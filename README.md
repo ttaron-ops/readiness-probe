@@ -14,12 +14,22 @@ links to its directory here.
 
 ```
 modules/<NN>-<slug>/
-├── README.md       # module overview, links back to the Notion page, status
-├── checkpoint.md   # answers to the module checkpoint (the completion gate)
-├── notes/          # concept notes
-├── practice/       # code, benchmarks, commands — the buildable output
-└── resources/      # saved references, diagrams, papers, link index
+├── README.md            # module overview (YAML frontmatter), lessons index, status
+├── checkpoint.md        # answers to the module checkpoint (the completion gate)
+├── lessons/             # one page per must-know concept
+│   └── <NN>-<slug>.md   #   notes · worked example · practice · self-check
+├── practice/            # code, benchmarks, commands — the buildable output
+└── resources/           # saved references, diagrams, papers, link index
+
+docs/
+├── CONVENTIONS.md       # structure + mandatory fields + definition of done
+└── templates/           # module.md and lesson.md starting points
 ```
+
+Both module and lesson files carry **YAML frontmatter** with a `status` field so
+progress is machine-readable (and Notion-syncable). See
+[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) for the field spec and the definition
+of done. 14 modules, 126 lessons — one per concept in the plan.
 
 ## Modules
 
@@ -58,8 +68,12 @@ Kueue from 06 and vLLM from 07. Modules 08, 09, 10 are the deferrable ones.
 
 ## Workflow per module
 
-1. Read enough to make the practice possible (`notes/`, `resources/`).
+1. Work each **lesson** in `lessons/` in order: read enough to make the practice
+   possible, then build the practice artifact and link it.
 2. Build the practice artifacts (`practice/`) — this is the point.
-3. Answer the checkpoint from memory (`checkpoint.md`).
-4. Tick the module's status and update its tracking row in Notion, linking the
-   files here as evidence.
+3. Answer the **checkpoint** from memory (`checkpoint.md`).
+4. Flip the module's `status` (frontmatter) and update its tracking row in Notion,
+   linking the files here as evidence.
+
+A lesson is `done` only when it has a real artifact; a module is
+`checkpoint-passed` only when every lesson is done and the checkpoint is answered.
