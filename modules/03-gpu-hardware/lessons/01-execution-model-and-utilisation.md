@@ -111,6 +111,16 @@ Using **H100 dense BF16 peak = 989 TFLOP/s** as the denominator (see the sparsit
 
 A cousin metric, **HFU (Hardware FLOPs Utilisation)**, counts *all* FLOPs the hardware executed including activation recomputation. MFU ≤ HFU always. For cost reasoning prefer **MFU**, because it measures FLOPs that advance the model — the thing you are actually buying — not FLOPs spent recomputing to save memory.
 
+### Occupancy is not throughput either
+
+A trap one level deeper, and a favourite interview follow-up: **high SM_OCCUPANCY does not guarantee high throughput.** Occupancy measures resident warps ÷ max warps — how *full* the SM's scheduler slots are. A memory-bound kernel can have 100% occupancy while every warp is *stalled waiting on HBM*; the SM is packed but the ALUs idle. Conversely a well-tuned GEMM can hit near-peak FLOP/s at only ~50% occupancy because it has enough in-flight work to hide latency. So the ladder of honesty is: GPU-Util (is it on?) → SM_ACTIVE (is the floor running?) → SM_OCCUPANCY (are the SMs packed?) → **TENSOR_ACTIVE / achieved FLOP/s (is it doing the work you paid for?)**. Only the last rung is throughput; the next lesson (03.2 roofline) is what turns it into a cost number.
+
+### Collection gotchas (ops reality)
+
+- **Profiling fields cost something.** DCGM `PROF_*` fields require the profiling API and add small overhead; historically some fields *serialised* with each other and could not all be sampled simultaneously on older DCGM/driver combos. Verify your dcgm-exporter config actually exports SM_ACTIVE and TENSOR_ACTIVE together before trusting a dashboard.
+- **GPU-Util is free and always there; that is exactly why it is over-trusted.** It comes from NVML with zero setup, so it is the default in every quick-look tool — which is how the lie propagates.
+- **Sample windows differ.** `nvidia-smi`'s duty cycle and DCGM's cycle-fraction fields are measured over different windows; do not expect them to reconcile arithmetically. Use each for its purpose, not to cross-check the other.
+
 ### The sparsity asterisk (a common interview trap)
 
 NVIDIA's H100 datasheet advertises **1,979 BF16 TFLOPS** and **3,958 FP8 TFLOPS**. Those are the **structured-sparsity** figures (2× marketing multiplier that assumes a 2:4 sparse weight pattern most workloads do not use). The **dense** numbers — the honest denominator for MFU on ordinary dense training/inference — are **989 BF16 / 1,979 FP8 TFLOP/s**. H100 SXM also carries **80 GB HBM3 at 3.35 TB/s**. Quoting the sparse number as if it were your dense ceiling silently halves your apparent MFU target; know which one you are dividing by.
