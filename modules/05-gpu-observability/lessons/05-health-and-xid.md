@@ -124,6 +124,12 @@ dmesg / DCGM  ──▶  XID classifier (the table above)
    → uncordon              → keep cordoned, open RMA ticket
 ```
 
+### The cost lens (FinOps angle)
+
+Every cordon has a dollar clock. A cordoned H100 idles at ~$2–4/GPU-hr (on-demand neocloud) doing nothing; an over-cordon on a healthy board from a mis-classified XID 31 is pure waste, and a *fleet* of them from a bad rule is a budget line item. But the asymmetry runs the other way for real faults: scheduling a training run onto a board with a pending remap (XID 63 un-reset) risks a corrupted multi-day checkpoint worth far more than the idle hours. So the classification table isn't just reliability hygiene — it's the control that keeps both false-cordon waste *and* corruption-loss risk low. Track "GPU-hours lost to cordon" split by XID class; a spike in the log-only classes means a tenant is burning your capacity with a buggy kernel and should be billed/paged, not the platform team.
+
+Complement the passive XID watch with active health checks: `dcgmi diag -r <level>` (or the DCGM diagnostics DCGM_FI health fields) run on drain — before you uncordon — catches marginal boards that haven't yet thrown a fatal XID. It's the "run the treadmill test before clearing the patient" step.
+
 Key ordering rule: **cordon before drain, drain before reset.** Resetting a GPU with live CUDA contexts either fails (`GPU is in use`) or wedges the device. And uncordon *only after* verifying `ROW_REMAP_PENDING=0` and `ROW_REMAP_FAILURE=0` post-reset — otherwise you schedule onto a still-degraded board.
 
 ## Worked example
