@@ -77,6 +77,19 @@ If you must express a whole-request bound (some product contracts want one), use
 
 So batch size is a **throughput ↔ per-user-latency dial**, and your two SLOs are the guardrails: crank the batch for cost until TTFT-p99 or TPOT-p99 approaches its budget, then stop. That's the whole game — run hot, but bounded by the two honest latencies. (Related knobs: chunked prefill to stop big prompts from stalling decode; `max_num_batched_tokens` to cap per-iteration work.)
 
+### Budgets are workload-specific
+
+There's no universal TTFT/TPOT number — the budget comes from the product. Anchors to reason from, not to copy:
+
+| Workload | TTFT budget | TPOT budget | Why |
+|----------|-------------|-------------|-----|
+| Interactive chat | ~200–500 ms | ~50 ms/token (≈20 tok/s ≥ reading speed) | Human reads ~5–10 words/s; faster-than-reading is wasted, so run the batch hotter. |
+| Voice / real-time agent | ~100–300 ms | tight, low-jitter | Downstream TTS needs a steady stream; ITL *variance* matters as much as the mean. |
+| Coding / autocomplete | very tight TTFT | high tok/s | Perceived as instant or not at all. |
+| Batch / offline (eval, summarisation) | seconds OK | loose | No human waiting → maximise throughput/goodput, batch as hard as KV allows. |
+
+The design move: pick the budgets from the use case, then push batch size / `max_num_seqs` up until TTFT-p99 or TPOT-p99 nears the budget. For batch workloads the budgets are so loose that you run essentially KV-cache-limited — pure throughput mode.
+
 ### Reading it in vLLM's `/metrics`
 
 vLLM exposes Prometheus metrics (prefix `vllm:`), labelled by `model_name`:
