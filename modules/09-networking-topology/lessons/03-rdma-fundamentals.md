@@ -22,7 +22,11 @@ Two dollars-and-cents consequences you will own:
 - **Utilization is money.** A100/H100/B200 time is the single largest line item in a training budget. If TCP overhead and jitter drop fabric-bound collective efficiency from 95% to 70%, you are lighting ~25% of a nine-figure GPU spend on fire. RDMA is not a nicety; it is the thing that keeps `$/token` defensible.
 - **CPU is not free either.** A single 400G NIC saturated with TCP can consume many host cores just doing copies and interrupt handling — cores you wanted for the data loader. RDMA gives them back.
 
-This lesson is conceptual. You will not write verbs code. You will be able to stand at a whiteboard and trace exactly which of your 01b kernel stages RDMA removes, and why removing them buys latency *stability*, not just latency.
+This lesson is conceptual. You will not write verbs code. You will be able to stand at a whiteboard and trace exactly which of your 01b kernel stages RDMA removes, and why removing them buys latency *stability*, not just latency. Three claims you should be able to defend by the end:
+
+- RDMA is **kernel-bypass + zero-copy + transport-offload** — three distinct wins, not one.
+- The win that matters for collectives is **tail stability**, and it comes specifically from deleting the *stateful, shared* kernel stages (conntrack, softirq), not from a faster mean.
+- The **remote CPU is uninvolved** in a one-sided WRITE — a property TCP structurally cannot offer.
 
 ## What's new here (contrast with 01b)
 
@@ -69,6 +73,10 @@ When the NIC finishes a WQE it posts a **Completion Queue Entry (CQE)** to a **C
 ### 5. The verbs (know the names, not the code)
 
 The operations ("verbs"): **RDMA WRITE** (push into remote memory, remote CPU uninvolved — the workhorse), **RDMA READ** (pull from remote memory), **SEND/RECV** (two-sided: receiver must pre-post a RECV; used for control/handshake), and **atomics** (fetch-add, compare-swap). One-sided WRITE/READ are the "remote CPU does nothing" superpower; SEND/RECV is the two-sided fallback that looks most like sockets.
+
+### 5b. GPUDirect RDMA — why the GPU is a first-class RDMA peer
+
+The reason RDMA matters *specifically* for GPU clusters is **GPUDirect RDMA**: the RNIC is given a direct PCIe path to peer into GPU HBM, so the GPU's memory is registered as an MR and the NIC DMAs into/out of it with **no bounce through host DRAM and no CPU orchestration**. Without it, every inter-node collective byte would take the TCP-style detour HBM→DRAM→NIC→wire→NIC→DRAM→HBM (the two staging copies in the worked example). With it, the path is HBM→NIC→wire→NIC→HBM. This is the substrate NCCL's inter-node transport rides on, and it's why "RDMA" and "GPU networking" are effectively synonyms at this tier — the win is not just kernel-bypass for the CPU, it's cutting the CPU and host DRAM out of the *GPU-to-GPU* path entirely. (BlueField-3 DPUs can additionally offload the transport and even parts of the collective onto the NIC itself.)
 
 ### 6. Memory registration — the cost you pay once, and why it exists
 
@@ -125,6 +133,24 @@ Cost: 4 payload copies, 2 syscalls, 2 conntrack touches, 1 softirq you don't sch
 4. RNIC A posts a **CQE**; A's CPU sees completion by polling the CQ.
 
 **What RDMA deleted, named explicitly:** the two `send()`/`recv()` **syscalls**; **all four payload copies** (both socket buffers *and* both GPU↔DRAM staging copies — zero-copy end to end); the entire **kernel TCP/IP stack**; **netfilter + conntrack** on both ends (no flow tuple exists — this is why RDMA and stateful firewalls/overlays are fundamentally in tension, a real Kubernetes design constraint); the **softirq** receive path; and the remote CPU's involvement entirely (host B's CPU did **nothing** — it wasn't interrupted, it didn't copy, it may not even know the WRITE happened until it reads its own memory). Result: ~2 copies-worth of PCIe DMA and one wire crossing, at ~0% CPU, with a latency whose tail doesn't depend on how busy the host's cores or conntrack table are.
+
+**Side-by-side stage count (the whiteboard summary):**
+
+```
+                       TCP (per 1 MB)        RDMA+GPUDirect (per 1 MB)
+  syscalls                 2 (send/recv)         0  (doorbell write)
+  payload copies           4                     0  (HBM↔HBM DMA)
+  kernel TCP/IP stack      yes (both ends)       none (transport in NIC)
+  netfilter/conntrack      2 touches             none  (no flow tuple)
+  softirq receive path     yes (host B)          none
+  remote CPU involved      yes (drains, copies)  NO — receiver does nothing
+  transport/reliability    kernel software       NIC hardware (RC QP)
+  once-only setup          connect()             MR register + QP + key xchg
+  tail-latency drivers     conntrack, softirq,   fixed silicon; no
+                           socket-buffer contention  load-dependent stages
+```
+
+Read the last row as the thesis of the whole lesson: the stages TCP adds are precisely the *load-dependent, shared, stateful* ones — and those, not the mean, are what a barrier-synchronous collective pays for.
 
 ## Practice (feeds the deliverable)
 

@@ -62,16 +62,56 @@ DCQCN exists to **keep PFC from ever firing.** ECN+DCQCN is the *fine-grained, e
 - **Head-of-line blocking / congestion spreading.** As above: one congested egress PAUSEs a whole class upstream, stalling unrelated flows. Kills collective efficiency because a collective is a barrier — stalling *any* participant stalls the step.
 - **Slow/silent misconfig.** Mismatched ECN thresholds vs PFC headroom, wrong DSCP-to-priority mapping across a vendor boundary, or a firmware change to DCQCN behavior (exactly what bit Meta) — none of these page you; they just quietly cost GPU-hours.
 
+### 4b. The three RoCE mechanisms in one line each (memorize)
+
+- **PFC** = *link-level, per-class PAUSE* — the last-resort "stop dropping" hammer; coarse and deadlock-prone.
+- **ECN** = *end-to-end congestion signal* — the switch marks packets so the sender learns *which* flow is hot.
+- **DCQCN** = *NIC-based congestion-control algorithm* — consumes ECN, rate-limits the offending flow so PFC rarely fires.
+
+Mnemonic: **ECN sees it, DCQCN slows it, PFC catches what slips through.** If you can only say one sentence in an interview, say that.
+
+### 4c. Control-plane operations — the part that decides who you hire
+
+- **InfiniBand:** one **Subnet Manager** is the brain. Simplicity (deterministic routing, one source of truth) but you must make the SM **highly available** (redundant SMs, failover) and you need **IB-specific tooling and skills** (`ibdiagnet`, UFM) that are scarcer and pricier on the hiring market.
+- **RoCE:** the control plane is your existing **Ethernet fabric** — **BGP/EVPN** underlay/overlay, ECMP, your current telemetry (streaming stats, sFlow/gNMI), your current on-call. No new control-plane brain to make HA, and the skills are commodity. The catch is that "the fabric config" now silently includes the entire PFC/ECN/DCQCN tuning surface — so you trade *control-plane novelty* for *data-plane tuning burden*.
+
 ### 5. Spectrum-X — "managed RoCE"
 
 NVIDIA's answer to "RoCE tuning is a research project": **Spectrum-X** = the **Spectrum-4 switch (SN5600)** + **BlueField-3 / ConnectX SuperNICs**, co-designed so the Ethernet fabric behaves like a lossless RDMA fabric out of the box — hardware **adaptive routing**, fast **telemetry-based congestion control**, and per-flow load balancing that plain ECMP+PFC can't do. The pitch: **Ethernet ecosystem, IB-like determinism, someone else did the tuning.** The cost: you're back toward a **single-vendor** stack (Spectrum-X's magic wants NVIDIA switches *and* NVIDIA SuperNICs), so it partially trades away the "reuse commodity Ethernet" benefit that made RoCE attractive. It's the middle box in the decision, not a free lunch.
 
-### 6. The cost dimension (your FinOps differentiator)
+### 6. The RoCE tuning checklist (what "engineering losslessness" concretely means)
+
+When someone says RoCE is "a tuning project," this is the project. A senior candidate can enumerate it:
+
+- **Lossless traffic class:** map RDMA traffic to a dedicated PFC-enabled priority (DSCP → traffic class), and keep it **consistent across every switch and NIC** in the path — a single mismatched DSCP-to-priority map at a vendor boundary silently breaks losslessness.
+- **PFC headroom:** reserve enough buffer per port so packets already in flight during the PAUSE propagation round-trip are not dropped. Headroom scales with **link speed × cable length** — the numbers change when you go 200G→400G→800G, which is exactly the trap Meta hit.
+- **ECN thresholds:** set the marking threshold **below** the PFC trigger so DCQCN reacts *before* PAUSE fires. If ECN marks too late, PFC does all the work and you get congestion spreading.
+- **DCQCN parameters + firmware:** rate-decrease/increase constants, CNP behavior, and — the operational landmine — **NIC firmware version**, because DCQCN lives in NIC firmware and its behavior can change (or regress) across releases.
+- **Deep-buffer vs shallow-buffer switches:** deep buffers absorb microbursts and reduce PFC dependence (Meta's Arista 7800 choice); shallow-buffer switches are cheaper but lean harder on PFC/ECN being perfect.
+- **Deadlock-free routing + PFC watchdog:** ensure the topology/routing can't form a PAUSE cycle, and run a watchdog that drops a stuck paused class after a timeout.
+
+Every line above is a place to be subtly wrong in a way that costs GPU-hours without paging anyone. That risk *is* the price of RoCE's cost savings — the trade you're naming for the interviewer.
+
+### 7. The cost dimension (your FinOps differentiator)
 
 - **Optics ecosystem:** Ethernet optics/DAC/AOC at 400G/800G are a **broad, multi-vendor, price-competitive** market; IB optics are **narrower and premium** and single-sourced. At 24K endpoints, cabling+optics is a serious line item — this is often where RoCE's TCO advantage actually lives, not in the switch ASIC.
 - **Operational cost:** IB needs **IB-specific skills** (SM, fabric tooling) that are scarcer/pricier to hire; RoCE reuses your existing **Ethernet/EVPN-BGP** team and monitoring. But RoCE spends that saving back as **tuning/validation engineering** (PFC/ECN/DCQCN qualification per switch model).
 - **Lock-in / second-sourcing:** IB = single vendor, weak negotiating position, roadmap risk. RoCE (non-Spectrum-X) = multi-vendor switches, real price leverage. Spectrum-X sits in between.
 - **SHARP:** if your training is all-reduce-bound and you can exploit in-network reduction, IB's SHARP is a *performance* win that can change the TCO math back in IB's favor — it's not purely a cost line, it's a throughput multiplier.
+
+**How to actually model it (don't hand-wave "cheaper"):** TCO here is roughly `switch/NIC capex + optics/cabling capex + power/cooling opex + (fabric engineering + operations headcount) − (GPU-hours saved by higher collective efficiency)`. IB tends to win the *efficiency* term (determinism + SHARP) and the *headcount* term at small scale; RoCE tends to win the *optics capex* and *second-sourcing/negotiation* terms and the *skills-reuse* term at large scale. The verdict flips based on **which term dominates for your cluster size** — that sentence is the whole senior competency being tested.
+
+### 8. The one-line summary to carry into an interview
+
+**IB buys determinism and in-network compute with money and lock-in; RoCE buys ecosystem and cost leverage with tuning risk. Small/latency-sensitive/all-reduce-bound → IB. Huge/Ethernet-fluent-org/optics-and-lock-in-dominated → RoCE (or Spectrum-X to buy down the tuning risk).** Everything else in this lesson is the justification for that sentence.
+
+### 8. Why RDMA is so loss-allergic (the mechanism behind "must be lossless")
+
+The reason a *single* dropped packet is catastrophic — not merely a small slowdown — is the classic RDMA reliable transport's **go-back-N** recovery: on a loss it retransmits from the lost packet *and everything after it*, not just the missing one. At 400G, "everything after it" is a large window, so one drop collapses that flow's effective throughput for a recovery interval. TCP tolerates loss because it was designed around it (selective ACK, fast retransmit, a congestion window that treats loss as signal). Classic RoCE was not. (Newer NICs add selective-retransmit/"improved" RoCE modes that soften this, but the fabric is still engineered to make drops *rare*, not to recover gracefully.) This is *why* the entire PFC/ECN/DCQCN edifice exists: not to go faster, but to drive the congestion-drop probability toward zero so go-back-N almost never triggers.
+
+### 9. Adaptive routing and the ECMP problem (why plain Ethernet load-balancing hurts)
+
+Standard Ethernet spreads flows across parallel paths with **ECMP**, hashing per-flow (5-tuple) onto a link. GPU collectives produce a *small number of very fat, long-lived* flows (elephant flows), so ECMP's hash frequently **collides** two elephants onto one link while others sit idle — instant congestion and PFC pressure that has nothing to do with real oversubscription. **Adaptive routing** (native in IB via the Subnet Manager; the headline feature of Spectrum-X on Ethernet) load-balances at finer granularity and reacts to congestion, which is a large part of why "just RoCE on a commodity Clos with ECMP" underperforms and why Spectrum-X's co-design exists. This is also why NCCL is *topology-aware* (module 08): it structures rings/trees to match the physical fabric so it doesn't fight the router.
 
 ## Worked example — the decision table + two verdicts
 
