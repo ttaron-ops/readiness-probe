@@ -207,9 +207,29 @@ Status:  Failed
 Reason:  TopologyAffinityError
 Message: Resources cannot be allocated with Topology locality
 ```
-Under `single-numa-node` the pod is **Terminated**, not `Pending`. Switch the policy to `best-effort`, redeploy the *same* pod → it **admits and runs cross-NUMA** — proving the guarantee-vs-attempt difference on identical inputs.
+Under `single-numa-node` the pod is **Terminated**, not `Pending`. Switch the policy to `best-effort` (edit kubelet config, drain, delete state files, restart), redeploy the *same* pod:
+```
+$ kubectl get pod ...
+NAME   READY   STATUS    RESTARTS
+job    1/1     Running   0
+$ kubectl exec pod -- cat /sys/fs/cgroup/cpuset.cpus.effective
+0-15,16-23,32-47,48-55        # spans BOTH NUMA nodes — admitted cross-NUMA
+```
+It **admits and runs cross-NUMA** — proving the guarantee-vs-attempt difference on identical inputs, with nothing changed but the policy string.
 
-**4. Demonstrate the TopologyInfo trap** — deploy the device plugin configured *without* topology reporting (or on a node where the GPU's `numa_node == -1`). Redeploy the aligned pod from step 2 but with CPUs requested from NUMA 1's free pool. It **admits under `single-numa-node`** with CPUs on NUMA 1 and the GPU physically on NUMA 0 — `nvidia-smi topo` shows the mismatch. The policy didn't reject because the GPU contributed no hint. That is the silent failure, reproduced.
+**4. Demonstrate the TopologyInfo trap** — deploy the device plugin configured *without* topology reporting (or on a node where the GPU's `numa_node == -1`). First confirm the pre-condition:
+```
+$ cat /sys/bus/pci/devices/0000:17:00.0/numa_node
+0                     # hardware DOES know the GPU is on NUMA 0...
+# ...but the plugin advertised it without TopologyInfo, so the kubelet never learned it.
+```
+Redeploy the aligned pod from step 2 but with CPUs requested from NUMA 1's free pool. It **admits under `single-numa-node`** with CPUs on NUMA 1 and the GPU physically on NUMA 0:
+```
+$ kubectl exec pod -- cat /sys/fs/cgroup/cpuset.cpus.effective
+16-19,48-51          # NUMA 1
+$ nvidia-smi topo -m # GPU0 CPU Affinity → 0-15,32-47 (NUMA 0)  → MISMATCH
+```
+The policy didn't reject because the GPU contributed an all-nodes hint. That is the silent failure, reproduced — same policy, same pod spec, silently cross-socket.
 
 ## Practice
 
