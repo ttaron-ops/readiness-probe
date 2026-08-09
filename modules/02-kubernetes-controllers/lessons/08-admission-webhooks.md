@@ -37,7 +37,16 @@ Internal to the extending layer and new here:
 
 ## Core notes
 
-**The admission chain and the AdmissionReview flow.** After authn + authz, the API server runs, in order: **mutating** admission (built-in, then `MutatingWebhookConfiguration`s), then **schema validation + defaulting**, then **validating** admission (built-in, then `ValidatingWebhookConfiguration`s), then persist to etcd. For each matching webhook the API server POSTs an `AdmissionReview` (`admission.k8s.io/v1`) whose `request` carries `uid`, `operation`, `object`, `oldObject`, `userInfo`, and `dryRun`. Your webhook replies with an `AdmissionReview` whose `response` echoes the `uid` and sets `allowed: true|false` (plus an optional `status.message` and `warnings`). Mutating webhooks additionally return a base64 JSONPatch. **The `uid` echo is mandatory** — a mismatched or missing uid is treated as a failure.
+**The admission chain and the AdmissionReview flow.** After authn + authz, the API server runs, in order: **mutating** admission (built-in, then `MutatingWebhookConfiguration`s), then **schema validation + defaulting**, then **validating** admission (built-in, then `ValidatingWebhookConfiguration`s), then persist to etcd. For each matching webhook the API server POSTs an `AdmissionReview` (`admission.k8s.io/v1`) whose `request` carries `uid`, `operation`, `object`, `oldObject`, `userInfo`, and `dryRun`. Your webhook replies with an `AdmissionReview` whose `response` echoes the `uid` and sets `allowed: true|false` (plus an optional `status.message` and `warnings`). Mutating webhooks additionally return a base64 JSONPatch. **The `uid` echo is mandatory** — a mismatched or missing uid is treated as a failure. A denial response looks like:
+
+```json
+{ "apiVersion": "admission.k8s.io/v1", "kind": "AdmissionReview",
+  "response": { "uid": "<echoed>", "allowed": false,
+    "status": { "code": 403, "message": "projected 512 GPU-h exceeds active Budget \"team-a\" limit 400" },
+    "warnings": ["reduce replicas or request a budget increase"] } }
+```
+
+controller-runtime builds this envelope for you — you return `(warnings, error)` and it serializes the rest — but knowing the wire shape is what lets you debug a webhook from `kubectl -v=8` output or API-server logs.
 
 One subtlety among mutating webhooks: after the mutating phase completes, if any webhook changed the object, the API server may **re-run** mutating webhooks marked `reinvocationPolicy: IfNeeded` so a webhook can react to a later webhook's edit. Validating webhooks never reinvoke — they run once, at the end. This is why order-dependent logic belongs in validation (deterministic, sees the final object), not mutation (may run more than once, order among peers is unspecified).
 
@@ -67,6 +76,8 @@ Note the enforcement target: to gate *workloads* (Pods/Deployments) against Budg
 - `matchConditions`: CEL expressions (GA 1.30) evaluated *after* the selectors, e.g. `request.userInfo.username != 'system:serviceaccount:kube-system:...'` to skip system actors, or `object.spec.requestsGPU`. CEL runs in-process in the API server — cheaper and safer than a network round-trip.
 
 Order matters: `rules` → `namespaceSelector`/`objectSelector` → `matchConditions`. Anything filtered out never reaches your pod, so tightening these both reduces load and shrinks blast radius.
+
+One infamous gotcha: **`matchPolicy`**. `Equivalent` (the default, and what you want) means the webhook also fires for requests that arrive via a *different* API version that converts to a matched one — so a `rules` entry for `apps/v1 deployments` still catches a client posting a differently-versioned Deployment. `Exact` matches only the literal group/version/resource in `rules`; a request through any other version **silently bypasses** your webhook. For a security-relevant policy, `Exact` is a hole — leave `matchPolicy: Equivalent`.
 
 **`failurePolicy` — the wedge trap.** When the API server can't get a valid response (pod down, timeout, TLS error):
 
@@ -139,6 +150,8 @@ webhooks:
 ```
 
 The `failurePolicy: Fail` decision is documented in-repo: *"Budget enforcement fails closed because silently admitting over-budget GPU workloads is a real cost incident; the wedge is bounded by excluding kube-system and the webhook's own namespace, a 5s timeout, and 2 replicas, so a webhook outage rejects only new tenant GPU workloads, never control-plane or webhook-recovery writes."* That paragraph is the interview answer.
+
+**Testing without a live API server.** You don't need a cluster to test the decision logic. Two levels: (1) **unit** — construct the `*appsv1.Deployment` and Budget fixtures, call `ValidateCreate` directly with a fake client (`fake.NewClientBuilder().WithObjects(...).Build()`), and assert on the returned error/warnings. Fast, covers every branch. (2) **integration** — `envtest` spins up a real `kube-apiserver` + etcd (no kubelet); register the webhook against it and `Create` a breaching Deployment through a real client to prove the wiring, cert plumbing, and `ValidatingWebhookConfiguration` all match. Do branch coverage at level 1 and one happy/one deny path at level 2 — envtest is slower and you don't want the whole matrix there.
 
 ## Practice
 
