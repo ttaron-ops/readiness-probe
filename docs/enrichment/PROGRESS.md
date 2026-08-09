@@ -1,0 +1,38 @@
+# Enrichment progress
+
+The daily enrichment Routine reads this file, takes the **first 2 modules whose status is
+`pending`** (top-to-bottom is the learning order), rewrites their lessons to deep-learning depth
+per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `main`.
+
+- **Cadence:** 2 modules/run · ~9 runs to finish all 17.
+- **Do not reorder** without intent — the order is the study order and the enrichment order.
+- To force a re-enrichment or fix-up of a finished module, set its status back to `pending` (or
+  `fixup`) and move it to the top of the remaining `pending` block.
+
+| # | Module | Status | Enriched on |
+|---|--------|--------|-------------|
+| 1 | `modules/01-go-for-infra` | pending | — |
+| 2 | `modules/01b-linux-internals` | pending | — |
+| 3 | `modules/02-kubernetes-controllers` | pending | — |
+| 4 | `modules/02b-host-topology` | pending | — |
+| 5 | `modules/03-gpu-hardware` | pending | — |
+| 6 | `modules/04-gpu-on-kubernetes` | pending | — |
+| 7 | `modules/05-gpu-observability` | pending | — |
+| 8 | `modules/06-scheduling-capacity` | pending | — |
+| 9 | `modules/07-inference-serving` | pending | — |
+| 10 | `modules/08-distributed-training` | pending | — |
+| 11 | `modules/09-networking-topology` | pending | — |
+| 12 | `modules/10-bare-metal-lifecycle` | pending | — |
+| 13 | `modules/11-gpu-cost-economics` | pending | — |
+| 14 | `platform/01-distributed-systems-and-design` | pending | — |
+| 15 | `platform/02-platform-networking` | pending | — |
+| 16 | `platform/03-observability` | pending | — |
+| 17 | `modules/12-capstone-interview` | pending | — |
+
+> Note on order: the platform "deepen" modules (14–16) are enriched after the GPU track because
+> they synthesize and reference it; the capstone (17) is last so it can point at the enriched
+> chain. If you'd rather deepen the platform foundations earlier, move rows 14–16 up.
+
+## Run log
+
+_(each run appends: date · modules enriched · commit shas)_
