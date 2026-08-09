@@ -3,55 +3,77 @@ id: "03"
 title: "GPU hardware fundamentals"
 notion: "https://app.notion.com/p/3b33abaeb82381abaccfd55ab24bc852"
 phase: "Phase 2 · Months 5–8"
-effort: "3–4 weeks"
+effort: "~34 hrs ≈ 3.5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["02b"]
 unlocks: ["04", "07", "11"]
-started: null              # YYYY-MM-DD
-completed: null            # set when the checkpoint passes
+started: null
+completed: null
 ---
 
 # 🔌 03 — GPU hardware fundamentals
 
-> **Goal.** Enough GPU hardware literacy to reason about utilisation, throughput and cost.
+> **Goal.** Enough GPU hardware literacy to reason about **utilisation vs useful
+> work, throughput, and cost per unit of work** — you're not becoming a CUDA kernel
+> developer; you need to know what the numbers mean.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381abaccfd55ab24bc852
-- **Phase:** Phase 2 · Months 5–8 · **Est. effort:** 3–4 weeks
-- **Prerequisites:** `02b` · **Unlocks:** `04`, `07`, `11`
+- **Phase:** Phase 2 · requires 02b · **Est. effort:** ~34 hrs ≈ 3.5 weeks (~$25–35 rented GPU)
+- **Deliverable:** [GPU Efficiency & Cost Report](practice/gpu-efficiency-report/) —
+  achieved-vs-spec TFLOPS, FP16→FP8 delta, the util-lie demo, and a cost-per-useful-work SKU call.
 
-## Objectives (must-know concepts)
+## Why this module, and to what bar
 
-Each objective maps to one lesson below. The module's objective is met only when
-its lesson is `done` **and** the checkpoint question(s) for it pass.
+For a *platform* engineer the bar isn't "write CUDA" — it's "reason about GPU
+efficiency and cost from the telemetry":
+
+- **CoreWeave** — *GPU Performance Engineer*: "performance tests + automation for **hardware validation across the fleet**… controllers to automate infra testing… visibility into metrics/performance/health."
+- **NVIDIA** — *Solutions Architect*: "inference optimization via **FP16/INT8/FP8**… arithmetic intensity vs peak compute and memory bandwidth using the **roofline model** to classify bottlenecks."
+- **Interview probes:** *"100% util but terrible throughput — why?"* · *"why is decode memory-bandwidth bound, prefill compute-bound?"* · *"FP8 vs FP16 cost lever"* · *"tokens/sec ceiling for a 70B on H100"* (≈24) · *"which SKU is cheaper per unit of useful work?"*
+
+## Calibrated to your background — what we skip
+
+Not a kernel dev, and 02b already did the topology/power layer. We **skip**: CUDA
+kernel authoring, PTX/SASS, deep microarchitecture, occupancy-tuning-as-coding, and
+**NVLink/PCIe topology, node layout, and power/thermal throttling (all 02b)** —
+referenced, not re-taught. The execution model appears *only* as the vocabulary for
+reading utilisation honestly.
 
 ## Lessons
 
-| # | Lesson | Status |
-|---|--------|--------|
-| 01 | [Execution model](lessons/01-execution-model.md) | `not-started` |
-| 02 | [Memory hierarchy](lessons/02-memory-hierarchy.md) | `not-started` |
-| 03 | [Compute-bound vs memory-bound](lessons/03-compute-vs-memory-bound.md) | `not-started` |
-| 04 | [Precision formats](lessons/04-precision-formats.md) | `not-started` |
-| 05 | [Tensor cores](lessons/05-tensor-cores.md) | `not-started` |
-| 06 | [Generational differences](lessons/06-generational-differences.md) | `not-started` |
-| 07 | [The software stack](lessons/07-software-stack.md) | `not-started` |
-| 08 | [Thermals and power](lessons/08-thermals-and-power.md) | `not-started` |
+Anchored on **the roofline** (L2); ends in the cost capstone (L7).
 
-## Sources
+| # | Lesson | Hrs | Decision it drives |
+|---|--------|-----|--------------------|
+| 01 | [Execution model & **the utilisation lie**](lessons/01-execution-model-and-utilisation.md) | 4 | distrust `GPU-Util`; demand tensor-active/MFU |
+| 02 | [Compute- vs memory-bound + **roofline**](lessons/02-compute-vs-memory-bound-roofline.md) (anchor) | 6 | will a bigger/newer SKU even help? |
+| 03 | [Memory hierarchy & **HBM bottleneck**](lessons/03-memory-hierarchy-hbm.md) | 4 | what fits (weights+KV) + decode throughput |
+| 04 | [**Decode bandwidth-bound** → batching](lessons/04-decode-bandwidth-batching.md) | 5 | batch sizing, prefill/decode disaggregation |
+| 05 | [Precision & tensor cores (**the cost lever**)](lessons/05-precision-and-tensor-cores.md) | 5 | FP8 → ½ memory, ~2× throughput, $/token |
+| 06 | [Generational SKUs + **software-stack hazard**](lessons/06-generational-and-software-stack.md) | 4 | purchasing; driver↔CUDA↔NCCL breakage |
+| 07 | [**Capstone — cost per unit of useful work**](lessons/07-capstone-cost-per-useful-work.md) | 6 | the SKU recommendation, defended by numbers |
 
-Canonical reading lives on the [Notion page](https://app.notion.com/p/3b33abaeb82381abaccfd55ab24bc852). Save any
-local copies (PDFs, diagrams) under [`resources/`](resources/).
+Total ≈ **34 hrs ≈ 3.5 weeks** · ~7–8 hrs rented-H100 time. Spine = L2 + L7.
 
-## Checkpoint
+## Resource spine
 
-The [checkpoint](checkpoint.md) is the real completion gate — answer it from
-memory. See [`checkpoint.md`](checkpoint.md).
+- **Horace He — "Making Deep Learning Go Brrrr From First Principles"** — the
+  conceptual anchor (deep-read twice).
+- **NVIDIA Hopper/H100 whitepaper** — the numbers + FP8/Transformer Engine (skim).
+- **Programming Massively Parallel Processors** ch.1–5 — the model only (skim, no exercises).
+- **Modal util guide** + **"Measuring GPU utilization one level deeper"** — the util-lie demo.
+- **SemiAnalysis GPU index** — live $/hr (refresh at study time); **CUDA Compatibility docs** — the version hazard.
 
-## Directory layout
+## Deliverable & checkpoint
 
-| Path | What goes here |
-|------|----------------|
-| [`lessons/`](lessons/) | One page per concept — notes, worked example, practice, self-check. |
-| [`practice/`](practice/) | Code, benchmarks, commands — the buildable output. |
-| [`resources/`](resources/) | Saved references, diagrams, papers, link index. |
-| [`checkpoint.md`](checkpoint.md) | Checkpoint answers (the completion gate). |
+- Build the **[GPU Efficiency & Cost Report](practice/gpu-efficiency-report/)** on one
+  rented H100 weekend.
+- The [**checkpoint**](checkpoint.md) is the gate — interpret every `nvidia-smi` field,
+  place workloads on a roofline, estimate decode ceilings, and argue cheapest-per-useful-work.
+
+## How to work this module
+
+1. Lessons in order; batch the hands-on (L1–L6) into one rented-GPU session, then write L7.
+2. Keep the raw benchmark logs — they *are* the deliverable.
+3. Answer the [checkpoint](checkpoint.md) from memory; flip `status` and update Notion
+   when the report is done.
