@@ -59,7 +59,15 @@ grep -rn "func.*Reconcile(ctx context.Context" --include=*.go
 grep -rn ") Start(ctx context.Context) error" --include=*.go   # find Runnable impls
 ```
 
-Signatures are distinctive enough that method-name grep finds implementations fast, even without tooling.
+Signatures are distinctive enough that method-name grep finds implementations fast, even without tooling. A key detail coming from Python: dependencies live *on disk*, in the module cache, so you grep and jump-to-def *into them* exactly as you would your own code — there's no pip black box:
+
+```
+go env GOMODCACHE                         # where dependency source lives, read-only
+ls $(go env GOMODCACHE)/sigs.k8s.io/      # controller-runtime@vX.Y.Z, etc.
+grep -rn "EnqueueRequestForObject" $(go env GOMODCACHE)/sigs.k8s.io/controller-runtime*/pkg/handler
+```
+
+This is the single biggest reading advantage over Python: the full, exact source of every tool you operate is already on your machine, versioned, and grep-able. Reading dcgm-exporter's source is `cd $(go env GOMODCACHE)/...` away, or a `git clone` of the tag you run in prod.
 
 **Read `_test.go` files first.** Tests encode intent. `reconcile/reconcile_test.go` shows exactly how a `Reconciler` is meant to be called and what `Result{Requeue: true}` means. Example-style tests (`func Example...`) double as runnable docs. When you don't understand a type, find its `*_test.go` and read the first table-driven test — it's the authoritative usage spec. Go's table-test idiom is instantly recognizable and worth reading fluently:
 
@@ -165,3 +173,7 @@ grep -rn "reconcile.Reconciler" $(go env GOMODCACHE)/sigs.k8s.io/controller-runt
 1. **controller-runtime** — [repo](https://github.com/kubernetes-sigs/controller-runtime) · [pkg docs](https://pkg.go.dev/sigs.k8s.io/controller-runtime) — the source you're tracing; read `pkg/reconcile`, `pkg/handler`, `pkg/source`, `pkg/builder`, and `pkg/internal/controller`. Start from the pkg docs' subpackage list, then jump into source. **Deep** — this is the framework your capstone is built on.
 2. **kubernetes/sample-controller** — [repo](https://github.com/kubernetes/sample-controller) — the canonical, heavily commented informer→workqueue→syncHandler pattern in *raw* `client-go` (no framework), so you see the machinery controller-runtime hides. `controller.go` is the whole lesson. **Deep** — read it once end to end; it makes the abstraction click.
 3. **`go doc`** — [command docs](https://pkg.go.dev/cmd/go#hdr-Show_documentation_for_package_or_symbol) — the exact flags (`-src`, `-all`, symbol/method addressing) for the orientation workflow above. **Skim** — reference it until the invocations are muscle memory.
+
+---
+
+**Next step.** In Module 02 you'll write the controller whose framework you just learned to read — and the ability to open `controller-runtime` and confirm behavior (rather than guessing) is what will keep that work moving when the docs are silent. The habit to build now: whenever a tool surprises you in prod, `cd` into its source and read the exact path, don't file a guess.
