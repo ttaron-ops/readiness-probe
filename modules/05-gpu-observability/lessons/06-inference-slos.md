@@ -66,6 +66,8 @@ Total latency ≈ `TTFT + (output_tokens − 1) × TPOT`. The dominant term for 
 
 Optionally normalise long requests with a **per-output-token latency budget** rather than a raw total. Never a single `e2e_request_latency` percentile as *the* user-facing SLO for streaming.
 
+If you must express a whole-request bound (some product contracts want one), use a **length-normalised** target — e.g. "total latency ≤ TTFT_budget + output_tokens × TPOT_budget," evaluated per request and then aggregated as a *compliance ratio* (fraction of requests inside budget), not a raw-latency percentile. That keeps the guarantee honest across short and long completions and folds directly into a burn-rate error budget.
+
 ### The batching trade-off (throughput vs individual latency)
 
 **Continuous (a.k.a. in-flight / dynamic) batching** — the vLLM/TGI default — doesn't wait to assemble a fixed batch. It admits new requests into the running batch at each decode iteration and evicts finished ones, keeping the GPU's matrix units fed. The trade:
