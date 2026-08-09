@@ -44,6 +44,14 @@ The modern refinement: **PSI (Pressure Stall Information)**, `/proc/pressure/{cp
 
 Note `iostat`'s `%util` is **not** true utilization on modern multi-queue NVMe (a device servicing many I/Os in parallel can show 100% `%util` while nowhere near saturated) — trust `await`/`aqu-sz` and PSI for saturation instead. This is exactly the kind of nuance an interviewer rewards.
 
+### Reading the vitals: the fields that actually matter
+Before profiling, the standard "USE first-pass" tools and the one number per tool that localizes the problem:
+- **`vmstat 1`** — `r` (run-queue length: > core count means CPU saturation), `b` (blocked/uninterruptible: nonzero means I/O stall), `si`/`so` (swap in/out: nonzero means memory pressure spilling to disk — usually pathological), `us`/`sy`/`id`/`wa` (user/system/idle/iowait split). One line tells you which resource class to chase.
+- **`mpstat -P ALL 1`** — the per-core breakdown `vmstat`'s average hides: one pegged core at 100% among 127 idle ones is a single-threaded bottleneck, invisible in aggregate.
+- **`iostat -xz 1`** — per-device: `r/s`+`w/s` (IOPS), `rkB/s`+`wkB/s` (throughput), `await` (avg ms per I/O — the latency users feel), `aqu-sz` (avg queue depth — the saturation signal), `%util` (busy time, unreliable on NVMe — see above). Rising `await` with rising `aqu-sz` is a saturated disk.
+- **`sar -n DEV 1` / `ss -s` / `nstat`** — network throughput, socket states, and retransmit counters (retransmits are network *saturation/error* — a rising `TcpRetransSegs` under load points at a lossy path or an overloaded peer).
+- **`/proc/pressure/{cpu,io,memory}`** — PSI, the one-stop saturation number; watch `some avg10` for "is anything waiting."
+
 ### perf: on-CPU profiling
 `perf` samples the instruction pointer + call stack on a timer (or on a hardware event) and tallies where the samples land.
 
@@ -93,6 +101,14 @@ sudo offcputime-bpfcc -f 10 > offcpu.folded    # or: bpftrace kstack on sched_sw
 
 A wide tower ending in `nfs_readpage`/`io_schedule`/`futex_wait` tells you the latency is storage or lock contention, not compute. This is the tool that catches the idle-but-expensive GPU node.
 
+### perf record → report → script, the full loop
+The three-verb workflow, and what each verb is *for*:
+- **`perf record`** captures samples to a `perf.data` file. Key flags: `-F <hz>` sample rate, `-a` all-CPUs (system-wide), `-g` call graphs, `-p <pid>` / `-t <tid>` to target, `-e <event>` to sample on a specific hardware/software/tracepoint event instead of the default cycles (`-e block:block_rq_issue`, `-e cache-misses`). `--` runs a command and records for its lifetime; `sleep N` is the idiom for "record everything for N seconds."
+- **`perf report`** reads `perf.data` into an interactive (or `--stdio`) ranked view: functions by **self** time (samples *in* that function) vs **children** (self + everything it called). Expand a call graph to see callers/callees. This is your first look before committing to a flame graph.
+- **`perf script`** dumps the raw per-sample records — one event with its full stack — as text. This is the *export* format: pipe it to `stackcollapse-perf.pl` for flame graphs, or grep it for a specific event sequence. `perf annotate` goes the other direction, down to hot *instructions* within a function.
+
+`perf list` enumerates every event the box exposes (hardware PMU counters, cache events, tracepoints, kprobes you've added). `perf top` is the live, no-file version — a continuously-updating `perf report`, the profiling analogue of `top`.
+
 ### ftrace / trace-cmd (awareness)
 ftrace is the kernel's built-in tracing framework (interface under `/sys/kernel/tracing`, or `/sys/kernel/debug/tracing`), predating eBPF and always present. You rarely poke the raw filesystem; you use **`trace-cmd`** (CLI) or **`perf-tools`** wrappers (`funccount`, `funcgraph`, `iolatency`). Its standout capability is the **function graph tracer** — it traces kernel *function entry and exit with timing and call nesting*, printing an indented call tree with per-function durations. Where perf samples statistically, ftrace's function tracer is *exhaustive* for the functions you select — invaluable for "which kernel function inside this syscall is slow." Know it exists, know `trace-cmd record -p function_graph -g <fn>` and `funcgraph` are how you'd get a timed kernel call tree; reach for eBPF/bpftrace first for most tasks.
 
@@ -118,6 +134,12 @@ $ ./FlameGraph/flamegraph.pl --color=io offcpu.folded > offcpu.svg
 ```
 
 Reading `offcpu.svg`: one wide tower under the `trainer` threads bottoms out in `read → nfs_file_read → nfs_readpage → io_schedule`. Verdict, one line: *node-47's trainers spend ~70% of wall-clock off-CPU blocked on NFS reads of the dataset; this is a storage-path latency incident, not a compute problem — CPU flame graph would be near-empty.* For contrast, had `%usr` been 90% and PSI-io low, we'd instead run `perf record -F 99 -a -g` and read the **on-CPU** flame graph, expecting a wide leaf plateau (say `json.Unmarshal` or a tokenizer) as the fix. **Which flame graph you generate is decided by the USE grid**, not guessed.
+
+### Why 99 Hz, frame pointers, and other gotchas that cost you in an interview
+- **99 Hz, not 100.** Sampling at a round 100 Hz risks phase-locking with periodic kernel timers (also at round frequencies), systematically over- or under-counting periodic work. An off-by-one like 99 decorrelates the sampler. Small detail, but naming it signals you've actually profiled.
+- **Broken stacks = broken flame graph.** If towers bottom out in `[unknown]` or a single frame, you're missing unwind info. Fixes, in order: rebuild the target with frame pointers (`-fno-omit-frame-pointer`); or `perf record --call-graph dwarf` (unwinds from copied stack memory — accurate but heavier and larger `perf.data`); or `--call-graph lbr` on Intel (uses the Last Branch Record, low overhead, limited depth). Interpreted/JIT runtimes (JVM, Node, Python) need a **symbol map** (`perf-<pid>.map`) or a runtime agent, or the frames show as raw addresses.
+- **Containers hide symbols.** Run `perf` from the **host**; the target's binaries/debuginfo must be reachable (perf resolves via `/proc/<pid>/root`). Inside a container `perf` often lacks the perf_event syscall permission anyway.
+- **`perf_event_paranoid`.** `/proc/sys/kernel/perf_event_paranoid` gates who can profile; on locked-down hosts you'll need root or a lowered value. Know it exists so "perf returns nothing" doesn't stump you.
 
 ## Practice (feeds the deliverable toolkit)
 1. Pick a **CPU-bound** process (e.g. `openssl speed`, `stress-ng --cpu 4`, or a real service under load). Profile and flame-graph it:

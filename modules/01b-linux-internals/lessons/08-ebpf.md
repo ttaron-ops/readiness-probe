@@ -79,6 +79,20 @@ This is the part interviewers probe, because it separates "I ran a bpftrace one-
 
 The through-line: eBPF gives you **kernel-truth with application/orchestrator identity**, gathered in the datapath, with no code changes and low enough overhead to run continuously.
 
+### bpftrace language in one screen (so the practice makes sense)
+Every bpftrace program is a list of `probe /filter/ { action }` blocks:
+- **probe** — `type:target`, e.g. `tracepoint:syscalls:sys_enter_openat`, `kprobe:vfs_read`, `uprobe:/lib/x86_64-linux-gnu/libc.so.6:malloc`, `profile:hz:99` (timed sampling), `interval:s:1` (once/sec). `BEGIN`/`END` fire at start/exit.
+- **filter** — an optional predicate: `/pid == 1234/`, `/comm == "nginx"/`, `/args.ret > 0/`. The block runs only when it's true.
+- **action** — statements. Builtins you'll use constantly: `comm` (process name), `pid`/`tid`, `args.<field>` (probe arguments), `retval`, `nsecs`, `kstack`/`ustack` (kernel/user stack), `str()` (read a char* into a string).
+- **maps** — variables prefixed `@`. `@x = count()`, `@x = sum(v)`, `@x = hist(v)` (power-of-two histogram), `@x = lhist(v, min, max, step)` (linear). Keyed maps: `@[comm] = count()` aggregates per process. bpftrace prints all `@` maps automatically at exit.
+
+That's ~90% of the one-liners you'll ever write: pick a probe, optionally filter, aggregate into a keyed map. Latency timing is the one two-block idiom worth memorizing — record a start timestamp keyed by tid on the entry probe, subtract on the return probe:
+
+```
+kprobe:vfs_read  { @start[tid] = nsecs; }
+kretprobe:vfs_read /@start[tid]/ { @us = hist((nsecs - @start[tid]) / 1000); delete(@start[tid]); }
+```
+
 ## Worked example: finding the busiest syscall, then who is behind it
 A node is sluggish; CPU shows high `%sys` (kernel time) in `top`, so the cost is in syscalls, not user code. Question one: **which syscall dominates?**
 
