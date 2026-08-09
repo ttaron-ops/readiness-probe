@@ -14,6 +14,11 @@ completed: null            # set when the checkpoint passes
 # 🏗️ 12 — Capstone project and interview preparation
 
 > **Goal.** Convert study into evidence: ship the capstone controller and prepare to interview.
+>
+> **This is Track C** of the [12–15 month roadmap](../../docs/ROADMAP.md). It runs
+> *continuously from ~month 4*, not at the end: the capstone controller is built out
+> of what you learn in Tracks A and B, and interview prep ramps in months 9–12.
+> Phasing and the readiness gate live in [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb8238190b651c1c904390a26
 - **Phase:** Months 12–18 (from month 6 onward) · **Est. effort:** ongoing

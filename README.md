@@ -1,79 +1,81 @@
-# 🎓 Readiness Probe — AI / GPU Infrastructure Study Repo
+# 🎓 Readiness Probe — Senior GPU-Platform Engineer study repo
 
-Working repository for the [**AI / GPU infrastructure study plan**](https://app.notion.com/p/3b23abaeb82380beb8a1d5dd935b9fd0).
-Notion holds the plan, the tracking, and the checkpoint syllabus; **this repo holds
-the work** — notes, code, benchmarks, and checkpoint answers. Each module in Notion
-links to its directory here.
+Working repository for a **12–15 month** preparation to land **Senior Platform
+Engineer roles at companies running GPU fleets**. Built for **~10–12 focused
+hrs/week**. Notion holds the original GPU study plan and progress tracking; **this
+repo holds the work** — notes, lessons, code, benchmarks, and checkpoint answers.
 
-> **Target:** Senior / Staff AI or GPU Infrastructure Engineer.
-> **Timeline:** 15–18 months at ~8–10 hrs/week.
-> **Operating principle:** *Build, do not read.* The reading exists to make the
-> practice possible, and the checkpoints — not the reading — are the real syllabus.
+> **Target:** Senior Platform Engineer where GPU fleet operations are mandatory.
+> **Timeline:** 12–15 months at ~10–12 hrs/week.
+> **Operating principle:** *Build, do not read.* Every module ends in something you
+> built; the checkpoints — not the reading — are the completion gate. Evidence is
+> public-by-default.
+
+## The three tracks
+
+The course runs three tracks **in parallel**, not one linear list.
+
+### Track A — Platform excellence  →  [`platform/`](platform/)
+Refresh and deepen core platform engineering to a senior/staff bar. Only the two—
+now three—genuinely high-leverage areas are first-class **deepen modules**;
+everything you already operate daily is a light **interview refresh**.
+
+| Module | Lessons | |
+|--------|:---:|---|
+| 🧩 [Distributed systems & system design](platform/01-distributed-systems-and-design) | 9 | deepen |
+| 🌐 [Platform networking depth](platform/02-platform-networking) | 8 | deepen |
+| 🔭 [Observability engineering](platform/03-observability) | 9 | deepen |
+| 🔁 [Interview refresh](platform/interview-refresh) | 6 pages | light — IaC · CI/CD & GitOps · cloud/multi-cloud · security · SRE · k8s ops |
+
+### Track B — GPU specialization  →  [`modules/`](modules/)
+The gap-closing path, mapped 1:1 to the [Notion study plan](https://app.notion.com/p/3b23abaeb82380beb8a1d5dd935b9fd0).
+
+**Core:** [01 🐹 Go](modules/01-go-for-infra) · [01b 🐧 Linux internals](modules/01b-linux-internals) · [02 ⚙️ K8s controllers](modules/02-kubernetes-controllers) · [02b 🧬 Host topology](modules/02b-host-topology) · [03 🔌 GPU hardware](modules/03-gpu-hardware) · [04 📦 GPU on Kubernetes](modules/04-gpu-on-kubernetes) · [05 📊 GPU observability](modules/05-gpu-observability) · [06 🗓️ Scheduling & capacity](modules/06-scheduling-capacity) · [07 🚀 Inference serving](modules/07-inference-serving) · [11 💰 GPU cost & unit economics](modules/11-gpu-cost-economics)
+
+**Stretch (deferrable — learn on the job or for a specific employer):** [08 🧮 Distributed training](modules/08-distributed-training) · [09 🔗 Networking & topology](modules/09-networking-topology) · [10 🖥️ Bare metal & lifecycle](modules/10-bare-metal-lifecycle)
+
+### Track C — Evidence & interview  →  [`modules/12-capstone-interview`](modules/12-capstone-interview)
+The public proof that converts knowledge into offers.
+- **Flagship:** GPU cost/efficiency controller — Stage 1 Metrics MVP → Stage 2 CRDs → Stage 3 fractional attribution
+- **Writing:** the "your GPU dashboard is lying" post + two more
+- **Benchmark:** cost-per-million-tokens curve (a vLLM weekend)
+- **Interview:** system-design track + behavioral / staff-signal stories
+
+## The plan
+
+The month-by-month calendar, milestones, and readiness gate live in
+**[`docs/ROADMAP.md`](docs/ROADMAP.md)**. Summary:
+
+| Phase | Months | Focus |
+|-------|--------|-------|
+| 0 · Foundations | 1–3 | B: Go + Linux + start controllers · A1 distributed systems begins · line up the open-source conversation |
+| 1 · Controller + GPU base | 3–6 | B: finish controllers, host topology, GPU hardware, start GPU-on-k8s · **C: Metrics MVP (~m4)** · A2 networking |
+| 2 · GPU depth + evidence | 6–9 | B: observability, scheduling, inference · A3 observability (pairs with B05) · **C: CRDs, benchmark, 2 posts** |
+| 3 · Cost + interview ramp | 9–12 | B: cost module · **C: fractional attribution, mocks, behavioral, post #3** · refresh sharp areas · **start interviewing** |
+| 4 · Close | 12–15 | Buffer + stretch modules as needed · capstone adopted by ≥1 external org · interview → offer |
 
 ## Layout
 
 ```
-modules/<NN>-<slug>/
-├── README.md            # module overview (YAML frontmatter), lessons index, status
-├── checkpoint.md        # answers to the module checkpoint (the completion gate)
-├── lessons/             # one page per must-know concept
-│   └── <NN>-<slug>.md   #   notes · worked example · practice · self-check
-├── practice/            # code, benchmarks, commands — the buildable output
-└── resources/           # saved references, diagrams, papers, link index
-
+platform/<NN>-<slug>/      # Track A — deepen modules (lessons/, practice/, resources/, checkpoint.md)
+platform/interview-refresh/ #          light refresh pages for the areas you already operate
+modules/<NN>-<slug>/       # Track B — GPU modules (map to Notion) + Track C in module 12
 docs/
-├── CONVENTIONS.md       # structure + mandatory fields + definition of done
-└── templates/           # module.md and lesson.md starting points
+├── ROADMAP.md             # month-by-month calendar, milestones, readiness gate
+├── CONVENTIONS.md         # structure, mandatory fields, definition of done
+└── templates/             # module.md and lesson.md starting points
 ```
 
 Both module and lesson files carry **YAML frontmatter** with a `status` field so
-progress is machine-readable (and Notion-syncable). See
-[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) for the field spec and the definition
-of done. 14 modules, 126 lessons — one per concept in the plan.
-
-## Modules
-
-Modules run in phases. `01b`/`02b` are parallel/prerequisite sub-modules, not
-afterthoughts (`02b` must precede `03`). `12` runs alongside from month 6 onward.
-
-| # | Module | Phase | Directory |
-|---|--------|-------|-----------|
-| 01  | 🐹 Go for infrastructure engineers | Months 1–5 | [`modules/01-go-for-infra`](modules/01-go-for-infra) |
-| 01b | 🐧 Linux systems internals | Months 1–5 (parallel with 01) | [`modules/01b-linux-internals`](modules/01b-linux-internals) |
-| 02  | ☸️ Kubernetes internals and controllers | Months 1–5 | [`modules/02-kubernetes-controllers`](modules/02-kubernetes-controllers) |
-| 02b | 🖥️ Host hardware and topology | Months 5–8 (precedes 03) | [`modules/02b-host-topology`](modules/02b-host-topology) |
-| 03  | 🔌 GPU hardware fundamentals | Months 5–8 | [`modules/03-gpu-hardware`](modules/03-gpu-hardware) |
-| 04  | 📦 GPU on Kubernetes | Months 5–8 | [`modules/04-gpu-on-kubernetes`](modules/04-gpu-on-kubernetes) |
-| 05  | 📊 GPU observability and telemetry | Months 5–8 | [`modules/05-gpu-observability`](modules/05-gpu-observability) |
-| 06  | 📋 Scheduling, queueing and capacity | Months 8–12 | [`modules/06-scheduling-capacity`](modules/06-scheduling-capacity) |
-| 07  | 🚀 Inference serving | Months 8–12 | [`modules/07-inference-serving`](modules/07-inference-serving) |
-| 08  | 🏋️ Distributed training infrastructure | Months 12–16 | [`modules/08-distributed-training`](modules/08-distributed-training) |
-| 09  | 🌐 Networking and topology | Months 12–16 | [`modules/09-networking-topology`](modules/09-networking-topology) |
-| 10  | 🔧 Bare metal and cluster lifecycle | Months 12–16 | [`modules/10-bare-metal-lifecycle`](modules/10-bare-metal-lifecycle) |
-| 11  | 💰 GPU cost and unit economics | Months 8–12 (ongoing) | [`modules/11-gpu-cost-economics`](modules/11-gpu-cost-economics) |
-| 12  | 🎓 Capstone project and interview prep | Months 12–18 | [`modules/12-capstone-interview`](modules/12-capstone-interview) |
-
-## Sequencing
-
-| Phase | Modules | Outcome |
-|-------|---------|---------|
-| Months 1–5  | 01, 01b, 02 | Go proficiency, Linux depth, a working operator |
-| Months 5–8  | 02b, 03, 04, 05 | Host topology, GPU stack hands-on, metrics MVP shipped |
-| Months 8–12 | 06, 07, 11 | Queueing, inference, cost attribution working |
-| Months 12–16| 08, 09, 10 | Training, networking, bare metal coverage |
-| Months 12–18| 12 | Project public and adopted, writing published, interviewing |
-
-**Minimum viable path** (if only half gets done): 01, 01b, 02, 04, 05, 11, plus
-Kueue from 06 and vLLM from 07. Modules 08, 09, 10 are the deferrable ones.
+progress is machine-readable. See [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) for
+the field spec and the definition of done.
 
 ## Workflow per module
 
-1. Work each **lesson** in `lessons/` in order: read enough to make the practice
-   possible, then build the practice artifact and link it.
-2. Build the practice artifacts (`practice/`) — this is the point.
-3. Answer the **checkpoint** from memory (`checkpoint.md`).
-4. Flip the module's `status` (frontmatter) and update its tracking row in Notion,
-   linking the files here as evidence.
+1. Work each **lesson** in order: read enough to make the practice possible, then
+   build the practice artifact and link it.
+2. Answer the **checkpoint** from memory.
+3. Flip the module's `status` (frontmatter) and update its tracking row in Notion.
 
 A lesson is `done` only when it has a real artifact; a module is
 `checkpoint-passed` only when every lesson is done and the checkpoint is answered.
