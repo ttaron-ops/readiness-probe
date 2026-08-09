@@ -1,0 +1,32 @@
+# Go
+bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# Python (cost scripts, notebooks)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets & local env — never commit cloud/GPU credentials
+.env
+*.local
+*.pem
+*.key
+kubeconfig
+*.kubeconfig
+
+# Large / generated artifacts
+*.log
+tmp/
+scratch/
