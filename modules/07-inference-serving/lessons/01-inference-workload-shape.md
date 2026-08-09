@@ -127,6 +127,10 @@ Reading + napkin calculation. No GPU required for this lesson (you rent one star
 
 **Answer:** `weights = 70e9 × 2 B = 140 GB`; `VRAM_total = 80 GB`; residual for KV + activations = `80 − 140 = −60 GB`. It does **not** fit — negative before any KV or overhead. It forces either tensor parallelism (e.g. TP=2 → ~70 GB weights/GPU, TP=4 → ~35 GB/GPU, freeing real KV room) or lower-precision weights (FP8 → ~70 GB, INT4 → ~35 GB). For meaningful concurrency you typically combine them (FP8 + TP=2), because a bare fit leaves almost nothing for the KV residual.
 
+**(c) Why is TTFT dominated by prefill and TPOT by decode — and which one does a bigger batch hurt?**
+
+**Answer:** TTFT (time-to-first-token) is the latency to process the whole prompt through prefill before the first decode step emits a token, so it scales with prompt length and prefill compute. TPOT (time-per-output-token) is the steady-state decode-step time. A bigger batch *helps* decode throughput (amortizes the HBM weight read) but *hurts* TTFT: incoming requests wait for a batch slot and share prefill compute, so tail TTFT rises with batch size and queue depth. That's the core serving tension — batch for decode throughput, cap batch/admission to protect TTFT SLOs (05).
+
 ## Resources
 
 1. **Inference Basics: KV Cache, Batching, Parallelism** — https://s09g.medium.com/inference-basics-kv-cache-batching-parallelism-0c04378d4067 — *skim.* Consolidates the exact bridge this lesson makes (why decode needs batching, how KV and parallelism interact) in one readable pass; use it to sanity-check your mental model, not for numbers.
