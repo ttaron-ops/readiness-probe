@@ -15,8 +15,8 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 | 2 | `modules/01b-linux-internals` | done | 2026-08-10 |
 | 3 | `modules/02-kubernetes-controllers` | done | 2026-08-10 |
 | 4 | `modules/02b-host-topology` | done | 2026-08-10 |
-| 5 | `modules/03-gpu-hardware` | pending | — |
-| 6 | `modules/04-gpu-on-kubernetes` | pending | — |
+| 5 | `modules/03-gpu-hardware` | done | 2026-08-10 |
+| 6 | `modules/04-gpu-on-kubernetes` | done | 2026-08-10 |
 | 7 | `modules/05-gpu-observability` | pending | — |
 | 8 | `modules/06-scheduling-capacity` | pending | — |
 | 9 | `modules/07-inference-serving` | pending | — |
@@ -41,3 +41,5 @@ _(each run appends: date · modules enriched · commit shas)_
   commits `cecc154` (Module 01), `60719a7` (Module 01b)
 - **2026-08-10** · `modules/02-kubernetes-controllers`, `modules/02b-host-topology` ·
   commits `b740e08` (Module 02), `bc7e7f9` (Module 02b)
+- **2026-08-10** · `modules/03-gpu-hardware`, `modules/04-gpu-on-kubernetes` ·
+  commits `50bea86` (Module 03), `d043ca0` (Module 04)
