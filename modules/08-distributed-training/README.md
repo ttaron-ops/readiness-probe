@@ -3,7 +3,7 @@ id: "08"
 title: "Distributed training infrastructure"
 notion: "https://app.notion.com/p/3b33abaeb82381619b81cc630fdf948c"
 phase: "Phase 4 · Months 12–16 (deferrable stretch)"
-effort: "~50 hrs ≈ 4–5 weeks @ 10–12 hrs/wk"
+effort: "~58 hrs ≈ 5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["06"]
 unlocks: []
@@ -18,7 +18,7 @@ completed: null
 > real subject is **failure-handling as the dominant term in effective throughput**.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381619b81cc630fdf948c
-- **Phase:** Phase 4 · **deferrable stretch** (do it if targeting a training-heavy shop) · **Est. effort:** ~50 hrs ≈ 4–5 weeks
+- **Phase:** Phase 4 · **deferrable stretch** (do it if targeting a training-heavy shop) · **Est. effort:** ~58 hrs ≈ 5 weeks
 - **Deliverable:** [Survive-a-failure lab](practice/survive-a-failure/) — kill a worker,
   recover from checkpoint, and **price the failure overhead**.
 
@@ -47,16 +47,16 @@ Anchored on **NCCL debugging** (L2); the throughput lever is **checkpointing** (
 
 | # | Lesson | Hrs | Reliability/cost decision |
 |---|--------|-----|---------------------------|
-| 01 | [Parallelism strategies (platform view)](lessons/01-parallelism-strategies.md) | 6 | which collective, over which link, memory saved |
-| 02 | [**NCCL & collectives**](lessons/02-nccl-collectives.md) (anchor) | 7 | minutes-to-detect a hang vs hours of gang burn |
-| 03 | [Communication as the bottleneck](lessons/03-communication-bottleneck.md) | 5 | is the run comms-bound? MFU as report card |
-| 04 | [**Checkpointing** (the throughput lever)](lessons/04-checkpointing.md) | 6 | interval sets effective time + $ wasted per failure |
-| 05 | [Failure & elasticity](lessons/05-failure-and-elasticity.md) | 6 | auto-drain-and-restart vs babysitting |
-| 06 | [Job orchestration (PyTorchJob / Trainer v2)](lessons/06-job-orchestration.md) | 5 | how the gang is expressed + re-rendezvous |
-| 07 | [Data pipeline (starvation)](lessons/07-data-pipeline.md) | 5 | a $40/hr GPU idling on JPEG decode is a cost bug |
-| 08 | [**Training economics** (capstone → 11)](lessons/08-training-economics.md) | 6 | cost per successful run incl. failure overhead |
+| 01 | [Parallelism strategies (platform view)](lessons/01-parallelism-strategies.md) | 7 | which collective, over which link, memory saved |
+| 02 | [**NCCL & collectives**](lessons/02-nccl-collectives.md) (anchor) | 9 | minutes-to-detect a hang vs hours of gang burn |
+| 03 | [Communication as the bottleneck](lessons/03-communication-bottleneck.md) | 7 | is the run comms-bound? MFU as report card |
+| 04 | [**Checkpointing** (the throughput lever)](lessons/04-checkpointing.md) | 9 | interval sets effective time + $ wasted per failure |
+| 05 | [Failure & elasticity](lessons/05-failure-and-elasticity.md) | 7 | auto-drain-and-restart vs babysitting |
+| 06 | [Job orchestration (PyTorchJob / Trainer v2)](lessons/06-job-orchestration.md) | 6 | how the gang is expressed + re-rendezvous |
+| 07 | [Data pipeline (starvation)](lessons/07-data-pipeline.md) | 6 | a $40/hr GPU idling on JPEG decode is a cost bug |
+| 08 | [**Training economics** (capstone → 11)](lessons/08-training-economics.md) | 7 | cost per successful run incl. failure overhead |
 
-Total ≈ **50 hrs ≈ 4–5 weeks** (lean; merge L5+L6 if time-pressed). Spine = L2 + L4 + L8.
+Total ≈ **58 hrs ≈ 5 weeks** (lean; merge L5+L6 if time-pressed). Spine = L2 + L4 + L8.
 
 ## Resource spine
 

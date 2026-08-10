@@ -4,8 +4,11 @@ title: "Communication as the bottleneck"
 module: "08"
 concept: "Communication as the bottleneck"
 status: not-started
-est_time: "5h"
+est_time: "7h"
+prev: "02-nccl-collectives.md"
+next: "04-checkpointing.md"
 artifacts: []
+sources: 8
 ---
 
 # 08.3 · Communication as the bottleneck
@@ -14,9 +17,13 @@ artifacts: []
 >
 > Module: [🧮 08 — Distributed training infrastructure](../README.md) · Deliverable: [Survive-a-failure lab](../practice/survive-a-failure/README.md)
 
+## Where this fits
+
+08.2 gave you NCCL's mechanics: which collective each parallelism strategy issues, how it picks a transport and algorithm, and how to debug a silent hang. This lesson gives you the **metric** that tells you whether all that machinery is actually paying off — MFU — and the cost model that explains *why* comms grows the way it does with world size and model size. It is the diagnostic layer that sits on top of 08.2's mechanics. 08.4 is next: once you can say "this job is (or isn't) comms-bound," checkpointing is the other major lever on effective throughput, and together the two of them are the arithmetic behind the module's ">90% effective time" headline.
+
 ## Why this matters
 
-You already sold the org 16,384 H100s at ~$2–4/GPU-hr. The finance question is not
+You already sold the org 16,384 H100s at ~$2–4/GPU-hr (dated snapshot — check current spot/reserved pricing before quoting it in a real proposal). The finance question is not
 "how fast is an H100" — module 03 answered that (roofline, ~990 TFLOP/s BF16 peak).
 The question is **what fraction of that peak the cluster actually delivers on a real
 training step**, because you pay for the peak and bill against the delivered. On
@@ -27,7 +34,7 @@ a collective waiting for bytes to cross a link. If you can name why MFU is 35% a
 not 20%, and which of the three usual causes is biting this job, you are doing the
 part of this role that an ML engineer usually cannot.
 
-## What's new here (the platform view)
+## What's new here (calibration)
 
 Module 03 gave you two regimes on the roofline: **compute-bound** (you're on the flat
 FLOP ceiling) and **memory-bound** (you're on the HBM-bandwidth slope). Distributed
@@ -42,15 +49,24 @@ you add GPUs (world size `N`) and as the model grows (message size `M`), the col
 term grows on both axes while the per-GPU compute term stays fixed. Past some scale the
 collective *is* the step. Your job is to keep collectives cheap by placing ranks on the
 fastest available link — which is exactly the rail-alignment problem from 02b, now with
-a throughput number attached.
+a throughput number attached. We assume 02b's topology vocabulary (NVLink domains,
+rail alignment, GPUDirect) and 08.2's transport/algorithm vocabulary throughout; neither
+is re-taught here.
 
-## Core notes
+## Core concepts
 
 ### The 6N rule and the MFU definition
 
 For a dense transformer, the forward+backward compute is very close to **6 × N_params
-FLOPs per token** (2 for the forward matmuls, ~4 for the backward — the "6N" heuristic;
-add activation checkpointing recompute and it's ~8N, but use 6N as the yardstick).
+FLOPs per token** (2 for the forward matmuls, ~4 for the backward — the "6N" heuristic
+from the OpenAI/Kaplan scaling-law lineage; add activation-checkpointing recompute and
+it's closer to 8N, but 6N is the standard yardstick). The derivation is component-level:
+each parameter participates in one multiply-add in the forward pass (2 FLOPs) and
+roughly two multiply-adds worth of work in the backward pass (~4 FLOPs) to propagate
+gradients through both the activations and the weights — see Casson's derivation
+(References) if you want the term-by-term accounting, including why embeddings/logits
+and attention-pattern FLOPs are usually folded in as a minor correction, not a
+different order of magnitude.
 
 **MFU (Model FLOPs Utilisation)** is the achieved fraction of aggregate peak:
 
@@ -64,10 +80,14 @@ MFU  =  ────────────────────────
 
 It is deliberately *model* FLOPs (the useful 6N), not *hardware* FLOPs — so recompute
 from activation checkpointing does **not** get counted as useful work, which is why MFU
-is always below "how busy are the SMs." HFU (Hardware FLOPs Utilisation) counts recompute
-and is a few points higher; when a paper quotes one number it's usually MFU. Llama 3 405B
-reports **38–43% BF16 MFU** on the 16K-H100 cluster — that is the frontier bar, not a
-disappointment.
+is always below "how busy are the SMs." **HFU (Hardware FLOPs Utilisation)** counts
+recompute and is therefore a few points higher and *not directly comparable* to MFU —
+they're different denominators of "useful," not two measurements of the same thing.
+Google's PaLM paper is where this split was formalized: PaLM reports **46.2% MFU and
+57.8% HFU** on a 6,144-chip TPU v4 pod (arXiv 2204.02311, Appendix B). Llama 3 405B
+reports **38–43% BF16 MFU** on the 16K-H100 cluster (arXiv 2407.21783 §3.3) — that pair
+of numbers, from two different hardware generations and two different papers, is the
+frontier bar for 3D-parallel dense-transformer training, not a disappointment.
 
 ### Why the collective grows with world size
 
@@ -113,7 +133,11 @@ from "hidden under compute" to "the dominant term," and MFU collapses — a job 
 run at 38% MFU lands at 12–15%. On the roofline (03) you've been shoved off the compute
 ceiling onto a communication wall that the roofline doesn't even plot. The fix is
 placement, not tuning: keep TP ranks rail-aligned and NVLink-local, which is a scheduler/
-topology constraint you own, not a hyperparameter the ML team owns.
+topology constraint you own, not a hyperparameter the ML team owns. Lambda's B200/GB300
+MFU whitepaper (References) reports the same failure mode from the other direction — a
+Llama-3.1-70B run measured at **23.8% MFU** climbed to **50.2%** purely from aligning
+parallelism strategy (FSDP/TP/HSDP split) to the interconnect, no model or data change.
+Same lever, independently observed.
 
 ### The three usual causes of low MFU
 
@@ -127,7 +151,7 @@ observability tells you which:
 2. **Data-loader / input starvation** — GPUs idle waiting for the *next batch*, not the
    network. Signature: periodic SM idle at step boundaries, host CPU or storage pegged,
    `DataLoader` workers saturated. Cause: too few loader workers, slow object store, no
-   prefetch. Covered in 08.8.
+   prefetch. Covered in 08.7.
 3. **Failure overhead** — the run is up but bleeding time to restarts, rework since the
    last checkpoint, and slow-node detection. This is the module's spine and the subject of
    08.4/08.5: on a ~3-hr-MTBF cluster this term alone can eat >10% of wall-clock if
@@ -136,6 +160,66 @@ observability tells you which:
 MFU is the report card; these three are the line items. A good incident note says "MFU
 dropped 38%→22% at 14:03, comms term doubled, cause = DP gang rescheduled off-rail after
 a node drain," not "training got slow."
+
+## Perspectives
+
+**FinOps/economics view.** MFU is literally the ratio of what you're billed for to what
+you converted into gradient updates. That makes it the bridge between this lesson's
+mechanics and 08.8's dollar capstone: every point of MFU you claw back is a direct
+percentage cut on cost-per-successful-run. But MFU is a *report card*, not a diagnosis —
+it tells finance the delta exists, not which of the three causes to fix. Owning that
+translation (percentage → dollars → root cause → fix) is the job.
+
+**Network/topology view.** The rail-alignment argument — TP split across nodes
+collapsing MFU from 38%→12–15% — is the single most concrete, testable claim in this
+lesson. It is not hypothetical: SemiAnalysis's 100K-H100-cluster analysis (References)
+documents this as a known operational failure mode at hyperscale, and Lambda's
+whitepaper measured the identical 2× MFU swing on a production Llama-3.1-70B run by
+fixing placement alone. If you remember one number from this lesson, make it this one.
+
+**ML-research view.** Researchers historically thought in loss curves and tokens/sec,
+not MFU — the metric is a platform import. PaLM and later MosaicML/Databricks report MFU
+as a first-class number precisely because infra teams pushed for a normalized way to
+compare "how well is this cluster being used" across models and hardware generations.
+Asking "who owns this number" in an interview is a fair question: the platform team
+measures and defends it; the ML team's job is training quality, not utilization.
+
+**Historical/definitional view.** HFU (counts recompute) predates the now-standard MFU
+(useful work only) framing. This trips people up comparing older papers — PaLM reports
+HFU-first — against newer ones like Llama 3, which report MFU. Flag it explicitly:
+PaLM's headline 57.8% is HFU; its MFU is 46.2%, still higher than Llama 3's 38–43% MFU,
+but the two are *comparable* numbers only once you've confirmed you're reading the same
+metric. Silently comparing a paper's HFU to another paper's MFU is the single most common
+mistake in casual MFU discussion.
+
+## Real-world use cases
+
+- **Meta — Llama 3 Herd of Models, §3.3** — <https://arxiv.org/abs/2407.21783> — the
+  module's anchor. Reports **38–43% BF16 MFU** on 16,384 H100s; this is the field's
+  reference frontier number for dense-transformer 3D-parallel training and the one to
+  quote in an interview.
+- **Google — PaLM: Scaling Language Modeling with Pathways** —
+  <https://arxiv.org/abs/2204.02311> — origin of the MFU/HFU split. Reports **46.2% MFU
+  and 57.8% HFU** on 6,144 TPU v4 chips (Appendix B). Read it to see where the metric
+  came from and why HFU stopped being the headline number.
+- **Databricks/MosaicML — "Mosaic LLMs (Part 2): GPT-3 quality for <$500k"** —
+  <https://www.databricks.com/blog/gpt-3-quality-for-500k> — reports **40–60% MFU**
+  achievable on MPT-class training without loss divergence, a second independent
+  real-world data point showing MFU discipline isn't unique to hyperscale frontier labs.
+  Cost figure is a dated snapshot (2023).
+- **Lambda — MFU whitepaper (B200/GB300 NVL72)** —
+  <https://lambda.ai/hubfs/4.%20Resources/White%20Papers/Lambda%20MFU.pdf> — vendor
+  whitepaper, treat as practitioner/secondary and cross-check the headline numbers, but
+  the concrete case is worth citing: a Llama-3.1-70B run moved from **23.8% to 50.2% MFU**
+  through interconnect-aware parallelism placement alone, no model or data change — the
+  rail-alignment argument, measured.
+- **SemiAnalysis — "100,000 H100 Clusters: Power, Network Topology, Ethernet vs
+  InfiniBand, Reliability, Failures, Checkpointing"** —
+  <https://newsletter.semianalysis.com/p/100000-h100-clusters-power-network> —
+  industry-analyst deep dive tying network topology directly to achievable utilization at
+  extreme scale; the public preview covers topology/reliability framing (rest is
+  paywalled). Reinforces the rail-alignment argument with independent, larger-scale
+  numbers.
 
 ## Worked example
 
@@ -161,7 +245,7 @@ number never moved — MFU moved entirely on the communication term.
 
 ## Practice
 
-Feeds the **Survive-a-failure lab** deliverable. Rent **2 GPUs** (same node if you can get
+Feeds the **Survive-a-failure lab** deliverable ([`../practice/survive-a-failure/README.md`](../practice/survive-a-failure/README.md)). Rent **2 GPUs** (same node if you can get
 NVLink; note it if you can't) and run the DDP job from lesson 08.1.
 
 1. Run the identical job on **1 GPU**, then on **2 GPUs** (DDP), same per-GPU batch size.
@@ -182,6 +266,32 @@ NVLink; note it if you can't) and run the DDP job from lesson 08.1.
 the 1-GPU and 2-GPU step times behind it), committed under `../practice/survive-a-failure/`.
 One paragraph: is this job compute-bound or comms-bound at 2 GPUs, and what would you expect
 at 8?
+
+## Common pitfalls
+
+- **"PaLM's 57.8% beats Llama 3's 38–43%, so Google's infra was better."** PaLM's 57.8% is
+  *hardware* FLOPs utilization, which counts activation-checkpointing recompute as useful
+  work; Llama 3's number is *model* FLOPs utilization, which excludes it. PaLM's own MFU
+  is 46.2% — still higher, but now it's an apples-to-apples comparison instead of a
+  metric mismatch.
+- **"All-reduce cost grows unboundedly with world size."** Split the terms: the
+  *bandwidth* term asymptotes to `~2M` bytes per GPU regardless of `N`; only the
+  *latency/synchronization* term (`~2Nα`, or `~log N` with tree algorithms) grows with
+  world size. Conflating the two leads to wrong capacity-planning conclusions — adding
+  GPUs doesn't multiply your per-GPU bandwidth bill, but it does lengthen the
+  synchronization tail.
+- **"Low MFU always means a network problem."** Three causes exist: comms, data
+  starvation, and failure overhead. Jumping straight to "add bandwidth" without checking
+  data-loader signatures (08.7) or restart/rework overhead (08.4/08.5) wastes engineering
+  time chasing the wrong fix.
+- **"35–40% MFU is disappointing/broken."** It's the frontier bar for 3D-parallel
+  dense-transformer training on real fabric. Below ~30% is worth investigating; below
+  ~20% something is clearly broken. But <100% is not inherently broken — communication is
+  a fundamental cost of synchronous distributed training, not a bug to be eliminated.
+- **"MFU measured over any window tells the full story."** MFU averaged over a long
+  window silently absorbs failure-overhead time — the run "looks" comms-bound in
+  aggregate when it's actually restart-bound. You need short-window MFU around incidents
+  to attribute correctly; that decomposition is exactly what 08.8's capstone builds.
 
 ## Self-check
 
@@ -214,12 +324,65 @@ a TP=8 gang split **4+4 across two nodes** (the 02b rail-alignment failure) drag
 per-layer all-reduce onto the fabric, turning a collective that *hid under compute* into
 the dominant term. MFU collapses from ~38% to ~12–15% — off the roofline's compute ceiling
 onto a communication wall. It's a placement/scheduling fix you own, not a hyperparameter.
+Lambda's whitepaper measured the identical effect in the other direction: fixing placement
+alone took a Llama-3.1-70B run from 23.8% to 50.2% MFU.
 
-## Resources
+**(d) A paper reports 57.8% utilization and another reports 40%. Can you compare them
+directly?**
+**Answer:** Not without checking which metric each one reports. HFU (Hardware FLOPs
+Utilization) counts activation-checkpointing recompute as useful work; MFU (Model FLOPs
+Utilization) does not, and is therefore always the lower, stricter number for the same
+run. PaLM's own paper reports both: 57.8% HFU vs 46.2% MFU on the same training run — an
+11.6-point gap from definition alone. Always confirm which one you're reading before
+concluding one infra stack outperformed another.
 
+**(e) MFU on a job has averaged 30% over the last week, but a teammate says "the comms
+picture actually looks fine." How do both statements hold at once?**
+**Answer:** Long-window MFU blends all three causes of loss — comms, data starvation, and
+failure overhead — into one number, and doesn't tell you the mix. If the run has been
+eating restarts and rework from a rough failure week (08.4/08.5's territory), the
+long-window average absorbs that dead time even though the comms term, measured in a
+clean steady-state window, is healthy. The fix is to decompose: measure MFU (or better,
+step time) in short windows around known incidents versus steady-state windows, which is
+exactly the attribution 08.8's capstone formula performs.
+
+## Connections & what's next
+
+08.2 gave you the mechanics (transport, algorithm, hang triage); this lesson gave you the
+metric (MFU) and the cost model that explains why comms creeps toward owning the step at
+scale, plus the rail-alignment lever you already knew from 02b now expressed as a
+throughput number. 08.4 picks up the third cause of low MFU — **failure overhead** — and
+gives it the same treatment: a formula (Young/Daly) that turns two measured numbers into a
+policy decision, exactly the way this lesson turned a placement decision into a
+measurable MFU delta. By 08.8's capstone you'll have all three terms (comms, data,
+failure) as separate line items in one cost-per-successful-run number.
+
+## References & further reading
+
+**Primary sources**
 1. **Llama 3 paper, §3.3 "Infrastructure, Scaling, and Efficiency"** —
-   https://arxiv.org/abs/2407.21783 — the real efficiency numbers: 16K H100s, 38–43% MFU,
+   <https://arxiv.org/abs/2407.21783> — the real efficiency numbers: 16K H100s, 38–43% MFU,
    4D parallelism, and why placement/comms dominate at scale. The anchor.
-2. **Megatron-LM README** — https://github.com/NVIDIA/Megatron-LM — context for 3D/4D
+2. **PaLM: Scaling Language Modeling with Pathways** — <https://arxiv.org/abs/2204.02311> —
+   read Appendix B for the original MFU/HFU derivation and the 46.2%/57.8% pair.
+3. **Megatron-LM README** — <https://github.com/NVIDIA/Megatron-LM> — context for 3D/4D
    parallelism (TP/PP/DP/CP) and where the MFU yardstick comes from; skim the parallelism
    sections, don't drown in the flags.
+
+**Real-world engineering blogs**
+4. **Databricks/MosaicML — "Mosaic LLMs (Part 2): GPT-3 quality for <$500k"** —
+   <https://www.databricks.com/blog/gpt-3-quality-for-500k> — 40–60% MFU on MPT-class
+   training; dated cost snapshot (2023).
+5. **Lambda — MFU whitepaper** —
+   <https://lambda.ai/hubfs/4.%20Resources/White%20Papers/Lambda%20MFU.pdf> — vendor
+   whitepaper; the 23.8%→50.2% Llama-3.1-70B placement fix, cross-check the numbers.
+6. **SemiAnalysis — "100,000 H100 Clusters..."** —
+   <https://newsletter.semianalysis.com/p/100000-h100-clusters-power-network> —
+   topology-to-utilization link at extreme scale (public preview; rest paywalled).
+
+**Deeper dives**
+7. **Adam Casson — "Transformer FLOPs"** — <https://www.adamcasson.com/posts/transformer-flops> —
+   clean, citable term-by-term derivation of the 6N/6ND FLOPs-per-token heuristic.
+8. **Glenn Klockwood — "Model FLOPs Utilization"** — <https://www.glennklockwood.com/garden/MFU> —
+   a well-regarded HPC engineer's reference notes on MFU definitions and the
+   cross-paper comparison pitfalls (HFU vs MFU chief among them).
