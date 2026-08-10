@@ -3,7 +3,7 @@ id: "01"
 title: "Go for infrastructure engineers"
 notion: "https://app.notion.com/p/3b33abaeb82381e499c2faec468fb993"
 phase: "Phase 0 · Months 1–3 (the gate)"
-effort: "~103 hrs ≈ 9 weeks @ 11 hrs/wk"
+effort: "~110 hrs ≈ 10 weeks @ 11 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: []
 unlocks: ["02", "04"]
@@ -18,7 +18,7 @@ completed: null
 > and it bends toward one thing: **writing controllers**.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381e499c2faec468fb993
-- **Phase:** Phase 0 · the gate · **Est. effort:** ~103 hrs ≈ 9 weeks @ 11 hrs/wk
+- **Phase:** Phase 0 · the gate · **Est. effort:** ~110 hrs ≈ 10 weeks @ 11 hrs/wk
 - **Deliverable:** [`gpu-cost-exporter`](practice/gpu-cost-exporter/) — a tested Go
   exporter/CLI whose core drops straight into your capstone controller.
 
@@ -51,15 +51,15 @@ Order matters; emphasis is deliberate. **Never shortcut 3, 4, or 9.**
 
 | # | Lesson | Emphasis | Hrs |
 |---|--------|----------|-----|
-| 01 | [Syntax & types](lessons/01-syntax-and-types.md) | light | 6 |
-| 02 | [Error handling](lessons/02-error-handling.md) | high | 8 |
-| 03 | [Interfaces & composition](lessons/03-interfaces-and-composition.md) | **highest** | 12 |
-| 04 | [Concurrency & context](lessons/04-concurrency-and-context.md) | **highest** | 16 |
-| 05 | [Testing](lessons/05-testing.md) | high | 12 |
-| 06 | [Modules & layout](lessons/06-modules-and-layout.md) | light | 5 |
-| 07 | [Stdlib fluency](lessons/07-stdlib-fluency.md) | medium | 10 |
-| 08 | [Reading unfamiliar Go](lessons/08-reading-unfamiliar-go.md) | medium | 10 |
-| 09 | [Controller primer (CRD · reconcile · envtest)](lessons/09-controller-primer.md) | high | 16 |
+| 01 | [Syntax & types](lessons/01-syntax-and-types.md) | light | 7 |
+| 02 | [Error handling](lessons/02-error-handling.md) | high | 9 |
+| 03 | [Interfaces & composition](lessons/03-interfaces-and-composition.md) | **highest** | 14 |
+| 04 | [Concurrency & context](lessons/04-concurrency-and-context.md) | **highest** | 18 |
+| 05 | [Testing](lessons/05-testing.md) | high | 14 |
+| 06 | [Modules & layout](lessons/06-modules-and-layout.md) | light | 6 |
+| 07 | [Stdlib fluency](lessons/07-stdlib-fluency.md) | medium | 12 |
+| 08 | [Reading unfamiliar Go](lessons/08-reading-unfamiliar-go.md) | medium | 12 |
+| 09 | [Controller primer (CRD · reconcile · envtest)](lessons/09-controller-primer.md) | high | 18 |
 
 Each lesson is self-contained: *why it matters · the delta from Python · core notes ·
 a worked example · a practice task (that builds the deliverable) · self-check Q&A ·
