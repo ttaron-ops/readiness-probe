@@ -15,6 +15,11 @@ One panel, three series:
 - **SM-active GPU-hours** — `DCGM_FI_PROF_SM_ACTIVE`-weighted busy time,
 - **the gap, in dollars** — `gap_gpu_hours × hourly_rate`.
 
+If any GPU in your cluster is time-sliced or MPS-shared, add an explicit
+**`unattributable_gpu_hours`** bucket (lesson 05.4) rather than silently crediting the
+SM-active time to whichever pod's label happened to land last — device-level DCGM fields
+can't distinguish co-tenants under those sharing modes.
+
 ### 2. The util-lie exhibit (screenshot)
 `DCGM_FI_DEV_GPU_UTIL = 100%` beside `DCGM_FI_PROF_SM_ACTIVE ≈ 0.1` for the **same
 GPU/pod**, captured from a **batch-1 decode workload you run yourself**. This single image
@@ -40,8 +45,10 @@ DCGM_FI_DEV_GPU_UTIL > 90 and DCGM_FI_PROF_SM_ACTIVE < 0.2
 
 ## The $ framing (for the blog + the CFO test)
 
-- Industry avg GPU utilisation ~15% ⇒ ~85% of paid capacity idle.
-- At $2–3/hr/H100, a **10% fleet-utilisation improvement on 500 GPUs ≈ $0.9–1.3M/yr**.
+- Industry avg GPU utilisation ~15% ⇒ ~85% of paid capacity idle — **a dated, directional
+  2026 snapshot**, not a precise universal constant; state it as such.
+- At $2–3/hr/H100 (also a 2026 snapshot — verify current pricing), a **10%
+  fleet-utilisation improvement on 500 GPUs ≈ $0.9–1.3M/yr**.
 - You are billed on **allocated** GPU-hours, not SM-active-hours — the gap is pure waste.
 
 ## Acceptance criteria (matches the [checkpoint](../../checkpoint.md))

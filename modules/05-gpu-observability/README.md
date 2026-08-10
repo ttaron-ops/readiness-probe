@@ -3,7 +3,7 @@ id: "05"
 title: "GPU observability and telemetry"
 notion: "https://app.notion.com/p/3b33abaeb82381c390d7ce54b1b87b6e"
 phase: "Phase 2 · Months 5–8"
-effort: "~37 hrs ≈ 3.5 weeks @ 10–12 hrs/wk"
+effort: "~61 hrs ≈ 5.5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["04"]
 unlocks: ["11"]
@@ -18,7 +18,7 @@ completed: null
 > and the home of the flagship "your GPU dashboard is lying to you" artifact.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381c390d7ce54b1b87b6e
-- **Phase:** Phase 2 · requires 04 · unlocks 11 · **Est. effort:** ~37 hrs ≈ 3.5 weeks
+- **Phase:** Phase 2 · requires 04 · unlocks 11 · **Est. effort:** ~61 hrs ≈ 5.5 weeks
 - **Deliverable:** ["Your GPU dashboard is lying to you"](practice/gpu-dashboard-lie/) —
   allocated-vs-utilised dashboard + the util-lie exhibit + a PromQL pack (also a blog post).
 
@@ -44,16 +44,16 @@ Anchored on **the lie vs the truth**; spine = **allocated-vs-utilised GPU-hours*
 
 | # | Lesson | Hrs | The payoff |
 |---|--------|-----|-----------|
-| 01 | [**The lie and the truth**](lessons/01-lie-and-truth.md) (metrics, merged anchor) | 5 | `GPU_UTIL` semantics + the four `PROF_*` metrics + which to alert on |
-| 02 | [DCGM architecture](lessons/02-dcgm-architecture.md) | 4 | hostengine, field groups, the profiling sampler + its cost |
-| 03 | [dcgm-exporter at fleet scale](lessons/03-dcgm-exporter-at-scale.md) | 4 | `SM_ACTIVE` ships **commented out**; cardinality on 500+ GPUs |
-| 04 | [Attribution (consumes 04)](lessons/04-attribution.md) | 3 | per-namespace truthful metrics; the time-slicing hole |
-| 05 | [**Health & errors / XID**](lessons/05-health-and-xid.md) | 4 | which XID cordons (48/63/64/79/94/95) vs logs (13/31/43) |
-| 06 | [Inference SLOs](lessons/06-inference-slos.md) | 5 | TTFT/TPOT/ITL/queue-depth; the batching trade |
-| 07 | [Profiling escalation](lessons/07-profiling-escalation.md) | 4 | metrics → PyTorch Profiler → Nsight ladder |
-| 08 | [**Capstone — allocated-vs-utilised dashboard + util-lie artifact**](lessons/08-capstone-allocated-vs-utilised.md) | 8 | the flagship |
+| 01 | [**The lie and the truth**](lessons/01-lie-and-truth.md) (metrics, merged anchor) | 7 | `GPU_UTIL` semantics + the four `PROF_*` metrics + which to alert on |
+| 02 | [DCGM architecture](lessons/02-dcgm-architecture.md) | 6 | hostengine, field groups, the profiling sampler + its cost |
+| 03 | [dcgm-exporter at fleet scale](lessons/03-dcgm-exporter-at-scale.md) | 6 | `SM_ACTIVE` ships **commented out**; cardinality on 500+ GPUs |
+| 04 | [Attribution (consumes 04)](lessons/04-attribution.md) | 5 | per-namespace truthful metrics; the time-slicing hole |
+| 05 | [**Health & errors / XID**](lessons/05-health-and-xid.md) | 6 | which XID cordons (48/63/64/79/94/95) vs logs (13/31/43) |
+| 06 | [Inference SLOs](lessons/06-inference-slos.md) | 7 | TTFT/TPOT/ITL/queue-depth; the batching trade |
+| 07 | [Profiling escalation](lessons/07-profiling-escalation.md) | 6 | metrics → PyTorch Profiler → Nsight ladder |
+| 08 | [**Capstone — allocated-vs-utilised dashboard + util-lie artifact**](lessons/08-capstone-allocated-vs-utilised.md) | 10 | the flagship |
 
-Total ≈ **37 hrs ≈ 3.5 weeks** — your fluency banks time for the capstone/blog polish. Spine = L1 → L8.
+Total ≈ **53 hrs ≈ 5 weeks** (+ ~8 hrs capstone polish/blog ≈ 61 hrs ≈ 5.5 weeks). Spine = L1 → L8.
 
 ## Resource spine
 

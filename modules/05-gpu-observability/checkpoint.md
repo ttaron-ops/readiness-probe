@@ -17,7 +17,9 @@ built from your own cluster, and answer the probes cold. You've passed when you 
 - [ ] **5 · The query.** Write the **allocated-but-idle-beyond-N-minutes** PromQL from memory,
       using the module-04 pod-resources join.
 - [ ] **6 · The CFO test.** Explain the utilisation trap and the allocated-vs-utilised gap
-      **with a dollar figure** in 2 minutes to a non-engineer.
+      **with a dollar figure** in 2 minutes to a non-engineer — state the ~15%-utilised
+      industry baseline and your $/GPU-hr rate as **dated, directional 2026 snapshots**,
+      not universal constants.
 - [ ] **7 · Artifact.** The per-namespace gap dashboard renders, and the
       `GPU_UTIL=100%` / `SM_ACTIVE≈0.1` exhibit exists from your own cluster.
 
