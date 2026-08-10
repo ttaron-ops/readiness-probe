@@ -3,7 +3,7 @@ id: "03"
 title: "GPU hardware fundamentals"
 notion: "https://app.notion.com/p/3b33abaeb82381abaccfd55ab24bc852"
 phase: "Phase 2 · Months 5–8"
-effort: "~34 hrs ≈ 3.5 weeks @ 10–12 hrs/wk"
+effort: "~51 hrs ≈ 5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["02b"]
 unlocks: ["04", "07", "11"]
@@ -45,15 +45,15 @@ Anchored on **the roofline** (L2); ends in the cost capstone (L7).
 
 | # | Lesson | Hrs | Decision it drives |
 |---|--------|-----|--------------------|
-| 01 | [Execution model & **the utilisation lie**](lessons/01-execution-model-and-utilisation.md) | 4 | distrust `GPU-Util`; demand tensor-active/MFU |
-| 02 | [Compute- vs memory-bound + **roofline**](lessons/02-compute-vs-memory-bound-roofline.md) (anchor) | 6 | will a bigger/newer SKU even help? |
-| 03 | [Memory hierarchy & **HBM bottleneck**](lessons/03-memory-hierarchy-hbm.md) | 4 | what fits (weights+KV) + decode throughput |
-| 04 | [**Decode bandwidth-bound** → batching](lessons/04-decode-bandwidth-batching.md) | 5 | batch sizing, prefill/decode disaggregation |
-| 05 | [Precision & tensor cores (**the cost lever**)](lessons/05-precision-and-tensor-cores.md) | 5 | FP8 → ½ memory, ~2× throughput, $/token |
-| 06 | [Generational SKUs + **software-stack hazard**](lessons/06-generational-and-software-stack.md) | 4 | purchasing; driver↔CUDA↔NCCL breakage |
-| 07 | [**Capstone — cost per unit of useful work**](lessons/07-capstone-cost-per-useful-work.md) | 6 | the SKU recommendation, defended by numbers |
+| 01 | [Execution model & **the utilisation lie**](lessons/01-execution-model-and-utilisation.md) | 7 | distrust `GPU-Util`; demand tensor-active/MFU |
+| 02 | [Compute- vs memory-bound + **roofline**](lessons/02-compute-vs-memory-bound-roofline.md) (anchor) | 8 | will a bigger/newer SKU even help? |
+| 03 | [Memory hierarchy & **HBM bottleneck**](lessons/03-memory-hierarchy-hbm.md) | 6 | what fits (weights+KV) + decode throughput |
+| 04 | [**Decode bandwidth-bound** → batching](lessons/04-decode-bandwidth-batching.md) | 7 | batch sizing, prefill/decode disaggregation |
+| 05 | [Precision & tensor cores (**the cost lever**)](lessons/05-precision-and-tensor-cores.md) | 7 | FP8 → ½ memory, ~2× throughput, $/token |
+| 06 | [Generational SKUs + **software-stack hazard**](lessons/06-generational-and-software-stack.md) | 6 | purchasing; driver↔CUDA↔NCCL breakage |
+| 07 | [**Capstone — cost per unit of useful work**](lessons/07-capstone-cost-per-useful-work.md) | 10 | the SKU recommendation, defended by numbers |
 
-Total ≈ **34 hrs ≈ 3.5 weeks** · ~7–8 hrs rented-H100 time. Spine = L2 + L7.
+Total ≈ **51 hrs ≈ 5 weeks** · ~7–8 hrs rented-H100 time. Spine = L2 + L7.
 
 ## Resource spine
 
