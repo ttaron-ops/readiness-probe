@@ -3,7 +3,7 @@ id: "06"
 title: "Scheduling, queueing and capacity"
 notion: "https://app.notion.com/p/3b33abaeb82381d9b1baea460826f00e"
 phase: "Phase 3 · Months 8–12"
-effort: "~65 hrs ≈ 5.5–6 weeks @ 10–12 hrs/wk"
+effort: "~75 hrs ≈ 6.5–7 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["02"]
 unlocks: []
@@ -18,7 +18,7 @@ completed: null
 > every scheduling decision here is a cost/fairness decision.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381d9b1baea460826f00e
-- **Phase:** Phase 3 · requires 02 · **Est. effort:** ~65 hrs ≈ 5.5–6 weeks
+- **Phase:** Phase 3 · requires 02 · **Est. effort:** ~75 hrs ≈ 6.5–7 weeks
 - **Deliverable:** [Kueue setup + per-queue showback](practice/kueue-showback/) — all
   runnable on a **GPU-less kind cluster** with fake resources.
 
@@ -44,16 +44,16 @@ Anchored on **Kueue** (L3–L4, the deepest interview surface).
 
 | # | Lesson | Hrs | Cost/fairness decision |
 |---|--------|-----|------------------------|
-| 01 | [Why the default scheduler fails](lessons/01-why-default-scheduler-fails.md) | 4 | held-but-idle GPUs = pure burn |
-| 02 | [Gang / co-scheduling](lessons/02-gang-scheduling.md) | 5 | all-or-nothing admission fixes the deadlock |
-| 03 | [**Kueue I — the queueing model**](lessons/03-kueue-queueing-model.md) (anchor) | 8 | quota = the unit you do showback against |
-| 04 | [**Kueue II — cohorts, borrowing, preemption, fair-sharing**](lessons/04-kueue-cohorts-borrowing-preemption.md) | 10 | borrow to sweat a fixed fleet without losing floors |
-| 05 | [Alternatives — Volcano & KAI](lessons/05-alternatives-volcano-kai.md) | 6 | which scheduler for which fleet shape |
-| 06 | [Topology-aware placement](lessons/06-topology-aware-placement.md) | 6 | topology-blind gang = 2–5× slower all-reduce |
-| 07 | [Fragmentation & effective capacity](lessons/07-fragmentation-effective-capacity.md) | 6 | the "$X of hidden capacity" story |
-| 08 | [Priority/preemption + capacity economics](lessons/08-priority-preemption-capacity-economics.md) | 8 | commitment laddering; why you can't autoscale GPUs |
+| 01 | [Why the default scheduler fails](lessons/01-why-default-scheduler-fails.md) | 6 | held-but-idle GPUs = pure burn |
+| 02 | [Gang / co-scheduling](lessons/02-gang-scheduling.md) | 7 | all-or-nothing admission fixes the deadlock |
+| 03 | [**Kueue I — the queueing model**](lessons/03-kueue-queueing-model.md) (anchor) | 10 | quota = the unit you do showback against |
+| 04 | [**Kueue II — cohorts, borrowing, preemption, fair-sharing**](lessons/04-kueue-cohorts-borrowing-preemption.md) | 13 | borrow to sweat a fixed fleet without losing floors |
+| 05 | [Alternatives — Volcano & KAI](lessons/05-alternatives-volcano-kai.md) | 9 | which scheduler for which fleet shape |
+| 06 | [Topology-aware placement](lessons/06-topology-aware-placement.md) | 9 | topology-blind gang = 2–5× slower all-reduce |
+| 07 | [Fragmentation & effective capacity](lessons/07-fragmentation-effective-capacity.md) | 9 | the "$X of hidden capacity" story |
+| 08 | [Priority/preemption + capacity economics](lessons/08-priority-preemption-capacity-economics.md) | 12 | commitment laddering; why you can't autoscale GPUs |
 
-Total ≈ **65 hrs ≈ 5.5–6 weeks** (+ ~12 hrs capstone). Spine = L3–L4 + the capstone showback.
+Total ≈ **75 hrs ≈ 6.5–7 weeks** (+ ~12 hrs capstone). Spine = L3–L4 + the capstone showback.
 
 ## Resource spine
 
