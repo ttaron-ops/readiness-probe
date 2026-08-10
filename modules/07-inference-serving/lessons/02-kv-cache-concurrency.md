@@ -4,8 +4,11 @@ title: "KV cache as a concurrency problem: capacity, fragmentation, and the cap"
 module: "07"
 concept: "KV cache as a concurrency problem: capacity, fragmentation, and the cap"
 status: not-started
-est_time: "5h"
+est_time: "6h"
+prev: "01-inference-workload-shape.md"
+next: "03-pagedattention-and-vllm.md"
 artifacts: []
+sources: 7
 ---
 
 # 07.2 · KV cache as a concurrency problem: capacity, fragmentation, and the cap
@@ -14,15 +17,25 @@ artifacts: []
 >
 > Module: [🚀 07 — Inference serving](../README.md) · Deliverable: [Cost-per-million-tokens](../practice/cost-per-token/README.md)
 
+## Where this fits
+
+07.1 established that the KV cache is the *residual* term in the VRAM budget and that it, not raw FLOPs, governs how many requests you can run concurrently — but it left "the residual" as an abstract leftover. This lesson turns that residual into an exact number by working out per-token KV bytes from model geometry, and then exposes the uncomfortable fact that a naive allocator wastes most of that number to fragmentation before you ever get to use it. That waste — and the concurrency you're leaving on the table because of it — is precisely what 07.3's PagedAttention mechanism exists to reclaim, so this lesson's job is to make you feel the size of the problem before you're handed the solution.
+
 ## Why this matters
 
 The concurrency cap is the number that sets your \$/Mtok, and it is a memory-management fact, not a scheduler setting. Interviewers at serving-heavy shops probe this precisely: "you have an H100, an 8B model, and an 8k context — how many requests run at once, and where does the memory go?" If you can compute the cap from KV geometry and then explain why a contiguous allocator would have wasted most of it, you have demonstrated the single insight that motivates PagedAttention, continuous batching, and every KV-offload trick that follows. Getting fragmentation wrong is how teams conclude they "need more GPUs" when they actually needed a better allocator.
 
-## What's new here
+Character.AI's public account of their serving stack makes this concrete at production scale: they describe an "efficient system for caching attention KV on host memory between chat turns" that directly "determines the maximum batch size that can fit on a GPU" — and they cut KV cache size by more than 20× through architecture choices (multi-query attention, hybrid attention horizons) without regressing quality. That is a team treating KV-cache-per-token as a first-class design target, not an afterthought tuned after the fact. This lesson gives you the arithmetic to reason about that the same way.
 
-Module 03 introduced the KV cache *as a concept* — the per-token K and V tensors you keep so you don't recompute attention over the whole history each decode step. This lesson reframes it as a **memory-management and concurrency problem**: KV is a pool of a fixed byte size, requests are variable-length allocations against that pool, and the interesting failure modes are *capacity* (how many fit) and *fragmentation* (how much you waste fitting them). Module 05's `/metrics` reading is the instrument; here you use it to *observe the cap move* as you change context length. Nothing about prefill/decode physics is re-derived — we take "decode is memory-bound, so batch size matters" as given and ask the next question: what sets the ceiling on batch size?
+## What's new here (calibration)
 
-## Core notes
+- **Already yours (referenced, not re-taught):** the KV cache *as a concept* — the per-token K/V tensors you keep so you don't recompute attention over the whole history each decode step (module 03); reading TTFT/TPOT and vLLM's `/metrics` (module 05).
+- **New here:** the KV cache reframed as a **memory-management and concurrency problem** — a fixed-byte pool, requests as variable-length allocations against it, and the two failure modes that matter: *capacity* (how many fit) and *fragmentation* (how much you waste fitting them).
+- **New here:** the exact per-token KV-bytes formula, worked against real model geometry, and the concurrency-cap formula it feeds.
+- **New here:** the three-signal observability runbook (`kv_cache_usage_perc` + `num_requests_running` + `num_requests_waiting`) for diagnosing *whether* you're KV-bound at all — module 05 gave you the instrument, this lesson gives you the diagnostic procedure.
+- We take "decode is memory-bound, so batch size matters" as given (03) and ask the next question this module is built around: **what sets the ceiling on batch size?**
+
+## Core concepts
 
 **Per-token KV bytes.** For one token, one sequence, the KV cache stores a key and a value vector in every layer, for every KV head:
 
@@ -32,7 +45,7 @@ kv_bytes_per_token = 2 × num_layers × num_kv_heads × head_dim × dtype_bytes
                      K and V
 ```
 
-The `2` is K+V. `num_kv_heads` (not `num_attention_heads`) is what matters — with **Grouped-Query Attention (GQA)**, many query heads share a few KV heads, and modern models exploit this to shrink KV by 4–8×. This is a serving-economics decision baked into the model architecture: GQA is largely *why* long-context serving is affordable.
+The `2` is K+V. `num_kv_heads` (not `num_attention_heads`) is what matters — with **Grouped-Query Attention (GQA)**, many query heads share a few KV heads, and modern models exploit this to shrink KV by 4–8×. This is the serving-economics decision 07.1 flagged as an architecture-level cost lever — GQA is largely *why* long-context serving is affordable at all.
 
 Worked geometry for **Llama-3.1-70B** (BF16 KV): `num_layers = 80`, `num_kv_heads = 8` (GQA; 64 query heads), `head_dim = 128`, `dtype_bytes = 2`.
 
@@ -68,10 +81,10 @@ KV_pool_bytes ≈ VRAM_total × gpu_memory_utilization − weights − overhead
 
 Two things to internalize:
 
-- **The cap is inversely proportional to context length.** Double `avg_seq_len` (or double `--max-model-len`, which is the *worst-case* per-request reservation), and the number of requests that fit **halves**. Context length and concurrency trade off against each other on a fixed KV pool — this is the lever behind almost every capacity decision.
+- **The cap is inversely proportional to context length.** Double `avg_seq_len` (or double `--max-model-len`, which is the *worst-case* per-request reservation), and the number of requests that fit **halves**. Context length and concurrency trade off against each other on a fixed KV pool — this is the lever behind almost every capacity decision, and it is the exact tension that agent workloads with 100K+ token contexts push to its limit (see Perspectives below).
 - **`--max-model-len` is a reservation ceiling, not the live footprint.** vLLM sizes and admits work against the maximum a request *could* grow to; with paged allocation the live blocks track actual length, but the admission control and profiling are bounded by `--max-model-len`. Set it to your real p99 context, not the model's theoretical max, or you strand KV pool on headroom you never use.
 
-**Why naive contiguous KV wastes 60–80%.** The pre-PagedAttention approach reserved one **contiguous** buffer per sequence, sized to the maximum possible length, at admission time. Three compounding wastes (this is the core argument of the PagedAttention paper, §2):
+**Why naive contiguous KV wastes 60–80%.** The pre-PagedAttention approach reserved one **contiguous** buffer per sequence, sized to the maximum possible length, at admission time. Three compounding wastes (this is the core argument of the PagedAttention paper, §2), each with a direct OS-memory-management analogue:
 
 - **Internal fragmentation (the big one):** you reserve `max_model_len` per request but most requests decode far fewer tokens. A request that stops at 300 tokens inside a 2048-token reservation wastes 85% of its buffer for its entire lifetime.
 - **Reservation-for-unknown-length:** generation length is unknown up front, so a safe contiguous allocator *must* over-reserve — you cannot grow a contiguous buffer in place if the neighbor is occupied.
@@ -100,7 +113,22 @@ Both are things you tune against the cap you're about to measure — hold them a
 2. `num_requests_running` flat at its ceiling,
 3. `num_requests_waiting` climbing (arrivals can't be admitted).
 
-That triple is your measured concurrency cap and the exact condition your \$/Mtok is computed at — it's the most efficient point *if* TPOT still meets SLO. If instead `kv_cache_usage_perc` is low while `waiting` climbs, you are *not* KV-bound (check `--max-num-seqs`, client concurrency, or a compute ceiling). Distinguishing these is a common senior-screen question: "the queue is growing — is it a memory cap or a throughput cap?" The KV gauge answers it.
+That triple is your measured concurrency cap and the exact condition your \$/Mtok is computed at — it's the most efficient point *if* TPOT still meets SLO. If instead `kv_cache_usage_perc` is low while `waiting` climbs, you are *not* KV-bound (check `--max-num-seqs`, client concurrency, or a compute ceiling). Distinguishing these is a common senior-screen question: "the queue is growing — is it a memory cap or a throughput cap?" The KV gauge answers it. Treat this three-signal test as a small incident-response runbook: it's the first thing you check when someone pages you about rising latency on an inference fleet, before you reach for "add more GPUs."
+
+## Perspectives
+
+**The architecture-as-cost-control view.** Character.AI's engineering blog is explicit that KV-cache-per-token is a design target they optimize *at the model architecture level* — multi-query attention variants and hybrid attention horizons that bound how far back a layer needs to attend — not just a serving-layer tuning knob. The most senior version of the skill this lesson teaches is not "I can compute the concurrency cap" but "I can influence the model architecture upstream so the cap is bigger to begin with." That's a materially different level of leverage than tuning `--gpu-memory-utilization` after the model is already fixed.
+
+**The allocator/OS-analogy view.** Everything in the "why naive contiguous KV wastes 60–80%" section is textbook OS memory management with the serial numbers filed off: internal fragmentation, external fragmentation, and over-reservation for unknown future growth are the same three failure modes a first-year OS course covers for heap allocators and process address spaces. If you've debugged fragmented Java heaps or Kubernetes node bin-packing, you already have the right mental model — the only new fact is that here the "heap" is HBM and the "objects" are per-token K/V tensors.
+
+**The observability/SRE view.** The three-signal test above is written as an incident-response runbook on purpose. In production, "requests are queuing" is an ambiguous alert — it could mean you're KV-bound, compute-bound, or hitting a client-side concurrency cap that has nothing to do with the GPU. Checking `kv_cache_usage_perc` first, before reaching for "scale out," is the difference between a two-minute diagnosis and an hour of adding GPUs that don't move the metric because the real constraint was a `--max-num-seqs` setting or a caller-side connection pool.
+
+**The long-context economics view.** As agent workloads push context windows toward 100K+ tokens (long conversation histories, large retrieved documents, multi-step tool-call traces), the inverse relationship between context length and concurrency cap stops being a napkin-math curiosity and becomes the dominant cost driver: a pool that comfortably serves 100 concurrent 8k-token requests serves roughly 8 concurrent 100k-token requests on the same hardware. This is exactly the tension that later lessons' disaggregation and KV-offload techniques (07.6) exist to relieve — by moving KV off the GPU's scarce HBM onto cheaper tiers, or by scaling prefill and decode independently so a long-context prefill doesn't starve the decode pool.
+
+## Real-world use cases
+
+- **Character.AI — "Optimizing AI Inference at Character.AI"** — https://blog.character.ai/optimizing-ai-inference-at-character-ai/ — describes an "efficient system for caching attention KV on host memory between chat turns" that "determines the maximum batch size that can fit on a GPU," and cuts KV cache size by more than 20× via architecture (multi-query attention, hybrid attention horizons) without quality loss. The load-bearing case study for this lesson: a production team treating KV footprint as the primary lever on serving cost.
+- **NetApp Community — "Engineering Inference: KV Cache, Shared Storage, and the Economics of AI"** — https://community.netapp.com/t5/Tech-ONTAP-Blogs/Engineering-Inference-KV-Cache-Shared-Storage-and-the-Economics-of-AI/ba-p/466018 — vendor content (flag it as such, not an independent operator postmortem), but a usable secondary reference for the "KV cache as an economic object, not just a data structure" framing, including why reuse vs. recompute and tiered storage for KV are becoming standard vocabulary in AI infrastructure.
 
 ## Worked example
 
@@ -142,7 +170,16 @@ Kill it, then **Run B** identically but `--max-model-len 16384`. Saturate and sc
 
 Record, for each run, `num_requests_running` at the moment `kv_cache_usage_perc` (or `gpu_cache_usage_perc`) pins near 1.0 — that peak `running` count is your measured concurrency cap. You should see the 4× larger `--max-model-len` cut the cap by roughly 3–4× (not exactly 4× — block rounding and overhead).
 
-**Acceptance:** a two-row measured table — `max-model-len` → peak `num_requests_running` at KV-saturation — plus the computed cap from the worked-example formula alongside each, committed to the [cost-per-token deliverable](../practice/cost-per-token/README.md). This "concurrency-cap vs max-model-len" observation is the load-bearing input for the \$/Mtok calc: tokens/sec/GPU ∝ this cap.
+While both runs are saturated, walk the three-signal test explicitly: confirm `kv_cache_usage_perc` is pinned, `num_requests_running` is flat, and `num_requests_waiting` is climbing — write down the values, since this triple is what you'll cite as "measured KV-bound" evidence in the deliverable, not just an inferred cap.
+
+**Acceptance:** a two-row measured table — `max-model-len` → peak `num_requests_running` at KV-saturation — plus the computed cap from the worked-example formula alongside each, and the three raw gauge values confirming the KV-bound signature, committed to the [cost-per-token deliverable](../practice/cost-per-token/README.md). This "concurrency-cap vs max-model-len" observation is the load-bearing input for the \$/Mtok calc: tokens/sec/GPU ∝ this cap.
+
+## Common pitfalls
+
+- **Setting `--max-model-len` to the architectural max "to be safe."** This directly strands KV pool you'll never use — the reservation ceiling scales your worst-case per-request footprint, not your actual usage. Character.AI's counterexample is instructive: elite serving teams actively engineer KV footprint *down* (via architecture and via right-sized `--max-model-len`), they don't pad it up for safety margin.
+- **Confusing `num_kv_heads` with `num_attention_heads`.** A common interview bug — using the query-head count instead of the KV-head count silently inflates your KV-bytes estimate by up to 8×, which cascades into a wrong concurrency cap and a wrong \$/Mtok. Always pull `num_key_value_heads` from the model's `config.json`, not the attention-head count from the architecture diagram.
+- **Believing block-size 16 is a serving-quality knob to tune first.** It rarely matters compared to `--max-model-len` and `--gpu-memory-utilization`, which move the cap by orders of magnitude more. Leave `--block-size` at its default unless you have a specific long-context or prefix-sharing reason to change it (07.3 covers when it does matter).
+- **Reading `num_requests_waiting` climbing as automatically "add GPUs."** Check `kv_cache_usage_perc` first. If it's low while the queue grows, you're not KV-bound — you may be hitting a compute ceiling, a `--max-num-seqs` cap, or a client-side concurrency limit, none of which more GPU memory or more replicas necessarily fixes without also checking what's actually saturated.
 
 ## Self-check
 
@@ -158,8 +195,31 @@ Record, for each run, `num_requests_running` at the moment `kv_cache_usage_perc`
 
 **Answer:** A contiguous allocator reserves one max-length buffer per sequence at admission because generation length is unknown and a contiguous buffer can't grow in place. Most requests finish far short of that reservation → **internal fragmentation** holds the unused tail for the request's whole life; variable-sized buffers also leave unusable gaps → **external fragmentation**. The PagedAttention paper measured only ~20–40% of KV holding real token state (60–80% wasted). Fixed-size paged blocks cut this to at most one partial block per sequence (a few %), turning the reclaimed memory directly into concurrency.
 
-## Resources
+**(d) Your dashboard shows `num_requests_waiting` climbing steadily. How do you determine, without guessing, whether the fix is "add GPUs"?**
 
-1. **PagedAttention (Efficient Memory Management for LLM Serving), SOSP'23 — §2–3** — https://arxiv.org/abs/2309.06180 — *deep.* The primary source for the fragmentation argument and the block-based fix; §2 quantifies the 60–80% waste, §3 defines the paged KV mechanism 07.3 builds on. Read the memory-waste figure closely.
-2. **vLLM — Conserving Memory** — https://docs.vllm.ai/en/latest/configuration/conserving_memory/ — *skim, then apply.* Practical `--gpu-memory-utilization`, `--max-model-len`, KV-dtype, and swap knobs that change the concurrency cap on real hardware — your reference during the practice runs.
-3. **vLLM — Metrics design** — https://docs.vllm.ai/en/stable/design/metrics/ — *skim.* Authoritative names/semantics for `kv_cache_usage_perc`, `num_requests_running`, `num_requests_waiting`; confirm the exact strings against your pinned 0.11.0 `/metrics` output before wiring dashboards.
+**Answer:** Run the three-signal test: check `kv_cache_usage_perc`, `num_requests_running`, and `num_requests_waiting` together. If `kv_cache_usage_perc` is pinned near 1.0 and `num_requests_running` is flat at its ceiling while `waiting` climbs, you are genuinely KV-bound — more KV pool (bigger GPU, more GPUs, quantized KV, or a shorter `--max-model-len`) is the right fix. If `kv_cache_usage_perc` is low while `waiting` still climbs, the bottleneck is elsewhere — a `--max-num-seqs` cap, a compute ceiling, or a client-side concurrency limit — and adding GPU memory won't move the metric.
+
+**(e) A team proposes cutting \$/Mtok by moving to a model with 4× more KV heads because it scored slightly higher on a quality benchmark. What do you ask before signing off?**
+
+**Answer:** Ask what the KV-heads change does to `kv_bytes_per_token` and, therefore, to the concurrency cap and \$/Mtok at your real production context length — a 4× increase in `num_kv_heads` is roughly a 4× cut in max concurrent requests on the same GPU, which likely dwarfs a marginal quality gain in cost terms. This is the GQA-vs-MHA counterfactual from this lesson applied as a go/no-go gate, not just a napkin exercise.
+
+## Connections & what's next
+
+This lesson turns 07.1's abstract "KV is the residual" into the concrete `max_concurrent_requests` number that every later lesson in this module measures, tunes, or multiplies. The fragmentation waste it quantifies (60–80%) is the exact gap 07.3's PagedAttention closes; the three-signal observability runbook is the diagnostic you'll reuse when 07.4 covers production tuning and preemption, and when 07.8 covers autoscaling signals. The long-context/concurrency tension raised in Perspectives resurfaces directly in 07.6's disaggregation lesson.
+
+**Next: [07.3 — PagedAttention and vLLM](03-pagedattention-and-vllm.md)** takes the fragmentation number this lesson names (60–80% wasted) and shows the block-table mechanism — non-contiguous fixed-size KV blocks addressed like OS virtual memory — that cuts that waste to under 4%, which is what physically permits the high `max-num-seqs` this lesson's cap formula assumes is achievable.
+
+## References & further reading
+
+**Primary sources**
+- PagedAttention paper, §2 ("Efficient Memory Management for LLM Serving with PagedAttention," SOSP'23) — https://arxiv.org/abs/2309.06180 — read for the fragmentation measurements (20–40% real utilization) that this lesson's core argument is built on.
+- vLLM — Metrics design — https://docs.vllm.ai/en/stable/design/metrics/ — read for the authoritative names/semantics of `kv_cache_usage_perc`, `num_requests_running`, `num_requests_waiting` before wiring the practice's dashboard.
+- vLLM — Conserving Memory — https://docs.vllm.ai/en/latest/configuration/conserving_memory/ — the practical `--gpu-memory-utilization`, `--max-model-len`, and KV-dtype knobs that change the concurrency cap on real hardware.
+
+**Real-world engineering blogs**
+- Character.AI — "Optimizing AI Inference at Character.AI" — https://blog.character.ai/optimizing-ai-inference-at-character-ai/ — KV cache as the batch-size-determining resource, cut >20× via architecture without quality loss; the load-bearing case study for this lesson.
+- NetApp Community — "Engineering Inference: KV Cache, Shared Storage, and the Economics of AI" — https://community.netapp.com/t5/Tech-ONTAP-Blogs/Engineering-Inference-KV-Cache-Shared-Storage-and-the-Economics-of-AI/ba-p/466018 — vendor content on KV-cache-as-economic-object framing; read with that lens, not as an operator postmortem.
+
+**Deeper dives**
+- GQA paper, "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints" (arXiv 2305.13245) — https://arxiv.org/abs/2305.13245 — the full derivation behind the `num_kv_heads` savings this lesson's worked example uses; cross-ref 07.1 rather than re-deriving.
+- Sebastian Raschka — "LLM Architecture Gallery" — https://sebastianraschka.com/llm-architecture-gallery/ — includes a compact GQA explainer alongside other attention-variant fact sheets, useful for quickly checking a new model's KV-head geometry.

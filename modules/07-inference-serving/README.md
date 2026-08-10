@@ -3,7 +3,7 @@ id: "07"
 title: "Inference serving"
 notion: "https://app.notion.com/p/3b33abaeb823810aa06bf912b8380bb1"
 phase: "Phase 3 · Months 8–12"
-effort: "~65 hrs ≈ 5–6 weeks @ 10–12 hrs/wk"
+effort: "~67 hrs ≈ 5–6 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["03"]
 unlocks: ["11"]
@@ -18,7 +18,7 @@ completed: null
 > family (Senior/Staff SWE, Inference) at every neocloud and AI-native shop.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb823810aa06bf912b8380bb1
-- **Phase:** Phase 3 · requires 03 · unlocks 11 · **Est. effort:** ~65 hrs ≈ 5–6 weeks (~$30–50 rented GPU)
+- **Phase:** Phase 3 · requires 03 · unlocks 11 · **Est. effort:** ~67 hrs ≈ 5–6 weeks (~$30–50 rented GPU)
 - **Deliverable:** [Cost-per-million-tokens characterization](practice/cost-per-token/) —
   the CPM-vs-batch curve, FP8-vs-FP16 saving, and cold-start, wired into `gpu-cost-operator`.
 
@@ -45,18 +45,18 @@ Anchored on **PagedAttention/vLLM** (L3); the **cost pivot** is L5; everything c
 
 | # | Lesson | Hrs | Cost decision |
 |---|--------|-----|---------------|
-| 01 | [Inference workload shape](lessons/01-inference-workload-shape.md) | 5 | manage the KV budget to an SLO at min CPM |
-| 02 | [KV cache as a concurrency problem](lessons/02-kv-cache-concurrency.md) | 5 | KV capacity *is* the concurrency ceiling |
-| 03 | [**PagedAttention & vLLM**](lessons/03-pagedattention-and-vllm.md) (anchor) | 6 | near-zero fragmentation → high `max-num-seqs` |
-| 04 | [vLLM in production (config + preemption)](lessons/04-vllm-in-production.md) | 6 | how much of the GPU you monetize |
-| 05 | [**Batching economics** (CPM curves)](lessons/05-batching-economics.md) (cost pivot) | 6 | the min-CPM operating point under the SLO |
-| 06 | [Alternative servers + disaggregation](lessons/06-alternative-servers-disaggregation.md) | 6 | match engine to workload; independent prefill/decode scaling |
-| 07 | [**Quantization ops** (FP8 lever)](lessons/07-quantization-ops.md) | 5 | ~½ CPM on Hopper+ — measured, not asserted |
-| 08 | [Autoscaling inference](lessons/08-autoscaling-inference.md) | 5 | scale-to-zero vs cold-start |
-| 09 | [Model loading & storage](lessons/09-model-loading-storage.md) | 5 | what *makes* scale-to-zero viable |
-| 10 | [Multi-model / LoRA](lessons/10-multi-model-lora.md) | 5 | one base + N adapters vs N deployments |
+| 01 | [Inference workload shape](lessons/01-inference-workload-shape.md) | 6 | manage the KV budget to an SLO at min CPM |
+| 02 | [KV cache as a concurrency problem](lessons/02-kv-cache-concurrency.md) | 6 | KV capacity *is* the concurrency ceiling |
+| 03 | [**PagedAttention & vLLM**](lessons/03-pagedattention-and-vllm.md) (anchor) | 8 | near-zero fragmentation → high `max-num-seqs` |
+| 04 | [vLLM in production (config + preemption)](lessons/04-vllm-in-production.md) | 8 | how much of the GPU you monetize |
+| 05 | [**Batching economics** (CPM curves)](lessons/05-batching-economics.md) (cost pivot) | 8 | the min-CPM operating point under the SLO |
+| 06 | [Alternative servers + disaggregation](lessons/06-alternative-servers-disaggregation.md) | 7 | match engine to workload; independent prefill/decode scaling |
+| 07 | [**Quantization ops** (FP8 lever)](lessons/07-quantization-ops.md) | 6 | ~½ CPM on Hopper+ — measured, not asserted |
+| 08 | [Autoscaling inference](lessons/08-autoscaling-inference.md) | 6 | scale-to-zero vs cold-start |
+| 09 | [Model loading & storage](lessons/09-model-loading-storage.md) | 6 | what *makes* scale-to-zero viable |
+| 10 | [Multi-model / LoRA](lessons/10-multi-model-lora.md) | 6 | one base + N adapters vs N deployments |
 
-Total ≈ **65 hrs ≈ 5–6 weeks**. Spine = L3 + L5 + the CPM deliverable.
+Total ≈ **67 hrs ≈ 5–6 weeks**. Spine = L3 + L5 + the CPM deliverable.
 
 ## Resource spine
 
