@@ -3,7 +3,7 @@ id: "01b"
 title: "Linux systems internals"
 notion: "https://app.notion.com/p/3b33abaeb823812a8e94cf07ea623410"
 phase: "Phase 0 · Months 1–3 (parallel with Go)"
-effort: "~60 hrs ≈ 5–6 weeks @ 10–12 hrs/wk"
+effort: "~65 hrs ≈ 6 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: []
 unlocks: []
@@ -18,7 +18,7 @@ completed: null
 > container runtime, and nothing above the kernel explains them.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb823812a8e94cf07ea623410
-- **Phase:** Phase 0 · runs **parallel with Go** (not sequentially gated) · **Est. effort:** ~60 hrs ≈ 5–6 weeks
+- **Phase:** Phase 0 · runs **parallel with Go** (not sequentially gated) · **Est. effort:** ~65 hrs ≈ 6 weeks
 - **Deliverable:** [Anatomy of a Container](practice/anatomy-of-a-container/) — a
   publishable teardown + a bpftrace/PSI diagnostic toolkit.
 
@@ -49,18 +49,18 @@ Anchored on **cgroups + namespaces = "what a container really is."** Spine = L3,
 
 | # | Lesson | Hrs | Fleet tie-in |
 |---|--------|-----|--------------|
-| 01 | [Processes, scheduling & the run queue](lessons/01-processes-and-scheduling.md) | 4 | D-state, load-vs-cores |
-| 02 | [Namespaces — half of what a container is](lessons/02-namespaces.md) | 5 | build a container by hand |
-| 03 | [cgroups v2 + K8s resource enforcement](lessons/03-cgroups-v2-and-k8s-enforcement.md) (anchor) | 8 | limits/QoS → `cpu.max`/`memory.max` |
-| 04 | [PSI — saturation the right way](lessons/04-psi.md) | 4 | data-loader stalls the GPU step |
-| 05 | [Memory management & the OOM killer](lessons/05-memory-and-oom.md) | 6 | attribute a kill from `dmesg` |
-| 06 | [Hugepages / THP / NUMA](lessons/06-hugepages-thp-numa.md) | 4 | GPU/NIC affinity, TLB/throughput |
-| 07 | [Networking datapath & conntrack](lessons/07-networking-datapath-conntrack.md) | 5 | NCCL/egress blows conntrack |
-| 08 | [eBPF — the observability substrate](lessons/08-ebpf.md) | 7 | Cilium/Hubble, Datadog-style tracing |
-| 09 | [perf / ftrace / USE method](lessons/09-perf-ftrace-use.md) | 6 | how you answer debugging interviews |
-| 10 | [systemd-as-cgroup-manager + block I/O](lessons/10-systemd-cgroups-and-block-io.md) | 3 | delegation, io PSI |
+| 01 | [Processes, scheduling & the run queue](lessons/01-processes-and-scheduling.md) | 6 | D-state, load-vs-cores, NCCL core isolation |
+| 02 | [Namespaces — half of what a container is](lessons/02-namespaces.md) | 7 | build a container by hand, GPU device visibility |
+| 03 | [cgroups v2 + K8s resource enforcement](lessons/03-cgroups-v2-and-k8s-enforcement.md) (anchor) | 9 | limits/QoS → `cpu.max`/`memory.max`, cpuset/NUMA pinning |
+| 04 | [PSI — saturation the right way](lessons/04-psi.md) | 5 | data-loader stalls the GPU step |
+| 05 | [Memory management & the OOM killer](lessons/05-memory-and-oom.md) | 7 | attribute a kill from `dmesg`, checkpoint-loss economics |
+| 06 | [Hugepages / THP / NUMA](lessons/06-hugepages-thp-numa.md) | 5 | GPU/NIC affinity, TLB/throughput |
+| 07 | [Networking datapath & conntrack](lessons/07-networking-datapath-conntrack.md) | 6 | NCCL/egress blows conntrack |
+| 08 | [eBPF — the observability substrate](lessons/08-ebpf.md) | 8 | Cilium/Hubble, Datadog-style tracing, BTF/CO-RE |
+| 09 | [perf / ftrace / USE method](lessons/09-perf-ftrace-use.md) | 7 | how you answer debugging interviews |
+| 10 | [systemd-as-cgroup-manager + block I/O](lessons/10-systemd-cgroups-and-block-io.md) | 5 | delegation, io PSI, iocost |
 
-Total ≈ **60 hrs ≈ 5–6 weeks** — deliberately lighter than the controllers module,
+Total ≈ **65 hrs ≈ 6 weeks** — deliberately lighter than the controllers module,
 runs parallel to Go.
 
 ## Resource spine

@@ -4,8 +4,11 @@ title: "Pressure Stall Information (PSI)"
 module: "01b"
 concept: "Pressure Stall Information (PSI)"
 status: not-started
-est_time: "4h"
+est_time: "5h"
+prev: "03-cgroups-v2-and-k8s-enforcement.md"
+next: "05-memory-and-oom.md"
 artifacts: []
+sources: 5
 ---
 
 # 01b.4 · Pressure Stall Information (PSI)
@@ -14,27 +17,34 @@ artifacts: []
 >
 > Module: [🐧 01b — Linux systems internals](../README.md) · Deliverable: [Anatomy of a Container](../practice/anatomy-of-a-container/README.md)
 
+## Where this fits
+
+Lesson 03 built the whole cgroup-v2 enforcement picture — `cpu.max`, `memory.max`, the QoS tree — and along the way introduced `cpu.pressure`/`memory.pressure`/`io.pressure` as a side note under "the observability lever." This lesson promotes that side note to the main event. Lesson 03 answered "how much of a resource is this cgroup *allowed*"; this lesson answers a different and, for on-call debugging, more urgent question: "is anything being *denied* a resource *right now*, and by how much wall-clock time." Where lesson 03 gave you the enforcement files, this lesson gives you the *diagnostic* file — the one you read first when a symptom shows up and you don't yet know which resource is guilty.
+
 ## Why this matters
 
-Your GPU node shows 60% CPU utilization and the fleet dashboard is green. Yet training throughput has collapsed: `nvidia-smi` shows the GPUs sitting at 30% utilization, waiting. The data-loader — CPU-side processes that decode JPEGs and feed tensors to the GPU — is stalling, and every millisecond it stalls, an $30k/hr GPU idles. Utilization cannot see this, because utilization measures *time spent running*, not *time spent waiting to run*. A CPU that is 60% busy can still have runnable threads queued behind it 90% of the time if those threads are bursty.
+Your GPU node shows 60% CPU utilization and the fleet dashboard is green. Yet training throughput has collapsed: `nvidia-smi` shows the GPUs sitting at 30% utilization, waiting. The data-loader — CPU-side processes that decode JPEGs and feed tensors to the GPU — is stalling, and every millisecond it stalls, an expensive GPU idles (2026 on-demand pricing for a single high-end training GPU commonly runs several dollars per hour; a multi-GPU node is easily $20–40+/hr — treat any such figure as a dated snapshot, not a fixed number). Utilization cannot see this, because utilization measures *time spent running*, not *time spent waiting to run*. A CPU that is 60% busy can still have runnable threads queued behind it 90% of the time if those threads are bursty.
 
 PSI is the kernel's answer to the question "is anything being *denied* a resource right now?" It is the mechanism behind:
 
-- **Kubernetes node-pressure eviction** — the kubelet's memory/disk signals, and increasingly PSI-derived signals, decide which pods get evicted before the node dies.
-- **`systemd-oomd`** and **Android's LMKD** — both kill processes based on memory PSI *before* the kernel OOM killer fires, avoiding the hard stall.
+- **Kubernetes node-pressure eviction** — the kubelet's memory/disk signals, and (as of the 1.36 GA feature covered below) increasingly PSI-derived signals, decide which pods get evicted before the node dies.
+- **`systemd-oomd`** (and Meta's own **oomd**, its production ancestor) and **Android's LMKD** — all kill processes based on memory PSI *before* the kernel OOM killer fires, avoiding the hard stall.
 - **Autoscalers and bin-packers** that want to pack GPU nodes densely without tipping them into thrash.
 
 If your differentiator is cost and observability, PSI is the single most important saturation metric you can teach a fleet to emit. It turns "the node feels slow" into "memory pressure some=42% for 60s, resource=memory, victim cgroup=data-loader."
 
-## From using to understanding
+## What's new here (calibration)
 
-**What the operator knows.** You read `top`, `htop`, `kubectl top node`. You watch `%CPU`, load average, `free -m`, `iostat`. You know load average > core count is "bad" and utilization near 100% is "saturated."
+You already run `top`/`htop`/`kubectl top node`, watch `%CPU`, load average, and `free -m`, and know load average above core count is "bad" and utilization near 100% is "saturated" — the module README's skip-list assumes exactly this operator fluency, and lesson 01 already gave you the precise mechanics of load average (R+D states, EWMA) as a *storage-health proxy*, not a saturation instrument. This lesson does not re-derive load average.
 
-**Why that model is blind.** Utilization answers *"was the resource busy?"* Load average answers *"how many tasks were runnable or in uninterruptible sleep?"* — a 1/5/15-minute exponentially-decayed count that conflates CPU demand with D-state I/O waiters and gives you no per-resource breakdown. Neither tells you *how much wall-clock time real work lost to waiting*. A box at 55% CPU with a bursty, latency-sensitive loader is functionally saturated; a box at 95% CPU running one throughput batch job with nothing queued behind it is perfectly healthy. Utilization mislabels both.
+What's genuinely new:
 
-**The kernel mechanism.** PSI (merged in Linux 4.20, by Johannes Weiner at Facebook) instruments the scheduler and the memory/I/O reclaim paths directly. Every time a task *cannot make progress because a resource is contended* — it's runnable but off-CPU waiting for a core, or blocked in direct reclaim, or blocked on I/O caused by memory pressure — the kernel accumulates stall time. It aggregates that into two productivity-loss ratios, **some** and **full**, per resource, and exposes running averages. This is not sampled after the fact; it is accounted at the scheduling events themselves.
+- The precise, kernel-accounted (not sampled) definitions of `some` and `full`, and why they measure something load average and utilization structurally cannot.
+- The system-level CPU asymmetry (`full` doesn't exist for system-wide CPU, but does per-cgroup) — a detail that trips people up in interviews because it seems inconsistent until you see why.
+- The trigger-FD/`poll()` mechanism that lets automated systems act on pressure in milliseconds, not scrape intervals.
+- PSI's direct lineage into production tooling — Meta's oomd (PSI's origin story) and, as of a recent Kubernetes release, first-class GA kubelet support — which turns this from "a kernel curiosity" into "a metric already on your node today."
 
-## Core notes
+## Core concepts
 
 ### The two numbers: `some` vs `full`
 
@@ -62,7 +72,7 @@ full avg10=0.00 avg60=0.08 avg300=0.19 total=5109882
 - `avg10 / avg60 / avg300` — the stall percentage averaged over the last 10, 60, and 300 seconds.
 - `total` — a monotonic **microsecond** counter of cumulative stall time since boot. This is the field to scrape for rate() in Prometheus: `rate(psi_total[1m])` gives you stall-microseconds per second, i.e. instantaneous pressure, without the EWMA smearing of avg10.
 
-**Per-cgroup (cgroup v2):** each cgroup directory exposes `cpu.pressure`, `memory.pressure`, `io.pressure`. Same format. This is what makes PSI operationally powerful — you can attribute pressure to *one pod's cgroup* instead of guessing at the node level.
+**Per-cgroup (cgroup v2):** each cgroup directory exposes `cpu.pressure`, `memory.pressure`, `io.pressure`. Same format. This is what makes PSI operationally powerful — you can attribute pressure to *one pod's cgroup* instead of guessing at the node level, the same leaf-cgroup-reading discipline lesson 03 built.
 
 ```
 $ cat /sys/fs/cgroup/kubepods.slice/.../cpu.pressure
@@ -78,8 +88,23 @@ Enablement: kernel must be built with `CONFIG_PSI=y`. Some distros default it of
 
 ### How this maps to Kubernetes and the GPU fleet
 
-- **Node-pressure eviction** today keys off `memory.available` (from `memory.working_set`) and `nodefs`/`imagefs` signals. But those are *level* signals — "how much is left" — not *rate-of-pain* signals. PSI memory `full` rising is the leading indicator that reclaim is thrashing *before* `memory.available` crosses the hard threshold. Fleets that scrape `memory.pressure` per pod evict the *right* pod earlier.
-- **The stalled GPU step.** A training step is a pipeline: CPU loader → host-to-device copy → GPU kernel. If the loader's cgroup shows `cpu.pressure some` high while node CPU utilization is moderate, the loader is being starved of cores (too few, or noisy-neighbor contention) — the GPU stalls downstream. If the loader shows `io.pressure full` spikes, it's blocked reading shards from disk/network FS. PSI tells you *which* stage of the pipeline lost the time. Utilization tells you none of it.
+- **Node-pressure eviction** historically keys off `memory.available` (from `memory.working_set`) and `nodefs`/`imagefs` signals. But those are *level* signals — "how much is left" — not *rate-of-pain* signals. PSI memory `full` rising is the leading indicator that reclaim is thrashing *before* `memory.available` crosses the hard threshold. As of Kubernetes v1.36, kubelet-native PSI collection at node/pod/container level graduated to **GA, on by default** (see Real-world use cases) — this is no longer a metric you have to bolt on yourself.
+- **The stalled GPU step.** A training step is a pipeline: CPU loader → host-to-device copy → GPU kernel. If the loader's cgroup shows `cpu.pressure some` high while node CPU utilization is moderate, the loader is being starved of cores (too few, or noisy-neighbor contention) — the GPU stalls downstream. If the loader shows `io.pressure full` spikes, it's blocked reading shards from disk/network FS. PSI tells you *which* stage of the pipeline lost the time, and *which* resource — it does not, by itself, tell you the exact code path or call stack that was blocked. That's lesson 09's job: once PSI has localized the resource and the cgroup, off-CPU flame graphs (built from scheduler tracepoints) show you the precise stack that was waiting. PSI narrows the search; off-CPU analysis finishes it.
+
+## Perspectives
+
+**Kernel-mechanism view.** PSI (merged in Linux 4.20, written by Johannes Weiner at Facebook) instruments the scheduler and the memory/I/O reclaim paths directly, at the moment a task can't make progress — it's runnable but off-CPU waiting for a core, or blocked in direct reclaim, or blocked on I/O caused by memory pressure. The kernel accumulates that stall time as it happens and aggregates it into the `some`/`full` running averages. This is not sampled after the fact the way `top` samples `/proc` every interval; the accounting happens at the scheduling event itself, which is why PSI can catch stalls too brief for a sampling profiler to ever see.
+
+**Operator/SRE view.** Contrast a dashboard-that-lies with a dashboard-that-tells-the-truth. Utilization answers "was the resource busy?" — a question that is compatible with *both* a healthy node and a badly starved one, because bursty demand can leave a CPU only 60% busy on average while still queuing tasks behind it most of the time. PSI answers a different, sharper question: "how much wall-clock time did real work lose to waiting?" It turns a vibe ("the node feels slow," "something's off") into a number you can alert on, graph, and cite in a postmortem — `memory some avg10=42%` is falsifiable in a way "feels slow" never was.
+
+**GPU-fleet-specific view.** The lesson's headline story — a data loader stalling the GPU step while node CPU utilization looks fine — is PSI doing exactly the job it was built for: localizing *which resource, in which cgroup* is the bottleneck in a multi-stage pipeline where the expensive resource (the GPU) is downstream of the cheap one (CPU/IO) that's actually stalled. Once PSI has told you "this cgroup, this resource, this severity," lesson 09's off-CPU flame graphs tell you the exact stack — PSI is the wide-angle instrument, off-CPU tracing is the zoom lens.
+
+**Failure-mode/economics view.** PSI and classic eviction thresholds are different *kinds* of signal, not competing versions of the same one. A level signal like `memory.available` tells you how much runway is left — a fuel gauge. A rate signal like PSI `full` tells you how fast you're burning it — a rate-of-climb indicator. The second pages you before the first one does: a node can have plenty of `memory.available` left by the gauge while `memory.pressure full` is already climbing because reclaim is thrashing to keep it that way. Waiting for the level signal alone means you find out about the fire after it's already spread; the rate signal is your early warning.
+
+## Real-world use cases
+
+- **Meta Engineering — "Open-sourcing oomd, a new approach to handling OOMs"** — https://engineering.fb.com/2018/07/19/production-engineering/oomd/ — Facebook's userspace OOM daemon watches `memory.pressure avg10` and proactively sheds load or kills low-priority jobs *before* the kernel's blunt-instrument OOM killer ever fires. This is PSI's origin story in production, written by the same team (Johannes Weiner et al.) that wrote PSI itself — the direct ancestor of `systemd-oomd`.
+- **Kubernetes Blog — "Kubernetes v1.36: PSI Metrics for Kubernetes Graduates to GA"** — https://kubernetes.io/blog/2026/05/12/kubernetes-v1-36-psi-metrics-ga/ — PSI moved from kernel curiosity to a first-class, GA, on-by-default kubelet feature: node-, pod-, and container-level PSI collection built into the platform you operate daily. Concrete evidence that the metric this lesson teaches isn't a lab exercise — it's already on the node.
 
 ## Worked example
 
@@ -147,7 +172,15 @@ full avg10=58.70 avg60=37.40 avg300=13.90 total=39882001
 2. **Memory pressure to thrash.** Create `/sys/fs/cgroup/psi-demo` with `memory.max=256M`, move a `stress-ng --vm 1 --vm-bytes 1G` into it, and record `memory.pressure` climbing. Note the moment `full` overtakes 40%.
 3. **Correlate a stalled workload < 100% util.** While CPU pressure is high but util < 80%, run a tiny latency probe (a loop that measures wall-time to do a fixed 1ms of work, or `cyclictest` if available) and show its latency inflates even though "there's idle CPU."
 
-**Acceptance (feeds "Anatomy of a Container"):** a short note — 8–15 lines — presenting one cgroup or node that is **not** CPU-saturated by utilization (paste the `mpstat` average, < 80% busy) yet **is** pressured by PSI (paste the `/proc/pressure/cpu` or `*.pressure` line, `some` > 15%). State explicitly **which resource** is pressured and **which cgroup** owns it, and one sentence on the GPU-fleet failure mode it models (starved loader → idle GPU). Include the raw `total=` delta over 1s as your rate evidence.
+**Acceptance (feeds "[Anatomy of a Container](../practice/anatomy-of-a-container/README.md)"):** a short note — 8–15 lines — presenting one cgroup or node that is **not** CPU-saturated by utilization (paste the `mpstat` average, < 80% busy) yet **is** pressured by PSI (paste the `/proc/pressure/cpu` or `*.pressure` line, `some` > 15%). State explicitly **which resource** is pressured and **which cgroup** owns it, and one sentence on the GPU-fleet failure mode it models (starved loader → idle GPU). Include the raw `total=` delta over 1s as your rate evidence.
+
+## Common pitfalls
+
+1. **Reading `some` and `full` as interchangeable.** They measure different failure modes: `full` is the lost-throughput signal (nothing ran), `some` is the latency/queueing signal (something waited). A dashboard that only surfaces one is blind to the other — a node can have low `full` but climbing `some` (queueing, not yet total starvation) and that's still a real, worsening problem.
+2. **Expecting system-wide `/proc/pressure/cpu` to report `full`.** It structurally can't — "every task stalled on CPU" at the system level is indistinguishable from an idle CPU with nothing runnable, which isn't contention. Only *per-cgroup* CPU pressure reports `full`, because from inside a constrained cgroup all of *its* tasks can be starved while sibling cgroups run freely.
+3. **Assuming PSI is always available.** It requires `CONFIG_PSI=y` at build time and, on some distros, `psi=1` on the kernel cmdline (`CONFIG_PSI_DEFAULT_DISABLED` governs the runtime default). A missing `/proc/pressure/` directory is a configuration gap to fix, not evidence "PSI doesn't apply here."
+4. **Polling PSI files on a fixed interval instead of using the trigger-FD/`poll()` mechanism** for latency-sensitive automated response. Polling on a scrape interval means seconds of detection latency; the trigger-FD path (what `systemd-oomd` and LMKD use) delivers a wakeup in single-digit milliseconds once a threshold is crossed.
+5. **Conflating high PSI with "the box is overloaded, add capacity."** PSI localizes *which* resource and *which* cgroup is stalled — it's a diagnostic instrument, not automatically a capacity verdict. High pressure can just as easily mean a noisy neighbor, a misconfigured limit, or a single bursty tenant; read the cgroup breakdown before reaching for more hardware.
 
 ## Self-check
 
@@ -158,10 +191,26 @@ full avg10=58.70 avg60=37.40 avg300=13.90 total=39882001
 **Answer:** Utilization is time-averaged busyness; pressure is time tasks spent *runnable but off-CPU*. With bursty threads that wake in bunches, many can queue behind the run-queue at the same instant while, averaged over the second, cores still go idle between bursts. So average utilization sits below 100% while `some` pressure — a task waited for a core — is high. It's a distribution/queueing effect utilization smooths away.
 
 **(c) Which PSI signal warns of memory thrash before an OOM kill?**
-**Answer:** Rising **memory `full`** pressure (per-cgroup `memory.pressure` `full`, or system `/proc/pressure/memory` `full`). When `full` climbs, every task in the scope is stuck in direct reclaim — the kernel is spending wall-clock time evicting and re-faulting pages instead of running the workload. This is the thrash plateau that precedes the OOM killer; `systemd-oomd` and LMKD act on exactly this signal to kill early and avoid the hard stall.
+**Answer:** Rising **memory `full`** pressure (per-cgroup `memory.pressure` `full`, or system `/proc/pressure/memory` `full`). When `full` climbs, every task in the scope is stuck in direct reclaim — the kernel is spending wall-clock time evicting and re-faulting pages instead of running the workload. This is the thrash plateau that precedes the OOM killer; `systemd-oomd`, its ancestor Meta's `oomd`, and LMKD act on exactly this signal to kill early and avoid the hard stall.
 
-## Resources
+**(d) Why doesn't system-wide `/proc/pressure/cpu` have a `full` line, and why does the per-cgroup version have one?**
+**Answer:** `full` means "every non-idle task was stalled simultaneously." At the whole-system level that condition is indistinguishable from the CPU simply being idle with nothing runnable — there's no meaningful notion of "the entire system's CPU demand is being denied" separate from "no one wants the CPU." Inside a single cgroup, though, `full` is meaningful: all of *that* cgroup's tasks can be stalled (none scheduled) while sibling cgroups elsewhere on the box are actively running on the CPU. So per-cgroup CPU pressure can report real lost throughput for that cgroup even while the system as a whole is busy.
 
-1. **PSI kernel documentation** — <https://docs.kernel.org/accounting/psi.html>. The authoritative spec: `some`/`full` definitions, file format, trigger/poll API. Read first.
-2. **Facebook PSI intro** — <https://facebookmicrosites.github.io/psi/>. The origin-team explainer with the "utilization lies, pressure doesn't" framing and production motivation.
-3. **Brendan Gregg, *Systems Performance* (2nd ed.), methodology chapters** — <https://www.brendangregg.com/systems-performance-2nd-edition-book.html>. Use the USE method (Utilization, Saturation, Errors) to place PSI as the *saturation* axis the other tools miss.
+## Connections & what's next
+
+PSI is the load-bearing diagnostic instrument for the rest of the module: it's the pressure axis of the USE method (Utilization, Saturation, Errors) that lesson 09 formalizes, it's the signal `systemd-oomd`-style tooling and Meta's oomd act on before the kernel OOM killer in lesson 05 ever fires, and it's the file you'll `cat` first — before `cpu.stat` or `memory.events` — whenever a symptom shows up and you don't yet know which resource is guilty. Lesson 03's `kubepods.slice` tree is where you point PSI: attribute pressure to a leaf cgroup the same way you attributed cost there.
+
+Next: **[05 · Memory management & the OOM killer](05-memory-and-oom.md)**, which follows the thread from "memory `full` is climbing" (this lesson's pre-thrash signature) all the way to "here is the exact process the kernel killed and why" — the reclaim path, `oom_badness()`, and reading a real `dmesg` OOM report cold.
+
+## References & further reading
+
+**Primary sources**
+- **PSI kernel documentation** — https://docs.kernel.org/accounting/psi.html — the authoritative spec: `some`/`full` definitions, file format, the trigger/`poll()` API. Read first.
+
+**Real-world engineering blogs**
+- **Meta Engineering — "Open-sourcing oomd, a new approach to handling OOMs"** — https://engineering.fb.com/2018/07/19/production-engineering/oomd/ — what it shows: a production userspace daemon acting on `memory.pressure` to kill/shed load before the kernel OOM killer, written by PSI's own authors — PSI's origin story in production.
+- **Kubernetes Blog — "Kubernetes v1.36: PSI Metrics for Kubernetes Graduates to GA"** — https://kubernetes.io/blog/2026/05/12/kubernetes-v1-36-psi-metrics-ga/ — what it shows: PSI collection at node/pod/container level is now a GA, on-by-default kubelet feature, plus the newer PSI-based node-pressure-eviction direction.
+
+**Deeper dives**
+- **Facebook PSI intro** — https://facebookmicrosites.github.io/psi/ — the origin-team explainer with the "utilization lies, pressure doesn't" framing and production motivation; cross-reference with the oomd post above (same team).
+- **Brendan Gregg, *Systems Performance* (2nd ed.), methodology chapters** — https://www.brendangregg.com/systems-performance-2nd-edition-book.html — use the USE method (Utilization, Saturation, Errors) to place PSI as the *saturation* axis the other tools miss.
