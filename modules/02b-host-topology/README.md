@@ -3,7 +3,7 @@ id: "02b"
 title: "Host hardware and topology"
 notion: "https://app.notion.com/p/3b33abaeb82381b48bc9e928ef7cb695"
 phase: "Phase 2 · Months 5–8 (precedes 03)"
-effort: "~35 hrs ≈ 3.5 weeks @ 10–12 hrs/wk"
+effort: "~55 hrs ≈ 5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: []
 unlocks: ["03", "04", "09", "10"]
@@ -20,7 +20,7 @@ completed: null
 > cost work should catch.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381b48bc9e928ef7cb695
-- **Phase:** Phase 2 · **precedes 03**; assumed by 04, 09, 10 · **Est. effort:** ~35 hrs ≈ 3.5 weeks
+- **Phase:** Phase 2 · **precedes 03**; assumed by 04, 09, 10 · **Est. effort:** ~55 hrs ≈ 5 weeks
 - **Deliverable:** [Topology Teardown](practice/topology-teardown/) — reconcile a real
   GPU node's topology + measure a NUMA-misalignment cost.
 
@@ -45,16 +45,16 @@ Anchored on **Kubernetes topology alignment** (L5); ends in a real-node capstone
 
 | # | Lesson | Hrs | Core skill |
 |---|--------|-----|-----------|
-| 01 | [Host as a topology tree (cpu-arch + NUMA, refresher)](lessons/01-host-topology-tree.md) | 2.5 | the tree devices hang off |
-| 02 | [Memory subsystem (accelerator-relevant)](lessons/02-memory-subsystem.md) | 3 | local vs remote bandwidth = placement |
-| 03 | [PCIe (gens/lanes/switches)](lessons/03-pcie.md) | 4 | read `LnkCap` vs `LnkSta` |
-| 04 | [8-GPU node architecture (HGX/DGX)](lessons/04-server-architecture-8gpu.md) | 4 | draw the reference layout |
-| 05 | [Topology / CPU / Memory Managers](lessons/05-topology-alignment-k8s.md) (anchor) | 6 | guarantee vs attempt; `TopologyInfo` trap |
-| 06 | [Storage / NVMe placement + GDS](lessons/06-storage-nvme.md) | 3 | NVMe on the GPU's switch |
-| 07 | [Power & thermals](lessons/07-power-and-thermals.md) (short) | 2.5 | throttling = undelivered FLOPs |
-| 08 | [Capstone — read one real GPU node end to end](lessons/08-capstone-topology-teardown.md) | 7 | reconcile all four tools |
+| 01 | [The host as a topology tree](lessons/01-host-topology-tree.md) | 5 | the tree devices hang off |
+| 02 | [Memory subsystem as placement consequence](lessons/02-memory-subsystem.md) | 6 | local vs remote bandwidth = placement |
+| 03 | [PCIe at operational depth](lessons/03-pcie.md) | 7 | read `LnkCap` vs `LnkSta` |
+| 04 | [The 8-GPU server: HGX/DGX H100 topology](lessons/04-server-architecture-8gpu.md) | 7.5 | draw the reference layout |
+| 05 | [Kubernetes topology alignment — Topology, CPU, and Memory Managers](lessons/05-topology-alignment-k8s.md) (anchor) | 10 | guarantee vs attempt; `TopologyInfo` trap |
+| 06 | [NVMe and storage placement for GPU data paths](lessons/06-storage-nvme.md) | 6 | NVMe on the GPU's switch |
+| 07 | [Power and thermals as measurable undelivered FLOPs](lessons/07-power-and-thermals.md) (short) | 4.5 | throttling = undelivered FLOPs |
+| 08 | [Capstone — read one real GPU node end to end](lessons/08-capstone-topology-teardown.md) | 9 | reconcile all four tools |
 
-Total ≈ **35 hrs ≈ 3.5 weeks**. Spine = L5 + L8.
+Total ≈ **55 hrs ≈ 5 weeks**. Spine = L5 + L8.
 
 ## Resource spine
 
