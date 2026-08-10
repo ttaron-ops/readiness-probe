@@ -4,8 +4,11 @@ title: "CRD and API design"
 module: "02"
 concept: "CRD and API design"
 status: not-started
-est_time: "10h"
+est_time: "20h"
+prev: "04-informers-caches-workqueues.md"
+next: "06-controller-runtime-deep.md"
 artifacts: []
+sources: 10
 ---
 
 # 02.5 · CRD and API design
@@ -14,19 +17,23 @@ artifacts: []
 >
 > Module: [⚙️ 02 — Kubernetes internals and controllers](../README.md) · Deliverable: [`gpu-cost-operator`](../practice/gpu-cost-operator/README.md)
 
+## Where this fits
+
+Lesson 04 gave you the machine every controller runs on: reflector → Delta FIFO → informer → lister → workqueue → worker. That machine assumes something already exists to watch — a type registered in the API server with a schema, versions, and a write contract. This lesson is where that type comes from. Before you can reconcile a `WorkloadCost`, something has to define what a `WorkloadCost` *is*: which fields are legal, which are computed, what happens when the shape changes next year. Get this lesson right and lesson 06's controller-runtime machinery has a clean, honest object to reconcile against. Get it wrong and every reconcile is compensating in Go for a schema that should have rejected the bad input at the door.
+
 ## Why this matters
 
 Your operator's CRDs are a public API the moment someone `kubectl apply`s them. Every field is a promise you have to keep across upgrades. Get the spec/status split wrong and you fight the API server on every reconcile. Skip validation and garbage lands in etcd, then your controller panics at 3am reconciling a `WorkloadCost` with a negative rate. Ship a v1alpha1 with no versioning plan and your first breaking change means telling 40 clusters to hand-edit CRs.
 
-For a GPU cost operator this is sharper than usual: money is involved. A `Budget` that accepts a negative limit, or a `GPUCostPolicy` with a typo'd currency, produces silently wrong spend numbers that people make purchasing decisions on. The API layer is your first and cheapest line of defense — validation rejected at admission never reaches your reconcile loop, never corrupts status, never needs a postmortem. Senior work here is designing the schema so that the invalid states you'd otherwise handle defensively in Go are simply unrepresentable.
+For a GPU cost operator this is sharper than usual: money is involved. A `Budget` that accepts a negative limit, or a `GPUCostPolicy` with a typo'd currency, produces silently wrong spend numbers that people make purchasing decisions on. The API layer is your first and cheapest line of defense — validation rejected at admission never reaches your reconcile loop, never corrupts status, never needs a postmortem. This is also directly the job: NVIDIA and CoreWeave postings for controller/operator roles both name CRD design as core work, not an implementation detail delegated to someone else. Senior work here is designing the schema so that the invalid states you'd otherwise handle defensively in Go are simply unrepresentable.
 
-## From operating to extending
+## What's new here (calibration)
 
 **CKA already knows:** what a CRD is, `kubectl apply -f crd.yaml`, that CRs show up in `kubectl get`, that operators define their own types. You've consumed CRDs from cert-manager, Prometheus, Argo. You know `kubectl explain` and `--v=8` to see the API traffic.
 
 **Internal to learn now:** how the `CustomResourceDefinition` object itself is structured — `spec.versions[]`, `schema.openAPIV3Schema`, `subresources`, `additionalPrinterColumns`, `conversion`. How the API server uses that schema as a structural-schema gate (pruning unknown fields, enforcing types) *before* your controller sees anything. How kubebuilder markers compile down to that OpenAPI schema. Where CEL (`x-kubernetes-validations`) runs and what it can express that OpenAPI can't. Why `/status` is a *subresource* and how that changes the write path and `metadata.generation`. When multiple versions force a conversion webhook versus when defaulting suffices. And server-side apply field ownership, because your controller and users will both write to the same objects.
 
-## Core notes
+## Core concepts
 
 **Structural schema is mandatory and it prunes.** Every CRD served needs a structural OpenAPI v3 schema. The API server *prunes* any field not in the schema before persisting — so an undeclared field silently vanishes, it does not error. This is why you never rely on "extra" annotations sneaking through spec. Declare everything.
 
@@ -115,7 +122,28 @@ What CEL validates that OpenAPI cannot: relationships between fields (`hardCap >
 
 Rule of thumb: **new optional field with a default → new version + `None` (or even same version).** Renamed/reshaped field, changed units, merged fields → **conversion webhook.** For a first-cut operator you ship a single `v1alpha1` as storage version and defer webhooks; but design fields now so your likely evolution stays additive.
 
+**A CRD instance is still an etcd value — it has a size limit.** The API server enforces a default per-object size limit (~1.5MiB) regardless of type, because it's still one etcd value under the Raft commit path. This is easy to forget on a status-heavy CRD: an unbounded `status.history[]` that appends one entry per reconcile is a realistic way for a long-lived `WorkloadCost` to hit the limit months into production, at which point every further status write starts failing. Cap history length in the type itself (ring buffer semantics, or push detail to a metrics backend and keep only a summary in status) rather than discovering the limit in an incident.
+
+**Storage-version rollback is an operational trap, not just a design nicety.** Once objects have actually been *written* under a new storage version, rolling the operator back to a build that only understands the old storage version can fail to read them — the old binary's scheme doesn't know how to decode the new stored shape. On a fleet doing staged rollouts across 40 clusters, this means "roll back the operator" is not always a safe undo button once a version bump has landed and persisted objects; treat a storage-version change with the same rollback planning you'd give a database migration, not a routine deploy.
+
 **Server-side apply and field ownership.** SSA (`kubectl apply --server-side`, or controller-runtime `client.Apply` patches with a `FieldOwner`) tracks *which manager owns which field* in `metadata.managedFields`. Two managers editing disjoint fields coexist; two claiming the same field conflict (resolvable with force). This matters because your controller writes `status` while users write `spec`, and if you ever apply into `spec` (e.g. defaulting a field) you must set a stable `FieldOwner` so you don't fight the user's own `kubectl apply` on the next round. Reconcile writes should be scoped to the fields you own.
+
+## Perspectives
+
+**API-design perspective.** A CRD schema is a promise to every future caller, including future-you. "Invalid states unrepresentable" — CEL plus enums plus immutability rules — is cheaper than defensive Go code re-checking the same invariants in every reconcile, and it's cheaper still than the incident where a bad object slipped through and corrupted status before anyone noticed.
+
+**Operator/fleet perspective.** Across 40 clusters, a CRD schema change is a rollout problem, not a single `kubectl apply`. Old and new operator binaries must both tolerate whichever API version is live during a rolling upgrade — this is the practical reason versioning discipline matters, not an admission-time nicety you can defer.
+
+**Security/FinOps perspective.** For a cost/budget CRD specifically, validation *is* your first fraud- and error-prevention control. A `Budget.spec.hardLimit: -1` rejected at admission never becomes a wrong invoice or a bypassed budget enforcement further down the pipeline — the cheapest bug is the one that never reaches your reconcile loop.
+
+**Extensibility-ecosystem perspective.** CRDs are how the entire Kubernetes ecosystem — cert-manager, the Prometheus Operator, KubeVirt, Kueue, even DRA's own `resource.k8s.io` types — extends the API without forking Kubernetes itself. Your three CRDs are doing exactly what those widely-run production systems do; there's no separate, lesser mechanism for "your" API versus "real" ones.
+
+## Real-world use cases
+
+- **"Kubernetes CRD Validation Using CEL"** — Google Open Source Blog. https://opensource.googleblog.com/2023/11/kubernetes-crd-validation-using-cel.html — official Google engineering explanation of CEL validation rules for CRDs; the direct production source for this lesson's CEL section.
+- **"Enforce CRD Immutability with CEL Transition Rules"** — official kubernetes.io blog. https://kubernetes.io/blog/2022/09/29/enforce-immutability-using-cel/ — walks the exact `self == oldSelf` immutability pattern this lesson's `Budget.spec.Scope` example uses, from the project itself.
+- **"Leveraging Kubernetes virtual machines at Cloudflare with KubeVirt"** — Cloudflare Blog. https://blog.cloudflare.com/leveraging-kubernetes-virtual-machines-with-kubevirt/ — KubeVirt's `VirtualMachine`/`VirtualMachineInstance` CRDs running in real Cloudflare production infrastructure; a large-scale CRD-as-API-extension case study to contrast against the cost operator's own three CRDs.
+- **kubernetes/kubernetes #110720** — "CRD Conversion webhook down results in controller-manager GC failure." https://github.com/kubernetes/kubernetes/issues/110720 — real production bug report showing a conversion-webhook outage stalling the garbage collector's cache sync; ties CRD versioning directly into lesson 06's GC material.
 
 ## Worked example
 
@@ -200,13 +228,45 @@ x-kubernetes-validations:
 
 Now the acceptance behavior: a `Budget` with `hardLimit: -5` is rejected by the API server with `hardLimit must be non-negative` — before your controller ever runs. A `Budget` with `hardLimit: 100, softLimit: 200` is rejected by the type-level rule. A later `kubectl edit` changing `scope` is rejected by the transition rule. None of this is Go you wrote or tested; it's the schema doing its job.
 
+**Conversion-webhook decision table.** Given three hypothetical `v1alpha1 → v1beta1` changes to `Budget`, classify each as passthrough-safe or webhook-required, using the rule of thumb above:
+
+| Change | Passthrough OK? | Why |
+|---|---|---|
+| (a) Add optional field `notifyChannel` with a default | Yes — `None` | Old objects are valid under the new schema unmodified; the new field just defaults on read. |
+| (b) Rename `hardLimit` → `hardCapUSD` | No — webhook required | The field name changed; a passthrough leaves old objects with no `hardCapUSD` and a dangling `hardLimit` the new schema doesn't know. |
+| (c) Split `window: "24h"` into `windowValue: 24` + `windowUnit: "h"` | No — webhook required | This is a genuine reshape: converting requires parsing the old string and writing two new fields, and converting back requires reassembling the string. |
+
+For case (c), the conversion webhook's `Convert` function has to run in both directions:
+
+```go
+func (c *BudgetConverter) ConvertTo(src *v1alpha1.Budget) (*v1beta1.Budget, error) {
+    dst := &v1beta1.Budget{ObjectMeta: src.ObjectMeta}
+    value, unit, err := parseWindow(src.Spec.Window) // "24h" -> (24, "h")
+    if err != nil {
+        return nil, err
+    }
+    dst.Spec.WindowValue, dst.Spec.WindowUnit = value, unit
+    // ... copy remaining fields ...
+    return dst, nil
+}
+
+func (c *BudgetConverter) ConvertFrom(src *v1beta1.Budget) (*v1alpha1.Budget, error) {
+    dst := &v1alpha1.Budget{ObjectMeta: src.ObjectMeta}
+    dst.Spec.Window = fmt.Sprintf("%d%s", src.Spec.WindowValue, src.Spec.WindowUnit) // (24, "h") -> "24h"
+    // ... copy remaining fields ...
+    return dst, nil
+}
+```
+
+Both directions must round-trip losslessly through whichever version is `storage: true`, or a client pinned to the other version eventually sees corrupted data.
+
 ## Practice
 
 Advance `gpu-cost-operator`: design and scaffold all three v1alpha1 CRDs.
 
 1. Scaffold the group and types (kubebuilder): `kubebuilder create api --group cost --version v1alpha1 --kind GPUCostPolicy` (repeat for `WorkloadCost`, `Budget`), generating both resource and controller.
 2. **`GPUCostPolicy`** — a price model. `spec.rates[]` mapping GPU class (`a100`, `h100`, ...) to `$-per-GPU-hour` (`resource.Quantity`), plus `spec.currency` (enum). CEL: every rate `>= 0`; currency in the enum. `/status` subresource with a `Ready` condition and `observedGeneration`.
-3. **`WorkloadCost`** — status-heavy. `spec.workloadRef` + `spec.policyRef`. Status carries `observedGPUHours`, `computedSpend`, `observedGeneration`, and conditions. `/status` subresource. Printer columns for spend and GPU-hours.
+3. **`WorkloadCost`** — status-heavy. `spec.workloadRef` + `spec.policyRef`. Status carries `observedGPUHours`, `computedSpend`, `observedGeneration`, and conditions. `/status` subresource. Printer columns for spend and GPU-hours. Cap any status history array explicitly (see the etcd size-limit note in Core concepts) rather than leaving it unbounded.
 4. **`Budget`** — as in the worked example: hard/soft limits, currency enum, window pattern, immutable scope selector, `hardLimit >= softLimit` cross-field CEL, non-negative limits.
 5. Run `make manifests generate` and `kubectl apply -f config/crd/bases/`.
 
@@ -216,6 +276,15 @@ Advance `gpu-cost-operator`: design and scaffold all three v1alpha1 CRDs.
 - `kubectl apply` of a `Budget` with `softLimit > hardLimit` **fails** on the type-level rule.
 - `kubectl explain budget.spec` shows your fields and constraints; `kubectl get budget` shows your printer columns.
 - Editing a `Budget`'s `scope` after creation is rejected as immutable.
+
+This directly produces the checkpoint's item 5 ("CRDs reject invalid specs via CEL … at `kubectl apply`") and lays the schema every later lesson's controller, RBAC, and webhook work builds on.
+
+## Common pitfalls
+
+1. **Believing OpenAPI `required`/`enum` markers can express cross-field constraints.** They can't — they see one field in isolation. Any rule that compares two fields (`hardLimit >= softLimit`) or references the prior value (`self == oldSelf`) has to be CEL.
+2. **Forgetting the `/status` RBAC grant is separate from the main-resource grant.** This connects forward to lesson 07: status writes fail at runtime with a `Forbidden` that passes CI, because envtest doesn't enforce RBAC, and only surfaces once the operator hits a real cluster.
+3. **Shipping an "additive-looking" version bump that's secretly a semantic change** — e.g. changing units from MB to GiB while keeping the same field name. Passthrough conversion validates shape, not semantics, so this silently corrupts every existing object's meaning without a single validation error firing.
+4. **Writing a CEL rule with an unbounded loop over a list that's fine in testing but blows the per-rule cost budget on a real large list in production** — at which point it's the *CRD update itself* that gets rejected, not a CR, which is a confusing failure to debug for the first time in a maintenance window.
 
 ## Self-check
 
@@ -231,8 +300,28 @@ Advance `gpu-cost-operator`: design and scaffold all three v1alpha1 CRDs.
 
 **Answer:** OpenAPI markers constrain one field in isolation (enum, min/max, pattern, required). CEL (`x-kubernetes-validations`) sees the whole object via `self` and the prior value via `oldSelf`, so it can express **cross-field** and **transition** constraints. Example from `Budget`: `self.hardLimit >= self.softLimit` — a relationship between two fields that no single-field OpenAPI constraint can capture. Another: `self == oldSelf` on `scope` enforces **immutability after creation**, which OpenAPI has no concept of. CEL can also do conditional requirements (`has(self.window) || self.scope == 'cluster'`) and list uniqueness by key. It runs at admission with a cost budget, so it stays cheap and rejects bad objects before they reach etcd or your controller.
 
-## Resources
+**(d) You need to rename `Budget.spec.limit` to `Budget.spec.hardLimitUSD`. Walk the exact steps.**
 
-1. **Kubebuilder Book — CRD validation & webhooks** — https://book.kubebuilder.io/reference/markers/crd-validation.html — the authoritative list of `+kubebuilder:validation` markers and how they map to schema, plus the multi-version/conversion and webhook chapters. **Deep read** the validation markers page while writing your types; **skim** the conversion webhook chapter for the mental model. Why: this is exactly the marker → CRD compilation your `make manifests` performs.
-2. **kubernetes.io — CRD reference & CEL validation** — https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/ and https://kubernetes.io/docs/reference/using-api/cel/ — the API-server view: structural schemas, subresources, versions/storage version, and the CEL variables (`self`, `oldSelf`), cost budget, `messageExpression`, and transition rules. **Deep read** the CEL page (it's the highest-leverage validation tool you have); **skim** the CRD task page for subresource/versioning specifics. Why: markers are sugar over this; when a rule is rejected at CRD-create time for cost, this is where the rules live.
-3. **apiextensions-apiserver types godoc** — https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1 — the Go structs behind a `CustomResourceDefinition` (`CustomResourceDefinitionVersion`, `CustomResourceValidation`, `CustomResourceSubresources`, `ValidationRule`). **Skim** once to see the ground truth your YAML deserializes into. Why: demystifies what "storage version" and "x-kubernetes-validations" actually are as first-class API objects.
+**Answer:** This is a renamed field, so passthrough conversion cannot handle it — it needs a conversion webhook. Steps: (1) add a new CRD version, e.g. `v1beta1`, with `hardLimitUSD` replacing `limit`; (2) pick exactly one version as `storage: true` for the migration window — typically keep `v1alpha1` as storage initially so a rollback stays safe, then flip storage to `v1beta1` once the new controller is proven; (3) write and deploy a conversion webhook whose `ConvertTo`/`ConvertFrom` copy `limit` ↔ `hardLimitUSD` in both directions, round-tripping losslessly through the storage version; (4) ship an operator binary whose scheme understands both versions before flipping any defaults, so in-flight rolling upgrades across the 40 clusters never see a version they can't decode; (5) communicate to cluster owners that `v1alpha1` is deprecated but still served — existing CRs and tooling using `limit` keep working unmodified because the webhook translates transparently; (6) only after every cluster's controller is on the new build and storage has been flipped do you deprecate/remove `v1alpha1` serving, on its own separate rollout.
+
+## Connections & what's next
+
+CRD design is the schema half of the contract; lesson 04's informer/workqueue machinery is the mechanism that watches whatever this lesson defines, and lesson 06's controller-runtime machinery is what actually reads and writes it — `Status().Update()` only behaves the way it does *because* of the `/status` subresource declared here. The RBAC lesson (07) needs the `/status` and `/finalizers` subresource grants this lesson's schema implies; the admission-webhooks lesson (08) builds directly on the CEL and conversion-webhook material here, since a validating webhook is CEL's escape hatch for anything the cost budget or the type system can't express. Next: **lesson 06** takes these three CRDs and wires the controller-runtime Manager, client, owner references, and finalizers that turn them into a running, restart-safe operator.
+
+## References & further reading
+
+**Primary sources**
+- Kubebuilder Book — CRD validation markers — https://book.kubebuilder.io/reference/markers/crd-validation.html — the authoritative list of `+kubebuilder:validation` markers and how they map to schema; deep-read while writing your types.
+- kubernetes.io — CustomResourceDefinitions — https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/ — the API-server view of structural schemas, subresources, versions, and the storage version.
+- kubernetes.io — Common Expression Language (CEL) reference — https://kubernetes.io/docs/reference/using-api/cel/ — `self`/`oldSelf`, the cost budget, `messageExpression`, and transition rules; this is where a rejected-for-cost CRD's rules live.
+- apiextensions-apiserver types godoc — https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1 — the Go structs behind a `CustomResourceDefinition` (`CustomResourceDefinitionVersion`, `CustomResourceValidation`, `CustomResourceSubresources`, `ValidationRule`); skim once to see what your YAML deserializes into.
+- Server-Side Apply docs — https://kubernetes.io/docs/reference/using-api/server-side-apply/ — the `managedFields`/`FieldOwner` mechanics referenced in the field-ownership section above.
+
+**Real-world engineering blogs**
+- Google Open Source Blog, "Kubernetes CRD Validation Using CEL" — https://opensource.googleblog.com/2023/11/kubernetes-crd-validation-using-cel.html — what it shows: official walkthrough of CEL validation rules in production CRDs.
+- kubernetes.io blog, "Enforce CRD Immutability with CEL Transition Rules" — https://kubernetes.io/blog/2022/09/29/enforce-immutability-using-cel/ — what it shows: the exact `self == oldSelf` pattern this lesson's `Budget.Scope` uses, from the project itself.
+- Cloudflare Blog, "Leveraging Kubernetes virtual machines at Cloudflare with KubeVirt" — https://blog.cloudflare.com/leveraging-kubernetes-virtual-machines-with-kubevirt/ — what it shows: KubeVirt's CRDs as a real large-scale production CRD-as-API-extension case study.
+- kubernetes/kubernetes issue #110720 — https://github.com/kubernetes/kubernetes/issues/110720 — what it shows: a real production bug where a down conversion webhook stalled the garbage collector, linking CRD versioning to lesson 06's GC material.
+
+**Deeper dives**
+- kubernetes.io blog, "CustomResourceDefinition Validation Rules Graduate to Beta" — https://kubernetes.io/blog/2022/09/23/crd-validation-rules-beta/ — historical/version context for when CEL validation rules became available and what changed as they matured to GA.

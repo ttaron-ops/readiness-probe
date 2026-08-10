@@ -4,8 +4,11 @@ title: "Informers, caches, and workqueues"
 module: "02"
 concept: "Informers, caches, and workqueues"
 status: not-started
-est_time: "12h"
+est_time: "22h"
+prev: "03-reconciliation-model.md"
+next: "05-crd-design.md"
 artifacts: []
+sources: 10
 ---
 
 # 02.4 · Informers, caches, and workqueues
@@ -14,6 +17,10 @@ artifacts: []
 >
 > Module: [⚙️ 02 — Kubernetes internals and controllers](../README.md) · Deliverable: [`gpu-cost-operator`](../practice/gpu-cost-operator/README.md)
 
+## Where this fits
+
+Lesson 03 gave you a contract you had to take on faith: reconcile receives a *key*, not an event; the workqueue is allowed to coalesce, drop, reorder, and replay; a cache read can be stale. This lesson opens that box. Every one of those behaviors is the observable effect of five concrete, nameable components — reflector, Delta FIFO, indexer, lister, workqueue — wired together in a specific way. Once you can name the box each behavior comes from, "my controller is stuck" stops being a mystery and becomes a short diagnostic checklist. This is also the last purely-mechanical lesson before the module turns to what you build *on top of* this machine: CRD schemas (05), controller-runtime's finalizer/GC layer (06), and RBAC (07) all assume you already understand how a watch becomes a reconcile.
+
 ## Why this matters
 
 This is the single highest-ROI internal you will learn in this module. Every controller you have ever run — kube-controller-manager, your CNI, your GPU device plugin's operator — is this exact machine repeated. Two things fall out of understanding it:
@@ -21,9 +28,9 @@ This is the single highest-ROI internal you will learn in this module. Every con
 1. **Interviews.** "Walk me through what an informer does" and "your controller stopped reconciling — how do you debug it" are standard senior-platform probes. The bad answer is "it watches the API." The good answer names the reflector, the Delta FIFO, the thread-safe indexer, the lister, and the rate-limited workqueue, and can explain where a stall hides (cache not synced, workqueue backing off, a wedged worker holding `Done()`).
 2. **Correctness.** Nearly every subtle operator bug — reconciling on stale data, hot-looping under an event storm, "it works but lags 30s" — is a misunderstanding of cache reads vs live reads, resync semantics, or the workqueue's backoff. You cannot write a *correct* GPU cost operator without this; a cost number computed from a stale cache is a wrong invoice.
 
-## From operating to extending
+## What's new here (calibration)
 
-As a CKA you have a true but lossy mental model: *"the controller watches resources and acts on changes."* That sentence hides the entire engineering problem. A naive watcher would: hammer the API server with a `GET` per reconcile; lose events during a disconnect; melt the apiserver when 5,000 pods churn at once; and reprocess the same object ten times concurrently.
+As a CKA you have a true but lossy mental model: *"the controller watches resources and acts on changes."* That sentence hides the entire engineering problem, and we won't re-litigate kubectl-level watch usage (`kubectl get --watch`, YAML basics) or CNI/CSI watch behavior — you've run those for years. A naive watcher would: hammer the API server with a `GET` per reconcile; lose events during a disconnect; melt the apiserver when 5,000 pods churn at once; and reprocess the same object ten times concurrently.
 
 The client-go machinery exists to solve exactly those four problems:
 
@@ -36,7 +43,7 @@ The client-go machinery exists to solve exactly those four problems:
 
 Learn the named parts and the whole thing stops being magic.
 
-## Core notes
+## Core concepts
 
 The whole pipeline, one type at a time:
 
@@ -83,6 +90,8 @@ A `Reflector` (`k8s.io/client-go/tools/cache`) is the only component that talks 
 
 **The `410 Gone` case is the one to memorize.** The apiserver only retains recent history in etcd's watch cache. If your watch falls far enough behind (a long disconnect, a slow consumer, an etcd compaction), the RV you resume from is no longer available and the server returns `410 Gone / "too old resource version"`. The reflector's answer is a **relist**: throw away the position, LIST fresh, get a new RV, resume watching. This is normal and healthy — but a relist re-delivers *everything*, which is why a flapping watch shows up as periodic reconcile spikes.
 
+**Thundering herd on informer-factory start.** When a controller-runtime manager (or a raw `SharedInformerFactory`) starts against a cluster with, say, 50,000 Pods, the initial LIST for every watched type is a large, synchronous, memory-heavy operation — and if several controllers in the same process (or several controller *pods* restarting together, e.g. after a node drain or a rolling deploy) all race to fill their caches at once, that's a real burst of apiserver load concentrated at exactly the moment the cluster is already busy. This is not a hypothetical: OpenAI's large-cluster scaling posts describe apiserver/etcd load patterns driven by exactly this kind of synchronized LIST behavior at high node/pod counts, one of the reasons they run multiple apiserver replicas specifically to isolate blast radius (see References). The practical takeaway for your operator: stagger or rate-limit simultaneous controller restarts where you can, and don't be surprised if "everything reconciles slowly for the first 30 seconds after a fleet-wide rollout" is just every cache refilling at once.
+
 ### Delta FIFO: ordered, deduped, per-object
 
 The reflector doesn't write the store directly; it writes a `DeltaFIFO`. This is a queue keyed by object (namespace/name) whose value is the *ordered list of deltas* seen for that object (`Added`, `Updated`, `Deleted`, `Replaced`, `Sync`). Two properties matter:
@@ -112,6 +121,8 @@ pods, _ := informer.GetIndexer().ByIndex("byNode", "gpu-node-7")
 ```
 
 For a GPU cost operator this is exactly how you'd fan from "a node's price changed" to "all Pods on it" cheaply. controller-runtime exposes the same thing via `mgr.GetFieldIndexer().IndexField(...)`, which then makes `client.MatchingFields{...}` list queries index-backed.
+
+**Quantifying why the index matters.** Without an index, "all Pods on node X" means listing the *entire* cached Pod set and filtering client-side — an O(N) scan of the whole cache on every call. At 5,000 cached Pods, that's roughly 5,000 comparisons per reconcile just to answer one question, repeated every time any of those Pods triggers a reconcile. With a registered `byNode` index, `ByIndex("byNode", nodeName)` is a map lookup — O(1) in the number of distinct index values, returning only the matching subset directly. The index costs you a small amount of memory (one extra map, updated incrementally as objects are added/updated/deleted) in exchange for turning a linear scan into a constant-time lookup on every reconcile that needs it. At small scale the difference is invisible; at fleet scale, with many controllers each doing their own filtered reads on every reconcile, an unindexed scan is the kind of CPU cost that shows up as "the operator pod's CPU request seems oddly high for what it does."
 
 You build these through a `SharedInformerFactory`:
 
@@ -151,10 +162,11 @@ func (c *Controller) enqueue(obj interface{}) {
 }
 ```
 
-Why keys and not objects? Three reasons, all central:
+Why keys and not objects? Three reasons, all central, and this is the deepest idea in the whole module — the one that makes the previous lesson's level-triggered contract *actually true* at the plumbing layer, not just a design intention:
+
 1. **Dedup.** The workqueue collapses duplicate keys (see below). Ten changes to one object → one queue entry. Enqueue the object and you defeat that.
 2. **Freshness.** When a worker finally pops the key, it fetches the *current* state from the lister. Enqueuing the object would freeze a stale snapshot at enqueue time.
-3. **Level-triggered semantics.** You reconcile toward "what should be true for this name," not "replay this specific event." This is the deepest idea in the whole module: controllers are level-triggered, not edge-triggered. Missing an intermediate event is fine because you always read current state.
+3. **Level-triggered semantics.** You reconcile toward "what should be true for this name," not "replay this specific event." Missing an intermediate event is fine because you always read current state.
 
 ### The rate-limited workqueue
 
@@ -219,7 +231,23 @@ controller-runtime hides the plumbing but it's the same machine:
 - `Reconcile(ctx, req)` receives a `reconcile.Request{NamespacedName}` — that's the **key** popped off controller-runtime's internal rate-limiting workqueue. Same dedup, same exponential backoff. Returning `err` or `Result{Requeue: true}` → `AddRateLimited`; returning `Result{RequeueAfter: d}` → `AddAfter`; a clean `Result{}` → `Forget`.
 - To bypass the cache and force a live read, use `mgr.GetAPIReader()` — an **`APIReader`** that talks directly to the apiserver, no cache. Use it sparingly (it defeats the whole point of the cache and adds apiserver load), only where you provably need the freshest state.
 
-So everything in "Core notes" is present in your kubebuilder controller — the manager just constructed the reflector, DeltaFIFO, informer, indexer, and workqueue for you.
+So everything in "Core concepts" is present in your kubebuilder controller — the manager just constructed the reflector, DeltaFIFO, informer, indexer, and workqueue for you.
+
+## Perspectives
+
+**Developer perspective.** The reflector/DeltaFIFO/indexer/workqueue pipeline is the single mental model that explains *every* client-go-based tool you'll ever debug — your CNI's controller, your CSI driver's, kube-controller-manager's, your own. Once it's internalized, reading an unfamiliar controller's source is a matter of finding where it wires up `AddEventHandler` and what it does inside `Reconcile`, not relearning a new architecture each time.
+
+**Operator perspective.** `workqueue_depth`, `workqueue_unfinished_work_seconds`, `workqueue_retries_total` are metrics a CKA has scraped for years without necessarily knowing which specific stall pattern each one diagnoses; this lesson turns dashboards into causal reasoning — a high, flat `workqueue_depth` means something different from a climbing `workqueue_retries_total`, and now you know which.
+
+**Systems/queueing-theory perspective.** The workqueue is a literal shock absorber: dedup collapses N events to 1 key, exponential backoff plus a global token bucket decouples event-arrival rate from reconcile-processing rate. This is the same shape as any bounded-queue backpressure system — worth naming as a transferable pattern you'll recognize in message brokers, rate-limited APIs, and load shedders elsewhere in your career.
+
+**Economics perspective (module-specific).** A controller hot-looping because a worker never calls `Done()` isn't just a reliability bug on a GPU fleet; it can pin a CPU core on every controller replica across 40 clusters simultaneously, and if the reconcile loop does a paid external API call per iteration (e.g. a billing API), it can generate real API-cost overrun — a stuck workqueue on a cost operator can literally cost money in two different ways at once (wasted compute, and wasted paid API calls).
+
+## Real-world use cases
+
+- **"Scaling Kubernetes with Assurance at Pinterest"** — Pinterest Engineering. https://medium.com/pinterest-engineering/scaling-kubernetes-with-assurance-at-pinterest-a23f821168da — discusses watch-cache sizing and event retention for informer/watch reliability during connection churn at real production scale, directly on-topic for the reflector/relist material above.
+- **"Kubernetes Informers are so easy... to misuse!"** — Render.com Engineering. https://render.com/blog/kubernetes-informers — a real infrastructure company's engineering blog covering common informer-misuse patterns in production controllers, a practitioner-level complement to the pitfalls below.
+- **"Scaling Kubernetes to 7,500 nodes"** — OpenAI. https://openai.com/index/scaling-kubernetes-to-7500-nodes/ — explicitly discusses watch/list load on the apiserver from many controllers' informers at high node/pod counts, and the apiserver/etcd sharding decisions made to isolate that load — the production-scale version of this lesson's "thundering herd on informer-factory start" paragraph. (Dated snapshot: describes OpenAI's cluster architecture as of the 2023 post; cite as an engineering case study, not current headcount/scale.)
 
 ## Worked example
 
@@ -236,6 +264,8 @@ Trace a single Pod update — a GPU node's Pod gets a new `nvidia.com/gpu` annot
 
 **Raw client-go (sample-controller) vs controller-runtime:** the sample-controller writes steps 1–8 by hand — you construct the informer factory, the workqueue, the worker loop, and call `Get/Done/Forget/AddRateLimited` yourself (see `controller.go`). controller-runtime does steps 2–6 and 8's queue mechanics for you; you write only step 7's `Reconcile` body and declare the watches. Same types under the hood — `pkg/cache` builds the `SharedIndexInformer`s, `pkg/internal/controller` runs the workqueue loop.
 
+**Secondary-index worked calc.** Suppose the same reconcile also needs "every other Pod on this node" to compute node-level utilization. Without an index: `podLister.List(labels.Everything())` returns all cached Pods — at 5,000 Pods, that's a slice of 5,000 objects the reconcile then filters client-side by `spec.nodeName == "gpu-node-7"`, roughly 5,000 comparisons per call. With `AddIndexers({"byNode": ...})` registered once at startup: `informer.GetIndexer().ByIndex("byNode", "gpu-node-7")` returns only the matching Pods directly, a map lookup plus a slice append for the matches — no scan of the other 4,990+ objects. The index trades a small amount of memory (one map, maintained incrementally) for turning an O(N) filter into an O(1) lookup on every reconcile that needs "Pods on this node" — worth registering the moment more than one reconcile path needs the same reverse lookup.
+
 ## Practice
 
 Instrument your `gpu-cost-operator` (or the module-01 controller if the operator isn't scaffolded yet) and record what you observe. Commit a short findings note (`docs/informer-observations.md` in the practice dir).
@@ -243,27 +273,54 @@ Instrument your `gpu-cost-operator` (or the module-01 controller if the operator
 1. **Cache-hit vs live read.** In `Reconcile`, do the normal cached `r.Get(...)`, then also fetch the same object via `mgr.GetAPIReader().Get(...)`. Log both `resourceVersion`s side by side. Do a rapid self-write (update status, then immediately reconcile) and catch a case where the cached RV lags the live RV. Record the divergence.
 2. **Short resync.** Set the manager's `SyncPeriod` (or a raw informer factory's resync) to `10s`. Log a distinctive line at the top of `Reconcile`. Confirm you see periodic reconciles for *every* object with **no corresponding apiserver watch event** (check with `kubectl get --watch` in another pane, or apiserver audit) — proving resync is a local replay, not a re-LIST.
 3. **Force a stale-cache scenario.** Either: (a) add an artificial delay/pause and `kubectl edit` the object during it, then observe your cached read returning the pre-edit version while `APIReader` shows the new one; or (b) delete an object and log whether the lister still returns it for a beat. Note the staleness window you measured.
-4. **Workqueue under stress (optional but recommended).** Make `Reconcile` return an error for one specific object and watch the requeue timestamps in the logs — confirm the delays grow (5ms, 10ms, 20ms…) i.e. exponential backoff, and that `Forget` (returning nil) resets it.
+4. **Register and measure a field index.** Add a `byNode` field indexer via `mgr.GetFieldIndexer()`, then log and compare wall-clock time for a `client.MatchingFields{"spec.nodeName": x}` indexed list vs an unindexed `List()` + client-side filter, at whatever Pod count your test cluster has. Even a small cluster should show the indexed path doing measurably less work.
+5. **Workqueue under stress (optional but recommended).** Make `Reconcile` return an error for one specific object and watch the requeue timestamps in the logs — confirm the delays grow (5ms, 10ms, 20ms…) i.e. exponential backoff, and that `Forget` (returning nil) resets it.
 
-**Acceptance:** a committed `informer-observations.md` describing the observed cache-vs-live RV divergence, the resync replay behavior, a measured staleness window, and (if done) the backoff progression — plus the instrumentation code committed alongside.
+**Acceptance:** a committed `informer-observations.md` describing the observed cache-vs-live RV divergence, the resync replay behavior, a measured staleness window, the indexed-vs-unindexed lookup comparison, and (if done) the backoff progression — plus the instrumentation code committed alongside.
+
+## Common pitfalls
+
+1. **Believing a short resync period improves data freshness.** It doesn't touch the API server at all; it's a local safety-net replay. Setting it too low just adds redundant reconcile load without making any data fresher.
+2. **Mutating a lister-returned object in place instead of `DeepCopy()`-ing first.** This corrupts shared cache state other goroutines are reading concurrently — a genuinely hard-to-reproduce bug class because it depends on goroutine timing.
+3. **Enqueuing the object itself instead of its key.** This defeats dedup and processes a stale snapshot instead of current state at pop-time — silently reintroducing the edge-triggered bugs lesson 03 warned about, at the plumbing layer.
+4. **Assuming a `Get` right after your own `Create`/`Update` will reflect it.** Cache reads lag your own writes; use `APIReader` when you truly need read-after-write consistency, not routine reconcile logic.
+5. **Not calling `WaitForCacheSync` (or ignoring its `false` return).** Reconciling before the cache is populated looks like "the controller does nothing on startup" — a confusing symptom for a simple ordering bug.
 
 ## Self-check
 
-**Q1. When can a controller-runtime client read return stale data, and how do you force a live read?**
+- **When can a controller-runtime client read return stale data, and how do you force a live read?**
+  **Answer:** `mgr.GetClient()` is a split client whose **reads are served from the manager's shared cache** (the `SharedIndexInformer`'s indexer), which is eventually consistent — it lags the apiserver by the watch-delivery window. So `r.Get`/`r.List` can return an object older than a fresh `GET`, return `NotFound` for something just created, still return something just deleted, or fail to reflect **your own write** that hasn't looped back through the watch yet. To force a live read, use `mgr.GetAPIReader()` — an `APIReader` that goes straight to the apiserver, bypassing the cache. Use it only where you truly need the freshest state (optimistic-concurrency retries, "did this land" checks); routine reconcile logic should stay on the cache since it's level-triggered and will get the update event momentarily.
 
-**Answer:** `mgr.GetClient()` is a split client whose **reads are served from the manager's shared cache** (the `SharedIndexInformer`'s indexer), which is eventually consistent — it lags the apiserver by the watch-delivery window. So `r.Get`/`r.List` can return an object older than a fresh `GET`, return `NotFound` for something just created, still return something just deleted, or fail to reflect **your own write** that hasn't looped back through the watch yet. To force a live read, use `mgr.GetAPIReader()` — an `APIReader` that goes straight to the apiserver, bypassing the cache. Use it only where you truly need the freshest state (optimistic-concurrency retries, "did this land" checks); routine reconcile logic should stay on the cache since it's level-triggered and will get the update event momentarily.
+- **What does the resync period actually re-trigger, and why isn't it a re-LIST?**
+  **Answer:** Resync walks the informer's **existing indexer contents** and re-delivers every cached object to your event handlers as a **synthetic Update** (`old == new`). It generates **zero apiserver traffic** — no LIST, no WATCH — it's a purely local replay of the cache. It isn't a re-LIST because its purpose isn't refreshing data (the watch already keeps the cache current); it's a **safety net** that periodically re-enqueues everything so a reconcile that silently failed to converge or re-enqueue itself gets another attempt. A re-LIST (which *does* hit the apiserver) only happens on reflector startup or on `410 Gone`, when the reflector has actually lost its watch position.
 
-**Q2. What does the resync period actually re-trigger, and why isn't it a re-LIST?**
+- **How does the workqueue's dedup + rate limiter keep a controller stable under an event storm, and where does `Forget()` fit?**
+  **Answer:** **Dedup** collapses the storm: because handlers enqueue *keys*, N events for one object become one queue entry, and a key already being processed is re-queued exactly once (after `Done`), never processed concurrently. **Rate limiting** bounds throughput: `AddRateLimited` applies per-item exponential backoff (`base × 2^requeues`, capped) so a persistently failing object retries ever more slowly, plus a global token bucket (default 10 qps / burst 100) so the whole controller can't exceed a fixed reconcile rate no matter how many distinct keys are failing. Together they decouple the reconcile rate from the event rate — `Reconcile` sees a deduped, rate-limited trickle instead of the storm. **`Forget(key)`** is called on **success**: it clears that key's backoff counter in the rate limiter (resetting its next-failure delay to `baseDelay`) so a once-flaky object that recovers doesn't carry a permanent penalty. Note `Forget` only zeroes backoff state — `Done` is what releases the key from processing; you call both, and forgetting without success would defeat the backoff.
 
-**Answer:** Resync walks the informer's **existing indexer contents** and re-delivers every cached object to your event handlers as a **synthetic Update** (`old == new`). It generates **zero apiserver traffic** — no LIST, no WATCH — it's a purely local replay of the cache. It isn't a re-LIST because its purpose isn't refreshing data (the watch already keeps the cache current); it's a **safety net** that periodically re-enqueues everything so a reconcile that silently failed to converge or re-enqueue itself gets another attempt. A re-LIST (which *does* hit the apiserver) only happens on reflector startup or on `410 Gone`, when the reflector has actually lost its watch position.
+- **Why is enqueuing a *key* rather than the *object* central to level-triggered correctness, not just an optimization?**
+  **Answer:** It's not just cheaper — it's what makes level-triggering *true* at runtime. If you enqueued the object, you'd freeze a snapshot at enqueue time and the worker would reconcile that stale snapshot instead of current state, which reintroduces edge-triggered behavior through the back door (you'd effectively be reacting to "the object as of when I saw the event," not "the object as of now"). Enqueuing a key forces the worker to re-fetch from the lister/cache at pop-time, guaranteeing it always reconciles against the *current* state regardless of how many changes happened in between or how long the key sat in the queue. It also enables dedup — the workqueue can only collapse duplicate *keys*, not duplicate objects, since two enqueues of "the same object" at different points in time aren't equal as values.
 
-**Q3. How does the workqueue's dedup + rate limiter keep a controller stable under an event storm, and where does `Forget()` fit?**
+- **At 5,000 Pods in cache, contrast the cost of a plain `List()` with a label filter vs a registered field-index lookup for "all Pods on node X."**
+  **Answer:** A plain `List()` (with or without a label selector applied client-side against `spec.nodeName`) means the lister returns the full cached set — approximately 5,000 objects — and your code then filters them one by one, roughly 5,000 comparisons per call, repeated on every reconcile that needs the answer. A registered field index (`AddIndexers`/`mgr.GetFieldIndexer().IndexField` on `spec.nodeName`) maintains a secondary map from node name to the set of matching keys, updated incrementally as Pods are added/updated/deleted in the cache; `ByIndex("byNode", "X")` or `client.MatchingFields{"spec.nodeName": "X"}` then does a single map lookup and returns only the matching Pods directly — no scan of the other ~4,995 objects. The tradeoff is a small constant memory overhead for the index versus a linear-time cost paid on every unindexed lookup; for any reconcile pattern that does this lookup repeatedly (which a per-node cost aggregation does), the index is a clear win.
 
-**Answer:** **Dedup** collapses the storm: because handlers enqueue *keys*, N events for one object become one queue entry, and a key already being processed is re-queued exactly once (after `Done`), never processed concurrently. **Rate limiting** bounds throughput: `AddRateLimited` applies per-item exponential backoff (`base × 2^requeues`, capped) so a persistently failing object retries ever more slowly, plus a global token bucket (default 10 qps / burst 100) so the whole controller can't exceed a fixed reconcile rate no matter how many distinct keys are failing. Together they decouple the reconcile rate from the event rate — `Reconcile` sees a deduped, rate-limited trickle instead of the storm. **`Forget(key)`** is called on **success**: it clears that key's backoff counter in the rate limiter (resetting its next-failure delay to `baseDelay`) so a once-flaky object that recovers doesn't carry a permanent penalty. Note `Forget` only zeroes backoff state — `Done` is what releases the key from processing; you call both, and forgetting without success would defeat the backoff.
+## Connections & what's next
 
-## Resources
+This lesson is the machinery that makes lesson 03's reconciliation contract real: the reflector/DeltaFIFO/indexer/workqueue pipeline is *why* reconcile receives a key instead of an event, *why* a cache read can be stale, and *why* backoff behaves the way it does. It's also the layer every subsequent lesson quietly assumes: lesson 06's owner-reference garbage collector is, under the hood, just another controller running this exact reflector→informer→workqueue loop watching every type in the cluster; lesson 08's admission webhooks sit in a different path entirely (synchronous, in the write path) precisely because informers are inherently asynchronous and can't gate an in-flight write. Next, **lesson 05, CRD design**, turns to the shape of the objects flowing through this pipeline — how a well-designed schema (validation, subresources, versioning) makes the reconcile loop you just learned to trust actually safe to build on.
 
-1. **client-go `tools/cache` godoc** — https://pkg.go.dev/k8s.io/client-go/tools/cache — the authoritative reference for `Reflector`, `DeltaFIFO`, `SharedIndexInformer`, `Indexer`, and the key funcs. *Skim* the package overview, *deep* on `Reflector`/`DeltaFIFO`/`SharedIndexInformer` doc comments — they state the exact resync/relist/410 semantics you were tested on above. (godoc may be egress-blocked; the source of truth is `staging/src/k8s.io/client-go/tools/cache/` in kubernetes/kubernetes.)
-2. **client-go `informers` + `util/workqueue` godoc** — https://pkg.go.dev/k8s.io/client-go/informers and https://pkg.go.dev/k8s.io/client-go/util/workqueue — *skim* the informers factory API; *deep* on `TypedRateLimitingInterface`, `DefaultTypedControllerRateLimiter`, and the exponential/token-bucket rate limiters. Why: this is the workqueue contract (`Get/Done/Forget/AddRateLimited`) you must be able to recite.
-3. **kubernetes/sample-controller — read `controller.go`** — https://github.com/kubernetes/sample-controller — *deep read* the whole file once. It is the canonical hand-written version of everything controller-runtime hides: factory setup, `WaitForCacheSync`, the worker loop, `enqueue`, and `Get/Done/Forget/AddRateLimited`. Seeing it raw makes kubebuilder's magic legible.
-4. **controller-runtime `pkg/cache` godoc** — https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/cache — *skim* to confirm the manager's cache is just wrapped `SharedIndexInformer`s and to locate `APIReader`/`GetAPIReader` semantics. Why: connects the client-go machinery to the code you actually write in the capstone.
+## References & further reading
+
+**Primary sources**
+- client-go `tools/cache` godoc — https://pkg.go.dev/k8s.io/client-go/tools/cache — the authoritative reference for `Reflector`, `DeltaFIFO`, `SharedIndexInformer`, `Indexer`, and the key funcs; the exact resync/relist/410 semantics covered above.
+- client-go `informers` godoc — https://pkg.go.dev/k8s.io/client-go/informers — the shared-informer-factory API.
+- client-go `util/workqueue` godoc — https://pkg.go.dev/k8s.io/client-go/util/workqueue — `TypedRateLimitingInterface`, `DefaultTypedControllerRateLimiter`, and the exponential/token-bucket rate limiters; the workqueue contract (`Get/Done/Forget/AddRateLimited`) you must be able to recite.
+- controller-runtime `pkg/cache` godoc — https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/cache — confirms the manager's cache is wrapped `SharedIndexInformer`s and locates `APIReader`/`GetAPIReader` semantics.
+- kubernetes/sample-controller — https://github.com/kubernetes/sample-controller — the canonical hand-written version of everything controller-runtime hides: factory setup, `WaitForCacheSync`, the worker loop, `enqueue`, and `Get/Done/Forget/AddRateLimited`. Read `controller.go` in full once.
+
+**Real-world engineering blogs**
+- Pinterest Engineering, "Scaling Kubernetes with Assurance at Pinterest" — https://medium.com/pinterest-engineering/scaling-kubernetes-with-assurance-at-pinterest-a23f821168da — watch-cache sizing and event retention in a real production fleet.
+- Render.com Engineering, "Kubernetes Informers are so easy... to misuse!" — https://render.com/blog/kubernetes-informers — real-world informer-misuse patterns from a production infrastructure company.
+- OpenAI, "Scaling Kubernetes to 7,500 nodes" — https://openai.com/index/scaling-kubernetes-to-7500-nodes/ — apiserver/etcd load from many informers' watch/list traffic at very high node/pod counts (2023 snapshot).
+
+**Deeper dives**
+- leftasexercise.com, "Understanding Kubernetes controllers part I – queues and the core controller loop" — https://leftasexercise.com/2019/07/08/understanding-kubernetes-controllers-part-i-queues-and-the-core-controller-loop/ — an individual engineer's deep technical walkthrough of the workqueue.
+- leftasexercise.com, "Understanding Kubernetes controllers part III – informers" — https://leftasexercise.com/2019/07/15/understanding-kubernetes-controllers-part-iii-informers/ — the companion piece on informers specifically.

@@ -4,8 +4,11 @@ title: "Validating admission webhooks and operational risk"
 module: "02"
 concept: "Validating admission webhooks and operational risk"
 status: not-started
-est_time: "10h"
+est_time: "20h"
+prev: "07-kubebuilder-and-rbac.md"
+next: "09-scheduler-and-gpu-scheduling.md"
 artifacts: []
+sources: 7
 ---
 
 # 02.8 · Validating admission webhooks and operational risk
@@ -14,11 +17,15 @@ artifacts: []
 >
 > Module: [⚙️ 02 — Kubernetes internals and controllers](../README.md) · Deliverable: [`gpu-cost-operator`](../practice/gpu-cost-operator/README.md)
 
+## Where this fits
+
+Lesson 07 gave you the marker → controller-gen → manifest discipline through the lens of RBAC: a reviewable, regenerated-not-hand-edited artifact that is a tight projection of what your controller actually does. This lesson applies the exact same discipline (`//+kubebuilder:webhook` markers → `config/webhook/manifests.yaml`) to a component with a fundamentally different risk profile. RBAC failures are about *excess access*; webhook failures are about *availability of the entire API server's write path*. Everything you've built so far — CRDs (05), controller-runtime's reconcile loop (06), least-privilege RBAC (07) — reacts to objects that already exist. A validating webhook is the first thing in this module that can say "no" *before* an object is ever persisted, which is exactly what Budget enforcement needs: reject an over-budget GPU workload before it schedules and starts billing, not reconcile it away after the fact.
+
 ## Why this matters
 
-A controller reacts *after* an object exists; a validating webhook decides whether it may exist *at all*. That's exactly what Budget enforcement needs — you want to reject an over-budget GPU workload before it schedules and starts billing, not reconcile it away after the fact. But an admission webhook sits synchronously in the write path of the entire API server: every create/update to matching resources blocks on your pod answering in time. Set `failurePolicy: Fail` and let your webhook pod crashloop, and you can wedge the cluster — including the very Deployment that would restart your webhook. This is a real, recurring big-tech outage class. The extension itself is a hundred lines of Go; the seniority is in scoping it so it can't fire on the wrong namespaces and choosing a failure policy you can defend when it's 3am and admission is rejecting everything.
+A controller reacts *after* an object exists; a validating webhook decides whether it may exist *at all*. But an admission webhook sits synchronously in the write path of the entire API server: every create/update to matching resources blocks on your pod answering in time. Set `failurePolicy: Fail` and let your webhook pod crashloop, and you can wedge the cluster — including the very Deployment that would restart your webhook. This is a real, recurring big-tech outage class, corroborated by a primary-source Kubernetes bug report (below) describing exactly this dead-connection failure mode in production. The extension itself is a hundred lines of Go; the seniority is in scoping it so it can't fire on the wrong namespaces and choosing a failure policy you can defend when it's 3am and admission is rejecting everything.
 
-## From operating to extending
+## What's new here (calibration)
 
 You already know, as a CKA:
 
@@ -35,7 +42,7 @@ Internal to the extending layer and new here:
 - **`failurePolicy`**, `sideEffects`, `timeoutSeconds`, and TLS/cert lifecycle for the webhook server.
 - **ValidatingAdmissionPolicy** (in-tree CEL) as the webhook-less modern alternative.
 
-## Core notes
+## Core concepts
 
 **The admission chain and the AdmissionReview flow.** After authn + authz, the API server runs, in order: **mutating** admission (built-in, then `MutatingWebhookConfiguration`s), then **schema validation + defaulting**, then **validating** admission (built-in, then `ValidatingWebhookConfiguration`s), then persist to etcd. For each matching webhook the API server POSTs an `AdmissionReview` (`admission.k8s.io/v1`) whose `request` carries `uid`, `operation`, `object`, `oldObject`, `userInfo`, and `dryRun`. Your webhook replies with an `AdmissionReview` whose `response` echoes the `uid` and sets `allowed: true|false` (plus an optional `status.message` and `warnings`). Mutating webhooks additionally return a base64 JSONPatch. **The `uid` echo is mandatory** — a mismatched or missing uid is treated as a failure. A denial response looks like:
 
@@ -66,7 +73,7 @@ func (v *BudgetValidator) ValidateUpdate(ctx context.Context, oldObj, newObj run
 func (v *BudgetValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) { return nil, nil }
 ```
 
-Note the enforcement target: to gate *workloads* (Pods/Deployments) against Budgets, the webhook matches those resources — a validator that inspects arbitrary objects is registered with `builder.WebhookManagedBy(mgr).For(&corev1.Pod{}).WithValidator(v)` or via a raw `admission.Handler`. The `//+kubebuilder:webhook` marker is what `make manifests` turns into `config/webhook/manifests.yaml` (the `ValidatingWebhookConfiguration`), exactly like the RBAC markers in 02.7.
+Note the enforcement target: to gate *workloads* (Pods/Deployments) against Budgets, the webhook matches those resources — a validator that inspects arbitrary objects is registered with `builder.WebhookManagedBy(mgr).For(&corev1.Pod{}).WithValidator(v)` or via a raw `admission.Handler`. The `//+kubebuilder:webhook` marker is what `make manifests` turns into `config/webhook/manifests.yaml` (the `ValidatingWebhookConfiguration`), exactly like the RBAC markers in lesson 07.
 
 **Scoping — the safety controls.** A `ValidatingWebhookConfiguration` webhook entry is filtered by, cheapest-to-most-expensive:
 
@@ -86,6 +93,8 @@ One infamous gotcha: **`matchPolicy`**. `Equivalent` (the default, and what you 
 
 Avoid the wedge: (1) `namespaceSelector` excluding `kube-system` **and** the webhook's own namespace; (2) `timeoutSeconds` small (e.g. 5–10) so a hung pod fails fast rather than stalling every write; (3) run the webhook with ≥2 replicas across nodes so a single failure doesn't take admission down; (4) keep `rules` narrow. A defensible default for a *policy* webhook is `Fail` (enforcement you can't silently lose) **with** those guards; `Ignore` is right when availability outranks the policy (e.g. best-effort labeling).
 
+**A fourth failure category: dead connections, not just down pods.** Pod-crashed, cert-expired, and slow-timeout are the three failure modes most treatments name — but a distinct and real fourth exists: **stale TCP connections to a webhook backend that has been replaced.** During a rolling update, the API server can hold a connection to a webhook pod that no longer exists (or is terminating) without cleanly detecting it, producing intermittent timeouts that look like flakiness rather than a hard outage. This is documented as a genuine upstream issue, not a hypothetical — see [kubernetes/kubernetes#80313](https://github.com/kubernetes/kubernetes/issues/80313) below. It's the reason "my webhook only times out right after I roll it" is a real, reproducible symptom with a specific mechanism, not random noise — treat readiness gating and connection reuse settings as part of your rolling-update story, not just steady-state config.
+
 **`sideEffects`, `timeoutSeconds`, dry-run.** `sideEffects` declares whether the webhook mutates external state: `None` (pure function — required if you want `dryRun` requests to reach it), `NoneOnDryRun` (has side effects but honors `request.dryRun` by skipping them), or `Some`/`Unknown` (legacy; API server won't send dry-run). A validating Budget check is a pure read — declare `None`. `timeoutSeconds` (1–30, default 10) bounds how long the API server waits before applying `failurePolicy`.
 
 **Certs.** The API server calls the webhook over HTTPS and verifies the serving cert against the `caBundle` in the webhook configuration. The serving cert's SAN must cover the Service DNS name the API server dials — `<service>.<namespace>.svc`. Two supported paths:
@@ -95,9 +104,25 @@ Avoid the wedge: (1) `namespaceSelector` excluding `kube-system` **and** the web
 
 Cert expiry is a classic silent outage: an expired or SAN-mismatched cert = every call fails TLS = `failurePolicy` fires cluster-wide, and under `Fail` that is an instant wedge. Alert on cert age well before expiry; prefer cert-manager so rotation isn't a human's calendar reminder.
 
-**Debugging admission.** When `kubectl apply` hangs or returns `Internal error occurred: failed calling webhook`, the fault tree is short: is the webhook pod Ready? does its Service endpoint resolve? is the `caBundle` current and does the serving cert's SAN match the Service DNS (`<svc>.<ns>.svc`)? did a `matchConditions` CEL expression error (a runtime CEL error is treated per `failurePolicy`)? Inspect the live config with `kubectl get validatingwebhookconfiguration <name> -o yaml` and watch the API server's admission metrics (`apiserver_admission_webhook_rejection_count`, `..._admission_webhook_admission_duration_seconds`). A webhook that's slow but not failing still taxes every matching write — the duration histogram is your early-warning signal before `timeoutSeconds` starts tripping.
+**Debugging admission.** When `kubectl apply` hangs or returns `Internal error occurred: failed calling webhook`, the fault tree is short: is the webhook pod Ready? does its Service endpoint resolve? is the `caBundle` current and does the serving cert's SAN match the Service DNS (`<svc>.<ns>.svc`)? did a `matchConditions` CEL expression error (a runtime CEL error is treated per `failurePolicy`)? is this the post-rollout dead-connection pattern described above? Inspect the live config with `kubectl get validatingwebhookconfiguration <name> -o yaml` and watch the API server's admission metrics (`apiserver_admission_webhook_rejection_count`, `..._admission_webhook_admission_duration_seconds`). A webhook that's slow but not failing still taxes every matching write — the duration histogram is your early-warning signal before `timeoutSeconds` starts tripping.
 
-**ValidatingAdmissionPolicy (the modern alternative).** GA in Kubernetes 1.30, `admissionregistration.k8s.io/v1`. You write the rule as **CEL** in a `ValidatingAdmissionPolicy` and bind it to resources with a `ValidatingAdmissionPolicyBinding` — no webhook pod, no cert, no network hop, evaluated in-process by the API server. It removes the entire availability/wedge/cert failure surface. Use it when your check is expressible over the request object (and, via `paramKind`, a referenced config object) in CEL. Limits: CEL only (no arbitrary Go, no calling external cost APIs), no cross-object *live* lookups beyond a single bound param resource, no mutation. So a Budget check that needs to **list all Pods in a namespace and sum live GPU usage** still needs a webhook; a check like "reject if `object.spec.replicas * gpusPerPod > param.spec.limit`" using a bound Budget param is a perfect VAP.
+**ValidatingAdmissionPolicy (the modern alternative).** GA in Kubernetes 1.30, `admissionregistration.k8s.io/v1`. You write the rule as **CEL** in a `ValidatingAdmissionPolicy` and bind it to resources with a `ValidatingAdmissionPolicyBinding` — no webhook pod, no cert, no network hop, evaluated in-process by the API server. It removes the entire availability/wedge/cert failure surface described above by construction. Use it when your check is expressible over the request object (and, via `paramKind`, a referenced config object) in CEL. Limits: CEL only (no arbitrary Go, no calling external cost APIs), no cross-object *live* lookups beyond a single bound param resource, no mutation. So a Budget check that needs to **list all Pods in a namespace and sum live GPU usage** still needs a webhook; a check like "reject if `object.spec.replicas * gpusPerPod > param.spec.limit`" using a bound Budget param is a perfect VAP.
+
+## Perspectives
+
+**API-design perspective.** The strict mutating-then-validating ordering — and the rule that a validating webhook's response can never mutate — is a deliberate trust boundary. It's what lets any downstream consumer, including a *later* validating webhook, reason "validation saw exactly what gets persisted," full stop. Weakening that ordering anywhere would make every validating webhook in the chain untrustworthy, not just the one that broke the rule.
+
+**Operator/on-call perspective.** `failurePolicy: Fail` is a decision made once at design time that an on-call engineer inherits at 3am. The `WEBHOOK-RISK.md` documentation practice this lesson's Practice section asks for is exactly what turns a design decision into an on-call-usable runbook instead of tribal knowledge — the difference between "someone remembers why we chose Fail" and "the on-call engineer, half asleep, can read one paragraph and know the wedge is bounded."
+
+**Availability-vs-correctness perspective.** This lesson is the clearest availability/correctness tradeoff in the whole module: `Fail` trades availability for policy correctness, `Ignore` trades the reverse, and `ValidatingAdmissionPolicy` is the rare case where you can partially escape the tradeoff entirely (no webhook pod, no availability risk) — but only for CEL-expressible rules that don't need external data or fleet-wide aggregation.
+
+**Attacker/adversarial perspective.** A `failurePolicy: Fail` webhook with broad `rules` and no `namespaceSelector` exclusion is a self-inflicted denial-of-service surface: crash the webhook pod (or just win a race during its own rolling update) and you've taken down admission clusterwide, no exploit needed, just an ops mistake. Thinking adversarially about your own webhook config — "what's the cheapest way to wedge this cluster, even by accident" — is exactly the review lens that catches the missing self-exclusion before it ships.
+
+## Real-world use cases
+
+- **kubernetes/kubernetes#80313, "Admission webhooks affected by dead tcp connections"** — [github.com/kubernetes/kubernetes/issues/80313](https://github.com/kubernetes/kubernetes/issues/80313). What it shows: a primary-source, upstream bug report documenting the exact dead/half-open-connection failure mode named in Core concepts above — real evidence that "my webhook times out only right after a rolling update" is a known mechanism, not a fluke.
+- **Gardener, "Fix Problematic Conversion Webhooks"** — [gardener.cloud/docs/guides/administer-shoots/conversion-webhook/](https://gardener.cloud/docs/guides/administer-shoots/conversion-webhook/). What it shows: real production operational guidance from a large-scale, real multi-cluster-management project (SAP's Gardener) on diagnosing and recovering from a wedged webhook — a practitioner's version of this lesson's debugging fault tree.
+- **AWS re:Post, "Managing webhook failures on Amazon EKS"** — [repost.aws/articles/ARr5AEAlgSSh2sdX30gnMGDQ/managing-webhook-failures-on-amazon-eks](https://repost.aws/articles/ARr5AEAlgSSh2sdX30gnMGDQ/managing-webhook-failures-on-amazon-eks). What it shows: official AWS practitioner guidance specifically about the availability/wedge risk this lesson centers on, from the operator side of a managed Kubernetes offering.
 
 ## Worked example
 
@@ -151,11 +176,20 @@ webhooks:
 
 The `failurePolicy: Fail` decision is documented in-repo: *"Budget enforcement fails closed because silently admitting over-budget GPU workloads is a real cost incident; the wedge is bounded by excluding kube-system and the webhook's own namespace, a 5s timeout, and 2 replicas, so a webhook outage rejects only new tenant GPU workloads, never control-plane or webhook-recovery writes."* That paragraph is the interview answer.
 
+**Failure-mode drill table.** For each fault category, the operationalized version of the debugging fault tree above:
+
+| Fault | What the API server does under `Fail` | What the API server does under `Ignore` | First signal | Mitigation from this lesson |
+|---|---|---|---|---|
+| Pod crash-loop | Rejects all matching writes | Admits all matching writes | `apiserver_admission_webhook_rejection_count` spikes; pod `CrashLoopBackOff` | ≥2 replicas across nodes; narrow `rules` |
+| Cert expired | Rejects all matching writes (TLS handshake fails) | Admits all matching writes | TLS handshake errors in apiserver logs | cert-manager auto-rotation; alert on cert age |
+| Rolling-update dead connection | Intermittent rejects, looks like flakiness | Intermittent silent admits | Timeout spikes correlated with rollout events, not steady-state | small `timeoutSeconds`; readiness gating; see k/k#80313 |
+| `matchConditions` CEL runtime error | Treated as webhook failure → rejects | Treated as webhook failure → admits | CEL evaluation error in apiserver logs | keep CEL expressions simple and tested; avoid nil-unsafe field access |
+
 **Testing without a live API server.** You don't need a cluster to test the decision logic. Two levels: (1) **unit** — construct the `*appsv1.Deployment` and Budget fixtures, call `ValidateCreate` directly with a fake client (`fake.NewClientBuilder().WithObjects(...).Build()`), and assert on the returned error/warnings. Fast, covers every branch. (2) **integration** — `envtest` spins up a real `kube-apiserver` + etcd (no kubelet); register the webhook against it and `Create` a breaching Deployment through a real client to prove the wiring, cert plumbing, and `ValidatingWebhookConfiguration` all match. Do branch coverage at level 1 and one happy/one deny path at level 2 — envtest is slower and you don't want the whole matrix there.
 
 ## Practice
 
-Implement the **Budget-enforcement validating webhook** in `gpu-cost-operator`.
+Implement the **Budget-enforcement validating webhook** in `gpu-cost-operator`. Feeds the module deliverable's [checkpoint item 4](../checkpoint.md) directly.
 
 1. `kubebuilder create webhook --group apps --version v1 --kind Deployment --programmatic-validation` (external type) or scaffold a raw `admission.Handler`; implement `ValidateCreate`/`ValidateUpdate` to reject Deployments whose projected GPU cost would exceed an **active** Budget in the same namespace.
 2. In the `//+kubebuilder:webhook` marker set `failurePolicy`, `sideEffects=None`, `timeoutSeconds`, narrow `rules`; `make manifests`. Patch a `namespaceSelector` excluding `kube-system` and `gpu-cost-system`.
@@ -168,19 +202,42 @@ Implement the **Budget-enforcement validating webhook** in `gpu-cost-operator`.
 - Creating a workload in `kube-system` (or `gpu-cost-system`) is unaffected while the webhook is down — proving the exclusion.
 - The webhook test passes in `make test`.
 
+## Common pitfalls
+
+1. **Assuming `matchPolicy: Exact` is "more precise" and therefore safer.** For a security policy it's usually a silent bypass hole, since requests via other API versions skip the webhook entirely — leave `Equivalent` unless you have a specific reason not to.
+2. **Forgetting that mutating webhooks can be re-invoked (`reinvocationPolicy: IfNeeded`) but validating webhooks never are.** Putting order-dependent logic in a mutator is fragile in a way validation isn't — mutators can run more than once, in an order you don't fully control.
+3. **Not excluding the webhook's *own* namespace from its own `namespaceSelector`.** The classic self-lockout, distinct from (but as important as) excluding `kube-system` — this is the single most common cause of a genuinely stuck cluster.
+4. **Treating `ValidatingAdmissionPolicy` as a drop-in webhook replacement for every case.** It can't call external systems or aggregate live fleet-wide state (e.g. "sum all current GPU usage across a namespace"), so a cost-budget check that needs a live Pod list still needs a webhook — VAP is for static/relational checks over the request object and at most one bound param.
+
 ## Self-check
 
-**(a) `failurePolicy: Fail` when your webhook pod is down — what happens, and how do you avoid self-lockout?**
-**Answer:** The API server can't get a valid AdmissionReview response, so under `Fail` it **rejects every matching write** with a webhook-unavailable error. If the webhook's `rules`/selectors also match the namespace hosting the webhook (or its dependencies), you can't reschedule or redeploy the webhook itself — a self-inflicted cluster wedge. Avoid it by: `namespaceSelector` excluding `kube-system` **and** the webhook's own namespace; a small `timeoutSeconds` so hung calls fail fast; ≥2 replicas anti-affined across nodes so one failure doesn't down admission; narrow `rules` so the webhook can only affect the resources it must; and, where availability outranks policy, `Ignore` instead. Also monitor the serving cert — an expired cert triggers the same failure path cluster-wide.
+- **`failurePolicy: Fail` when your webhook pod is down — what happens, and how do you avoid self-lockout?**
+  **Answer:** The API server can't get a valid AdmissionReview response, so under `Fail` it **rejects every matching write** with a webhook-unavailable error. If the webhook's `rules`/selectors also match the namespace hosting the webhook (or its dependencies), you can't reschedule or redeploy the webhook itself — a self-inflicted cluster wedge. Avoid it by: `namespaceSelector` excluding `kube-system` **and** the webhook's own namespace; a small `timeoutSeconds` so hung calls fail fast; ≥2 replicas anti-affined across nodes so one failure doesn't down admission; narrow `rules` so the webhook can only affect the resources it must; and, where availability outranks policy, `Ignore` instead. Also monitor the serving cert — an expired cert triggers the same failure path cluster-wide.
 
-**(b) Validating vs mutating ordering, and why can't a validating webhook change the object?**
-**Answer:** The API server runs mutating admission first (built-ins, then mutating webhooks), then schema validation + defaulting, then validating admission, then persists. A validating webhook returns only `allowed` (any patch it sends is ignored) — by design, because it runs *last*, on the final post-mutation object, so it can trust that what it inspects is exactly what gets stored. If validation could mutate, that guarantee would break for any validating webhook downstream, and validation could re-introduce values that were never schema-validated. Mutation belongs in the earlier phase precisely so its output is re-validated before persistence.
+- **Validating vs mutating ordering, and why can't a validating webhook change the object?**
+  **Answer:** The API server runs mutating admission first (built-ins, then mutating webhooks), then schema validation + defaulting, then validating admission, then persists. A validating webhook returns only `allowed` (any patch it sends is ignored) — by design, because it runs *last*, on the final post-mutation object, so it can trust that what it inspects is exactly what gets stored. If validation could mutate, that guarantee would break for any validating webhook downstream, and validation could re-introduce values that were never schema-validated. Mutation belongs in the earlier phase precisely so its output is re-validated before persistence.
 
-**(c) When would ValidatingAdmissionPolicy (CEL) replace a webhook, and what are its limits?**
-**Answer:** Use a `ValidatingAdmissionPolicy` (GA 1.30) when the rule is expressible in CEL over the request object plus at most one bound `paramKind` resource — e.g. reject a Deployment when `replicas * gpusPerPod > param.spec.limit`. It runs in-process in the API server, so it eliminates the webhook pod, the TLS cert, the network hop, and thus the entire availability/wedge/cert-expiry failure surface, and it can't self-lock the cluster. Limits: CEL only (no arbitrary Go, no calls to an external cost API), no live cross-object queries beyond the single bound param (so a check that must `list` all Pods and sum current GPU usage still needs a webhook), and it cannot mutate. Rule of thumb: static/relational checks → VAP; checks needing external data or fleet-wide aggregation → webhook.
+- **When would ValidatingAdmissionPolicy (CEL) replace a webhook, and what are its limits?**
+  **Answer:** Use a `ValidatingAdmissionPolicy` (GA 1.30) when the rule is expressible in CEL over the request object plus at most one bound `paramKind` resource — e.g. reject a Deployment when `replicas * gpusPerPod > param.spec.limit`. It runs in-process in the API server, so it eliminates the webhook pod, the TLS cert, the network hop, and thus the entire availability/wedge/cert-expiry failure surface, and it can't self-lock the cluster. Limits: CEL only (no arbitrary Go, no calls to an external cost API), no live cross-object queries beyond the single bound param (so a check that must `list` all Pods and sum current GPU usage still needs a webhook), and it cannot mutate. Rule of thumb: static/relational checks → VAP; checks needing external data or fleet-wide aggregation → webhook.
 
-## Resources
+- **Your webhook is intermittently timing out only right after each rolling update of the webhook Deployment, not at steady state. What's the likely mechanism, and what change would you make?**
+  **Answer:** The likely mechanism is a stale/dead TCP connection: the API server had an open connection to a webhook pod that has since been terminated as part of the rollout, and it doesn't always detect this cleanly before trying to use it — a documented upstream failure mode (kubernetes/kubernetes#80313), not random flakiness. Mitigations: keep `timeoutSeconds` small so a hung call fails fast rather than stalling the write path; ensure the webhook Service has correct readiness gating so old pods are removed from Endpoints promptly and new pods aren't added until truly ready; and consider `maxSurge`/`maxUnavailable` tuning on the webhook Deployment so there's always a healthy backend serving during the transition, reducing the window where a stale connection can be picked.
 
-1. **Kubebuilder Book — Webhook overview** — scaffolding, `CustomValidator`, marker → manifest, cert-manager wiring: https://book.kubebuilder.io/reference/webhook-overview.html
-2. **kubernetes.io — Dynamic Admission Control** — AdmissionReview contract, `failurePolicy`, `matchConditions`, selectors, `sideEffects`: https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/ (and the admission-controllers reference at `.../admission-controllers/`).
-3. **kubernetes.io — Validating Admission Policy** — CEL policy + binding, `paramKind`, when to prefer it over a webhook: https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/
+## Connections & what's next
+
+This lesson closes the marker → controller-gen → manifest arc that started with lesson 05's CRD markers and continued through lesson 07's RBAC markers — three generators, one pipeline, one discipline: the manifest is a projection of the code's intent, reviewed and regenerated, never hand-edited. It also completes the module's availability-vs-correctness thread: lesson 06's finalizers asked "what if cleanup can't complete," lesson 07's RBAC asked "what's the blast radius of compromise," and this lesson asks "what's the blast radius of the safety mechanism itself failing" — the same fail-open/fail-closed tension shows up at every extension point, and naming it explicitly here is what makes it transferable to scheduler and DRA-driver failure modes next. **Next**, lesson 09 shifts from "should this object be admitted" to "which node should this object land on" — the scheduler's Filter/Score cycle and GPU-aware scheduling via DRA and Kueue, where the `gpu-cost-operator`'s cost signal finally has somewhere to plug into a placement decision, not just an admission decision.
+
+## References & further reading
+
+**Primary sources**
+- [Kubebuilder Book — Webhook overview](https://book.kubebuilder.io/reference/webhook-overview.html) — scaffolding, `CustomValidator`, marker → manifest, cert-manager wiring; read for the exact scaffolding commands and generated file layout.
+- [kubernetes.io — Dynamic Admission Control](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) — AdmissionReview contract, `failurePolicy`, `matchConditions`, selectors, `sideEffects`; read for the authoritative wire contract.
+- [kubernetes.io — Validating Admission Policy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/) — CEL policy + binding, `paramKind`, when to prefer it over a webhook; read for the VAP alternative in full.
+
+**Real-world engineering blogs**
+- kubernetes/kubernetes#80313, ["Admission webhooks affected by dead tcp connections"](https://github.com/kubernetes/kubernetes/issues/80313) — what it shows: a documented upstream failure mode for the exact "times out right after rollout" symptom.
+- Gardener docs, ["Fix Problematic Conversion Webhooks"](https://gardener.cloud/docs/guides/administer-shoots/conversion-webhook/) — what it shows: real production diagnosis/recovery guidance for a wedged webhook, from a large-scale multi-cluster-management project.
+- AWS re:Post, ["Managing webhook failures on Amazon EKS"](https://repost.aws/articles/ARr5AEAlgSSh2sdX30gnMGDQ/managing-webhook-failures-on-amazon-eks) — what it shows: official AWS operator guidance on the same availability/wedge risk from a managed-Kubernetes vantage point.
+
+**Deeper dives**
+- [kubernetes.io — Admission Webhook Good Practices](https://kubernetes.io/docs/concepts/cluster-administration/admission-webhooks-good-practices/) — official checklist that directly complements this lesson's risk section; a good pre-ship review pass.

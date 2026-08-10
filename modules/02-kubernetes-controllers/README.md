@@ -3,7 +3,7 @@ id: "02"
 title: "Kubernetes internals and controllers"
 notion: "https://app.notion.com/p/3b33abaeb8238119965bd167fd8412a4"
 phase: "Phase 0–1 · Months 1–6"
-effort: "~104 hrs ≈ 9–10 weeks @ 10–12 hrs/wk"
+effort: "~194 hrs ≈ 16–19 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["01"]
 unlocks: ["04", "06"]
@@ -18,7 +18,7 @@ completed: null
 > produces the first real version of your capstone: `gpu-cost-operator`.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb8238119965bd167fd8412a4
-- **Phase:** Phase 0–1 · **Est. effort:** ~104 hrs ≈ 9–10 weeks @ 10–12 hrs/wk
+- **Phase:** Phase 0–1 · **Est. effort:** ~194 hrs ≈ 16–19 weeks @ 10–12 hrs/wk
 - **Prerequisites:** `01` (Go) · **Unlocks:** `04`, `06`
 - **Deliverable:** [`gpu-cost-operator` v0.1](practice/gpu-cost-operator/) — a real
   kubebuilder operator built on Module 01's `gpu-cost-exporter` core.
@@ -49,16 +49,16 @@ Internals-first, ending in a real build. Spine = **L4, L6, L10**.
 
 | # | Lesson | Hrs | Advances the operator |
 |---|--------|-----|-----------------------|
-| 01 | [Component internals — how each works](lessons/01-component-internals.md) | 12 | Node-watch client-go for the cost signal |
-| 02 | [API machinery](lessons/02-api-machinery.md) | 6 | Typed vs unstructured GPU-capacity reads |
-| 03 | [Reconciliation model](lessons/03-reconciliation-model.md) | 8 | Idempotency test on reconcile |
-| 04 | [Informers, caches, workqueues](lessons/04-informers-caches-workqueues.md) | 12 | Cache-vs-live instrumentation |
-| 05 | [CRD design (versioning · CEL · subresources)](lessons/05-crd-design.md) | 10 | The three `v1alpha1` CRD schemas |
-| 06 | [controller-runtime deep + finalizers/GC](lessons/06-controller-runtime-deep.md) | 14 | Owned children + finalizer recording spend |
-| 07 | [Kubebuilder + RBAC least-privilege](lessons/07-kubebuilder-and-rbac.md) | 8 | Minimal, justified ClusterRole |
-| 08 | [Admission webhooks + failurePolicy](lessons/08-admission-webhooks.md) | 10 | Budget-enforcement validating webhook |
-| 09 | [Scheduler + GPU-scheduling literacy (DRA/Kueue)](lessons/09-scheduler-and-gpu-scheduling.md) | 8 | Placement design doc |
-| 10 | [Capstone build + envtest](lessons/10-capstone-build.md) | 16 | Assemble & test v0.1 |
+| 01 | [Kubernetes component internals — how each component works](lessons/01-component-internals.md) | 18 | Node-watch client-go for the cost signal |
+| 02 | [API machinery](lessons/02-api-machinery.md) | 10 | Typed vs unstructured GPU-capacity reads |
+| 03 | [The reconciliation model](lessons/03-reconciliation-model.md) | 16 | Idempotency test on reconcile |
+| 04 | [Informers, caches, and workqueues](lessons/04-informers-caches-workqueues.md) | 22 | Cache-vs-live instrumentation |
+| 05 | [CRD and API design (versioning · CEL · subresources)](lessons/05-crd-design.md) | 20 | The three `v1alpha1` CRD schemas |
+| 06 | [controller-runtime in depth + finalizers/GC](lessons/06-controller-runtime-deep.md) | 26 | Owned children + finalizer recording spend |
+| 07 | [Kubebuilder project ownership + least-privilege RBAC](lessons/07-kubebuilder-and-rbac.md) | 16 | Minimal, justified ClusterRole |
+| 08 | [Validating admission webhooks and operational risk](lessons/08-admission-webhooks.md) | 20 | Budget-enforcement validating webhook |
+| 09 | [The scheduler framework and the GPU-scheduling frontier (DRA/Kueue)](lessons/09-scheduler-and-gpu-scheduling.md) | 16 | Placement design doc |
+| 10 | [Capstone build — gpu-cost-operator v0.1 under envtest](lessons/10-capstone-build.md) | 30 | Assemble & test v0.1 |
 
 **Scheduler (L9) is deliberately literacy/design, not a plugin build** — DRA + Kueue
 fluency is the interview-visible payoff; a production scheduler plugin would blow the
