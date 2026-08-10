@@ -11,8 +11,8 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 
 | # | Module | Status | Enriched on |
 |---|--------|--------|-------------|
-| 1 | `modules/01-go-for-infra` | pending | — |
-| 2 | `modules/01b-linux-internals` | pending | — |
+| 1 | `modules/01-go-for-infra` | done | 2026-08-10 |
+| 2 | `modules/01b-linux-internals` | done | 2026-08-10 |
 | 3 | `modules/02-kubernetes-controllers` | pending | — |
 | 4 | `modules/02b-host-topology` | pending | — |
 | 5 | `modules/03-gpu-hardware` | pending | — |
@@ -36,3 +36,6 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 ## Run log
 
 _(each run appends: date · modules enriched · commit shas)_
+
+- **2026-08-10** · `modules/01-go-for-infra`, `modules/01b-linux-internals` ·
+  commits `cecc154` (Module 01), `60719a7` (Module 01b)
