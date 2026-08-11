@@ -106,7 +106,7 @@ Go's memory model (formalized for `sync`/`sync/atomic` as of Go 1.19, see the [p
 
 ```go
 g, ctx := errgroup.WithContext(ctx)   // ctx is cancelled when any g.Go returns non-nil error
-g.SetLimit(N)                          // cap to N goroutines running at once (Go 1.20+)
+g.SetLimit(N)                          // cap to N goroutines running at once (errgroup.SetLimit; x/sync ≥ v0.1.0)
 for _, item := range items {
     item := item
     g.Go(func() error { return scrape(ctx, item) }) // blocks here once N are in flight
@@ -172,7 +172,7 @@ Before Go 1.14, the scheduler could only preempt a goroutine at specific points 
 
 ### GOMAXPROCS and containers
 
-Go's scheduler multiplexes goroutines onto `GOMAXPROCS` OS threads — by default, the number of logical CPUs Go detects. Before Go 1.19, that detection read the **host's** CPU count, which is wrong inside a cgroup-limited container: a pod with a `resources.limits.cpu: "2"` quota running on a 64-core node would see `GOMAXPROCS=64`, over-parallelize, get CPU-throttled by the cgroup, and show elevated latency despite "only" 2 CPUs of actual demand. This was a real, common source of over-parallel, throttled, high-latency containers, and `uber-go/automaxprocs` was a widely-adopted workaround library that read the cgroup limit and called `runtime.GOMAXPROCS()` explicitly at startup. Go 1.19+ auto-detects cgroup CPU limits and sets `GOMAXPROCS` accordingly, but the failure mode is still live wisdom if you're on an older pinned toolchain or base image — check your Go version before assuming this is handled.
+Go's scheduler multiplexes goroutines onto `GOMAXPROCS` OS threads — by default, the number of logical CPUs Go detects. Before Go 1.25, that detection read the **host's** CPU count, which is wrong inside a cgroup-limited container: a pod with a `resources.limits.cpu: "2"` quota running on a 64-core node would see `GOMAXPROCS=64`, over-parallelize, get CPU-throttled by the cgroup, and show elevated latency despite "only" 2 CPUs of actual demand. This was a real, common source of over-parallel, throttled, high-latency containers, and `uber-go/automaxprocs` was a widely-adopted workaround library that read the cgroup limit and called `runtime.GOMAXPROCS()` explicitly at startup. **Go 1.25 (released Aug 2025)** is the version where the runtime itself became container-aware: on Linux it auto-detects the cgroup CPU bandwidth limit and defaults `GOMAXPROCS` to it (and periodically re-reads it if the limit changes). Because that landed only in 1.25, `automaxprocs` was necessary for essentially all production Go through **Go 1.24** — so the failure mode is still live wisdom on any 1.24-or-earlier toolchain or pinned base image. Check your Go version before assuming this is handled.
 
 ### Channel direction & where this lands in a controller
 
@@ -206,7 +206,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 **Operator view.** A goroutine leak is invisible until it isn't. The actual production signature is `go_goroutines` climbing monotonically on a Grafana panel for days — not a crash, not an error log, just a slow slope upward. RSS grows because each leaked goroutine holds its stack and whatever it's referencing; GC pause times grow because pause time scales with live-heap size, not garbage-collection frequency; eventually the pod OOMKills. It's a uniquely hard on-call pattern precisely because nothing pages until the very end, and by then the postmortem has to reconstruct days of slow decay from a metric nobody was watching closely.
 
-**Hardware/runtime view.** Go's scheduler multiplexes goroutines onto `GOMAXPROCS` OS threads, and `GOMAXPROCS` defaults to the *host's* CPU count — wrong inside a cgroup-limited container. Pre-Go-1.19 this was a real source of over-parallel, throttled, high-latency containers; Go 1.19+ auto-detects cgroup limits, but the failure mode existed for years and `automaxprocs`-style libraries were a widely-adopted workaround before the fix landed upstream. It's a good example of a bug class that's specifically about where your Go binary runs, not what it does.
+**Hardware/runtime view.** Go's scheduler multiplexes goroutines onto `GOMAXPROCS` OS threads, and before Go 1.25 `GOMAXPROCS` defaulted to the *host's* CPU count — wrong inside a cgroup-limited container. Pre-1.25 this was a real source of over-parallel, throttled, high-latency containers; Go 1.25 (Aug 2025) made the runtime cgroup-aware, but the failure mode existed for years — through Go 1.24 — and `automaxprocs`-style libraries were the widely-adopted workaround before the fix landed upstream. It's a good example of a bug class that's specifically about where your Go binary runs, not what it does.
 
 **Economics/scale view.** Concurrency limits are literally a cost lever, not just a correctness one. An unbounded scrape fan-out against a billing API or the kubelet can trigger rate limiting or directly cost money per request at scale. A too-conservative limit under-utilizes GPUs sitting idle waiting on CPU-bound preprocessing — exactly the failure mode Google Cloud describes IceCube hitting (see Real-world use cases). Tuning concurrency is tuning a dial between "too slow, wasting expensive idle hardware" and "too fast, getting throttled or billed for it."
 
@@ -297,7 +297,7 @@ Build the collection stage of [`gpu-cost-exporter`](../practice/gpu-cost-exporte
 2. **Storing `ctx` in a struct field "for convenience."** This defeats cancellation semantics silently: the captured `ctx` outlives the request it belonged to, so code using it later has no relationship to the cancellation that should apply to the *new* work. Correction: pass `ctx` as the first argument to every function that needs it, never as stored state.
 3. **Assuming `errgroup.WithContext`'s cancellation aborts CPU-bound work.** It only cancels operations that actually check `ctx.Done()`; pure computation with no `select`/context check runs to completion regardless of how many other goroutines errored out. Correction: CPU-bound work that should be cancellable needs its own explicit `ctx.Err()` check between chunks of work.
 4. **Buffered-channel-as-semaphore off-by-one.** Sizing the semaphore channel to `N` but launching `N+1`-or-more unbounded goroutines that each try to acquire it (rather than gating the *launch* itself) still spikes memory at high fan-out — every launched goroutine's stack exists whether or not it holds the semaphore yet. Correction: gate the launch loop itself, or use `errgroup.SetLimit`, which blocks before starting the goroutine.
-5. **GOMAXPROCS mismatch inside a container.** Real, and still relevant on pre-Go-1.19 toolchains or older pinned base images: `GOMAXPROCS` defaults to the host's CPU count, over-parallelizing and getting throttled inside a cgroup-limited pod. Correction: confirm your Go version auto-detects cgroup limits (1.19+), or explicitly set `GOMAXPROCS` (or use `automaxprocs`) on older toolchains.
+5. **GOMAXPROCS mismatch inside a container.** Real, and still relevant on pre-Go-1.25 toolchains (Go 1.24 or earlier) or older pinned base images: `GOMAXPROCS` defaults to the host's CPU count, over-parallelizing and getting throttled inside a cgroup-limited pod. Correction: confirm your Go version is cgroup-aware (1.25+), or explicitly set `GOMAXPROCS` (or use `automaxprocs`) on older toolchains.
 
 ## Self-check
 
@@ -337,7 +337,7 @@ func fixed(ctx context.Context) {
 
 **(e)** Your container has a `cpu: "2"` limit but the node has 64 cores. What Go-specific behavior can bite you here, and on which Go versions?
 
-**Answer:** Pre-Go-1.19, `GOMAXPROCS` defaults to the *host's* CPU count (64), not the cgroup limit (2) — so the Go scheduler over-parallelizes onto far more OS threads than the container is actually entitled to run simultaneously, gets CPU-throttled by the cgroup, and shows elevated latency despite modest real demand. Go 1.19+ auto-detects cgroup CPU limits and sets `GOMAXPROCS` accordingly, closing the gap. On an older or pinned toolchain, the fix is to set `GOMAXPROCS` explicitly or use a library like `automaxprocs` that reads the cgroup limit at startup.
+**Answer:** Pre-Go-1.25, `GOMAXPROCS` defaults to the *host's* CPU count (64), not the cgroup limit (2) — so the Go scheduler over-parallelizes onto far more OS threads than the container is actually entitled to run simultaneously, gets CPU-throttled by the cgroup, and shows elevated latency despite modest real demand. Go 1.25 (Aug 2025) made the runtime cgroup-aware — it auto-detects the cgroup CPU limit and sets `GOMAXPROCS` accordingly, closing the gap. On Go 1.24 or earlier, or a pinned toolchain, the fix is to set `GOMAXPROCS` explicitly or use a library like `automaxprocs` that reads the cgroup limit at startup.
 
 ## Connections & what's next
 
