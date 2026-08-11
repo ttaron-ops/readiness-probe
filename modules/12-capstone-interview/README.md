@@ -3,7 +3,7 @@ id: "12"
 title: "Capstone project and interview preparation"
 notion: "https://app.notion.com/p/3b33abaeb8238190b651c1c904390a26"
 phase: "Track C · continuous from ~month 4; interview ramp months 9–15"
-effort: "~33 hrs of dedicated prep + continuous capstone assembly"
+effort: "~44 hrs of dedicated prep + continuous capstone assembly"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["01","02","03","04","05","06","07","08","09","10","11"]
 unlocks: []
@@ -20,7 +20,7 @@ completed: null
 > plus a rehearsed loop you can pass unaided.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb8238190b651c1c904390a26
-- **Phase:** Track C · continuous · **Est. effort:** ~33 hrs prep + capstone assembly
+- **Phase:** Track C · continuous · **Est. effort:** ~44 hrs prep + capstone assembly
 - **Prerequisites:** all of `01`–`11` feed it · **Unlocks:** the job search itself
 - **Deliverable:** [GPU platform capstone](practice/gpu-platform-capstone/) — one reference
   "GPU platform" repo + design doc + flagship blog + demo, threading all 11 artifacts.
@@ -56,17 +56,17 @@ Two arcs: **build the evidence** (01-04) and **drill the loop** (05-09).
 
 | # | Lesson | Hrs | What it produces |
 |---|--------|-----|------------------|
-| 01 | [The GPU-infra hiring landscape (2025-26)](lessons/01-hiring-landscape.md) | 3 | a per-company loop map + your sequencing |
-| 02 | [Capstone synthesis: 11 artifacts → one platform](lessons/02-capstone-synthesis.md) | 4 | the value-chain thesis + storyboard |
-| 03 | [Portfolio & writeup build](lessons/03-portfolio-writeup.md) | 4 | repo README + RFC design doc + diagram |
-| 04 | [Flagship blog + demo: "your dashboard is lying"](lessons/04-flagship-blog-demo.md) | 3 | lead blog + 5-min narrated demo |
-| 05 | [GPU system-design drills (P1–P6)](lessons/05-system-design-drills.md) | 5 | six probe-axis rubrics, drilled |
-| 06 | [Deep-dive / debugging drills (D1–D3)](lessons/06-debugging-drills.md) | 4 | three memorized decision trees |
-| 07 | [Narrate your artifacts](lessons/07-narrate-artifacts.md) | 3 | 3-min artifact→decision→tradeoff→metric stories |
-| 08 | [Staff-signal behavioral / STAR](lessons/08-staff-behavioral.md) | 3 | 8–10 staff STAR stories |
-| 09 | [Mock loop & the readiness gate](lessons/09-mock-loop-readiness.md) | 4 | a scored full-loop + remediation list |
+| 01 | [The GPU-infra hiring landscape (2025-26)](lessons/01-hiring-landscape.md) | 4 | a per-company loop map + artifact-to-signal matrix + your sequencing |
+| 02 | [Capstone synthesis: 11 artifacts → one platform](lessons/02-capstone-synthesis.md) | 5 | the value-chain thesis + storyboard + staff-archetype check |
+| 03 | [Portfolio & writeup build](lessons/03-portfolio-writeup.md) | 6 | repo README + RFC design doc + diagram + brag-doc |
+| 04 | [Flagship blog + demo: "your dashboard is lying"](lessons/04-flagship-blog-demo.md) | 5 | lead blog + 2 secondary posts + 5-min narrated demo |
+| 05 | [GPU system-design drills (P1–P6)](lessons/05-system-design-drills.md) | 6 | six probe-axis rubrics, drilled |
+| 06 | [Deep-dive / debugging drills (D1–D3)](lessons/06-debugging-drills.md) | 5 | three memorized decision trees |
+| 07 | [Narrate your artifacts](lessons/07-narrate-artifacts.md) | 4 | 3-min artifact→decision→tradeoff→metric stories + follow-up defenses |
+| 08 | [Staff-signal behavioral / STAR](lessons/08-staff-behavioral.md) | 4 | 8–10 staff STAR stories |
+| 09 | [Mock loop & the readiness gate](lessons/09-mock-loop-readiness.md) | 5 | a scored full-loop + remediation list |
 
-Total ≈ **33 hrs** of dedicated prep, on top of continuous capstone assembly.
+Total ≈ **44 hrs** of dedicated prep, on top of continuous capstone assembly.
 
 ## The six system-design prompts (P1–P6) and the artifacts that arm them
 
