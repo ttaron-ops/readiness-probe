@@ -61,7 +61,7 @@ Two things to internalize:
 This packaging fact has a direct, verified consequence across GPU generations:
 
 - **H100 SXM5:** 80 GB HBM3 across **5 stacks of 16 GB each**, 3.35 TB/s.
-- **H200 SXM5:** 141 GB HBM3e across **6 stacks of 24 GB each**, 4.8 TB/s.
+- **H200 SXM5:** 141 GB *usable* HBM3e across **6 stacks of 24 GB each** — that's 144 GB physically installed (6×24), of which ~3 GB is reserved/not exposed, so the datasheet capacity you budget against is 141 GB — 4.8 TB/s.
 
 Same GH100 compute die in both cards — NVIDIA didn't touch the SMs or tensor cores between H100 and H200. What changed is the memory package: one more physical stack, and a denser/faster generation of HBM (HBM3 → HBM3e) per stack. That's the entire mechanism behind "same compute, more memory, more bandwidth, higher price." **Capacity and bandwidth are somewhat independent knobs a vendor turns by changing the memory package, not the compute die** — which is exactly why you cannot infer bandwidth from capacity, or vice versa, without checking the spec sheet.
 

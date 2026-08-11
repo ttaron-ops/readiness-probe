@@ -18,7 +18,7 @@ completed: null
 > developer; you need to know what the numbers mean.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381abaccfd55ab24bc852
-- **Phase:** Phase 2 · requires 02b · **Est. effort:** ~34 hrs ≈ 3.5 weeks (~$25–35 rented GPU)
+- **Phase:** Phase 2 · requires 02b · **Est. effort:** ~51 hrs ≈ 5 weeks (~$25–35 rented GPU)
 - **Deliverable:** [GPU Efficiency & Cost Report](practice/gpu-efficiency-report/) —
   achieved-vs-spec TFLOPS, FP16→FP8 delta, the util-lie demo, and a cost-per-useful-work SKU call.
 

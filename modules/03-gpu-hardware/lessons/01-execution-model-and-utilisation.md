@@ -68,11 +68,11 @@ DCGM (NVIDIA Data Center GPU Manager) exposes profiling fields that measure the 
 | Metric (DCGM field) | Field ID | What it measures | The question it answers |
 |---|---|---|---|
 | `GPU-Util` (NVML) | — | Temporal: any kernel running | Is it switched on? |
-| `DCGM_FI_PROF_GR_ENGINE_ACTIVE` | 1002 | Fraction of time the graphics/compute engine was active | Slightly better "on" signal |
-| `DCGM_FI_PROF_SM_ACTIVE` | 1003 | Fraction of time ≥1 warp was resident on an SM, **averaged over all SMs** | How much of the machine floor is running? |
-| `DCGM_FI_PROF_SM_OCCUPANCY` | 1005 | Resident warps ÷ max warps, averaged over SMs | How densely packed are the running SMs? |
+| `DCGM_FI_PROF_GR_ENGINE_ACTIVE` | 1001 | Fraction of time the graphics/compute engine was active | Slightly better "on" signal |
+| `DCGM_FI_PROF_SM_ACTIVE` | 1002 | Fraction of time ≥1 warp was resident on an SM, **averaged over all SMs** | How much of the machine floor is running? |
+| `DCGM_FI_PROF_SM_OCCUPANCY` | 1003 | Resident warps ÷ max warps, averaged over SMs | How densely packed are the running SMs? |
 | `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE` | **1004** | Fraction of cycles the tensor (HMMA) pipe was active | Are the tensor cores — the thing you bought — doing anything? |
-| `DCGM_FI_PROF_DRAM_ACTIVE` | 1005b | Fraction of cycles HBM was reading/writing | Are you memory-bound? (feeds lesson 03.2) |
+| `DCGM_FI_PROF_DRAM_ACTIVE` | 1005 | Fraction of cycles HBM was reading/writing | Are you memory-bound? (feeds lesson 03.2) |
 
 (Field IDs per NVIDIA's DCGM documentation and `dcgmi dmon` output, where `DCGM_FI_PROF_PIPE_TENSOR_ACTIVE` shows as the abbreviated column `TENSO`.)
 
