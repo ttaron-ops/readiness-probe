@@ -25,8 +25,8 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 | 12 | `modules/10-bare-metal-lifecycle` | done | 2026-08-11 |
 | 13 | `modules/11-gpu-cost-economics` | done | 2026-08-11 |
 | 14 | `platform/01-distributed-systems-and-design` | done | 2026-08-11 |
-| 15 | `platform/02-platform-networking` | pending | — |
-| 16 | `platform/03-observability` | pending | — |
+| 15 | `platform/02-platform-networking` | done | 2026-08-11 |
+| 16 | `platform/03-observability` | done | 2026-08-11 |
 | 17 | `modules/12-capstone-interview` | pending | — |
 
 > Note on order: the platform "deepen" modules (14–16) are enriched after the GPU track because
@@ -54,3 +54,11 @@ _(each run appends: date · modules enriched · commit shas)_
   current FOCUS spec (v1.3 split-cost allocation columns, Dec 2025; v1.4, June 2026) and lesson 09
   / the deliverable's OpenCost source citations fixed to the verified `pkg/cloud/models/models.go`
   path.
+- **2026-08-11** · `platform/02-platform-networking`, `platform/03-observability` ·
+  commits `6105e33` (platform/02), `c607885` (platform/03). All 17 lessons across both modules
+  rewritten to the full template (Where this fits / Perspectives / Real-world use cases /
+  Common pitfalls / Connections & what's next / bucketed References) with verified production
+  links (Datadog, Cloudflare, Uber, Meta, NVIDIA, Netflix, Shopify, Honeycomb, and others) and an
+  unbroken prev/next chain in each module. Only the two other modules already `done` on this same
+  date preceded this run — this was a second run today per the schedule. This closes out the
+  original 17-module plan except the capstone (17), which is last by design.
