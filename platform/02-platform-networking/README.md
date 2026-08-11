@@ -4,7 +4,7 @@ track: "A — Platform excellence"
 title: "Platform networking depth"
 notion: null                # repo-native module (added in the 12–15mo rebuild), not from the original Notion plan
 phase: "Track A · deepen module"
-effort: "6–8 weeks ≈ ~32 hrs @ 10–12 hrs/wk"
+effort: "7–9 weeks ≈ ~36 hrs @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: []
 unlocks: []
@@ -51,7 +51,7 @@ operations** plane — provisioning and operating RDMA on K8s, not re-deriving f
 | 07 | [GPU and RDMA networking](lessons/07-gpu-and-rdma-networking.md) | operating RDMA on K8s; Network Operator/DRA; NUMA alignment |
 | 08 | [Network observability and debugging](lessons/08-network-observability-and-debugging.md) | the symptom→cause decision tree; eBPF (Hubble/pwru) |
 
-Total ≈ **32 hrs ≈ 6–8 weeks**. **Spine:** L1 (datapath), L5 (K8s dataplane), L7 (RDMA ops),
+Total ≈ **36 hrs ≈ 7–9 weeks**. **Spine:** L1 (datapath), L5 (K8s dataplane), L7 (RDMA ops),
 L8 (the debug tree).
 
 ## Deliverable & checkpoint
