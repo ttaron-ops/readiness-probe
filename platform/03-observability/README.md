@@ -4,7 +4,7 @@ track: "A — Platform excellence"
 title: "Observability engineering"
 notion: null                # repo-native module (added in the 12–15mo rebuild), not from the original Notion plan
 phase: "Track A · deepen module"
-effort: "6–8 weeks ≈ ~34 hrs @ 10–12 hrs/wk"
+effort: "7–9 weeks ≈ ~37 hrs @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: []
 unlocks: []
@@ -50,7 +50,7 @@ scales it to thousands of GPUs rather than re-teaching it.
 | 08 | [Continuous profiling and eBPF](lessons/08-profiling-and-ebpf.md) | on-CPU vs off-CPU; fleet-wide eBPF profiling |
 | 09 | [GPU and ML observability at fleet scale](lessons/09-gpu-and-ml-observability.md) | the synthesis: goodput alerts, NCCL, stragglers |
 
-Total ≈ **34 hrs ≈ 6–8 weeks**. **Spine:** L1 (cardinality), L2 (PromQL traps), L7 (burn-rate),
+Total ≈ **37 hrs ≈ 7–9 weeks**. **Spine:** L1 (cardinality), L2 (PromQL traps), L7 (burn-rate),
 L9 (fleet synthesis).
 
 ## Deliverable & checkpoint
