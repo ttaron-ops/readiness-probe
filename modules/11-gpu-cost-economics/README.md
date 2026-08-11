@@ -3,7 +3,7 @@ id: "11"
 title: "GPU cost and unit economics"
 notion: "https://app.notion.com/p/3b33abaeb8238190b01ce1117b80d2b1"
 phase: "Phase 3 · Months 8–12 (ongoing, the signature module)"
-effort: "~34 hrs ≈ 3–4 weeks @ 10–12 hrs/wk"
+effort: "~48 hrs ≈ 4–5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["04", "05", "07", "08", "10"]
 unlocks: ["12"]
@@ -19,7 +19,7 @@ completed: null
 > **source code of the tools that get it wrong** and the **industry cost standard (FOCUS)**.
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb8238190b01ce1117b80d2b1
-- **Phase:** Phase 3 · **the signature module** · **Est. effort:** ~34 hrs ≈ 3–4 weeks
+- **Phase:** Phase 3 · **the signature module** · **Est. effort:** ~48 hrs ≈ 4–5 weeks
 - **Prerequisites:** `04` `05` `07` `08` `10` · **Unlocks:** `12`
 - **Deliverable:** [GPU cost synthesis](practice/gpu-cost-synthesis/) — the finished
   `gpu-cost-operator` + "where every tool fails" writeup + FOCUS-aligned schema.
@@ -56,26 +56,28 @@ Anchored on **attribution theory** (L1) and closing on the **FOCUS schema** (L10
 
 | # | Lesson | Hrs | Decision it settles |
 |---|--------|-----|---------------------|
-| 01 | [**Attribution: four sharing regimes**](lessons/01-attribution-models.md) (anchor) | 4 | who owns a GPU-hour under exclusive/MIG/time-slice/DRA |
-| 02 | [Allocated vs utilised: the two ledgers](lessons/02-allocated-vs-utilised.md) | 2 | which ledger the bill vs the waste lives on |
-| 03 | [Idle detection & false-positive cost](lessons/03-idle-detection.md) | 3 | when a low-SM GPU is safe to reclaim |
-| 04 | [Fragmentation: unschedulable GPUs](lessons/04-fragmentation-cost.md) | 3 | the cost of free-but-unusable capacity |
-| 05 | [Unit economics: $ ↔ app counters](lessons/05-unit-economics.md) (synthesis) | 4 | $/GPU-hr → $/token, $/run, $/experiment |
-| 06 | [Commitment & procurement strategy](lessons/06-commitment-strategy.md) | 3 | commit / spot / own the baseline vs peak |
-| 07 | [Neocloud vs hyperscaler price gap](lessons/07-neocloud-vs-hyperscaler.md) | 3 | decompose & normalize the 3–6× gap |
-| 08 | [Chargeback, showback & queue-wait billing](lessons/08-chargeback-showback.md) | 3 | charge allocation, report utilisation |
-| 09 | [**Where tooling fails: OpenCost source**](lessons/09-existing-tooling-limits.md) | 4 | name the exact GPU gap, from the code |
-| 10 | [**FOCUS 1.x & a GPU cost schema**](lessons/10-focus-spec.md) (capstone) | 4 | the deliverable's schema |
+| 01 | [**Attribution: four sharing regimes**](lessons/01-attribution-models.md) (anchor) | 5 | who owns a GPU-hour under exclusive/MIG/time-slice/DRA |
+| 02 | [Allocated vs utilised: the two ledgers](lessons/02-allocated-vs-utilised.md) | 3 | which ledger the bill vs the waste lives on |
+| 03 | [Idle detection & false-positive cost](lessons/03-idle-detection.md) | 4.5 | when a low-SM GPU is safe to reclaim |
+| 04 | [Fragmentation: unschedulable GPUs](lessons/04-fragmentation-cost.md) | 4.5 | the cost of free-but-unusable capacity |
+| 05 | [Unit economics: $ ↔ app counters](lessons/05-unit-economics.md) (synthesis) | 6 | $/GPU-hr → $/token, $/run, $/experiment |
+| 06 | [Commitment & procurement strategy](lessons/06-commitment-strategy.md) | 5 | commit / spot / own the baseline vs peak |
+| 07 | [Neocloud vs hyperscaler price gap](lessons/07-neocloud-vs-hyperscaler.md) | 4.5 | decompose & normalize the 3–6× gap |
+| 08 | [Chargeback, showback & queue-wait billing](lessons/08-chargeback-showback.md) | 4.5 | charge allocation, report utilisation |
+| 09 | [**Where tooling fails: OpenCost source**](lessons/09-existing-tooling-limits.md) | 5 | name the exact GPU gap, from the code |
+| 10 | [**FOCUS 1.x & a GPU cost schema**](lessons/10-focus-spec.md) (capstone) | 6 | the deliverable's schema |
 
-Total ≈ **34 hrs ≈ 3–4 weeks**. **Non-skippable spine:** L1 (regimes), L5 (unit economics),
+Total ≈ **48 hrs ≈ 4–5 weeks**. **Non-skippable spine:** L1 (regimes), L5 (unit economics),
 L9 (OpenCost gap), L10 (FOCUS schema).
 
 ## Resource spine
 
 - **DCGM field docs** — SM_ACTIVE / PIPE_TENSOR_ACTIVE / power, the utilisation basis.
 - **NVIDIA MIG + time-slicing + DRA docs/KEPs** — the four sharing regimes' mechanics.
-- **OpenCost source** (`pkg/costmodel/costmodel.go`, `allocation.go`, `pkg/cloud/`) — read the gap.
-- **FOCUS spec** (focus.finops.org, 1.x) — the industry cost/usage schema + split cost.
+- **OpenCost source** (`pkg/costmodel/costmodel.go`, `core/pkg/opencost/allocation.go`,
+  `pkg/cloud/models/models.go`) — read the gap.
+- **FOCUS spec** (focus.finops.org, current 1.4 — the split-cost allocation columns for shared
+  compute landed in 1.3, Dec 2025) — the industry cost/usage schema + split cost.
 - **Neocloud vs hyperscaler pricing pages + 2026 GPU TCO posts** — inputs (flag $ as snapshots).
 
 > ⚠️ **Time-sliced attribution is provably unsolvable from driver/DCGM signals alone** (L1) —

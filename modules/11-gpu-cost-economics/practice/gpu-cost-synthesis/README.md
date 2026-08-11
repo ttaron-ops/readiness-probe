@@ -22,7 +22,8 @@ as unattributable from driver signals* (L1) rather than reporting a false precis
 
 A publishable 3–5 page teardown, grounded in **source you actually read** (L9):
 
-- Read OpenCost's `pkg/costmodel/costmodel.go` (+ `allocation.go`, `pkg/cloud/`); state, with
+- Read OpenCost's `pkg/costmodel/costmodel.go` (+ `core/pkg/opencost/allocation.go`,
+  `pkg/cloud/models/models.go`); state, with
   the exact logic, that its GPU cost is **request-based whole-GPU allocation cost** — blind to
   MIG fractions, time-slice sharers, and DCGM utilisation.
 - Name the **exact gap** and what it would take to close it (the DCGM × pod-resources × app-counter
