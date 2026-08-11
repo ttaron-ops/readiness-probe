@@ -1,0 +1,33 @@
+6 blog post topics (roughly one every 3–5 weeks)
+The arc moves from your comfort zone into your gaps, and several can share a repo so they build toward the capstone.
+
+"Your GPUs are 100% utilized and 99% wasted: the utilization lie, in dollars."
+GPU-Util vs SM-active/tensor-active/MFU, then convert the gap to $/hr on a real fleet. Your opener — pure FinOps+observability, the thing you already do, applied to GPUs. Highest-credibility first post.
+"Cost-per-token, measured not guessed: an FP8-vs-FP16 teardown."
+Batch-size → TTFT/TPOT → CPM curve with the SLO knee, FP8 saving with a measured accuracy delta. Leans on your Async TTS inference experience; produces a chart nobody can hand-wave.
+"Who actually used that H100? GPU cost attribution on Kubernetes."
+Per-pod / per-team attribution across MIG, time-slicing, MPS, and DRA — the hard part that OpenCost/Kubecost gloss over. Directly your Skyro chargeback/showback work, GPU-flavored.
+"Fragmentation is stranded capital: effective capacity vs the free-GPU count."
+Bin-packing, Kueue, the job-size-dependent fragmentation math (the effective_capacity model), stranded-GPU $/hr. FinOps framing of a scheduling problem — a lens few write.
+"Neocloud vs hyperscaler for GPUs: a TCO and commitment model that survives scrutiny."
+Bare-metal capex vs cloud, commitment ladders, break-even utilization, the real on-demand vs reserved crossover. Your commitment-management + cost-recovery experience; pulls you into module 10/11.
+"What a training failure actually costs: goodput, checkpointing, and the reliability tax."
+Young/Daly checkpoint math → failure-overhead multiplier → dollars; why restart-time engineering beats more checkpoints at scale. Deliberately your weakest area (distributed training) — writing it forces the learning, and the cost angle keeps it authentically yours instead of a me-too NCCL post.
+Tip: posts 1, 3, and 4 can all emit from the same tool → that tool becomes capstone A below. Write in public, link the repo, and each post is a portfolio artifact.
+
+4 capstone project alternatives
+Pick one flagship (I'd recommend A — it's your unfair advantage). Each says what it proves and which roles it targets.
+
+A. GPU Cost & Efficiency Operator (Kubernetes controller, Go) — recommended
+A controller/exporter that joins DCGM utilization + allocation + $/GPU-hr into per-pod/per-team cost, surfaces the allocated-vs-utilised waste, and alerts on "busy-but-idle" GPUs. Proves: Go/controllers (your gap) + observability + FinOps (your edge) in one artifact. Targets: neocloud platform/FinOps-platform roles. Stretch: showback/chargeback API + a Grafana dashboard you already know how to build.
+
+B. Multi-tenant GPU sharing & chargeback platform
+Stand up MIG + time-slicing + MPS + DRA on one node pool, then attribute cost per slice with a defensible showback model. Proves: deep GPU-on-Kubernetes (module 04) + your chargeback expertise. Targets: platform roles at multi-tenant GPU shops. Stretch: policy engine that recommends the cheapest sharing mode per workload shape.
+
+C. Inference min-CPM optimizer
+A benchmarking harness that sweeps batch/precision/max-num-seqs, finds the min cost-per-token operating point under a TTFT-p99 SLO, autoscales on queue depth (KEDA) with scale-to-zero, and emits CPM. Proves: inference serving + economics (builds on your TTS work). Targets: Inference SWE / inference-platform roles. Stretch: prefill/decode disaggregation or multi-LoRA cost comparison.
+
+D. GPU fleet capacity & TCO planner
+A fragmentation-aware capacity model driven by a real trace (Alibaba's public GPU cluster trace): effective capacity per job-size profile, neocloud-vs-hyperscaler TCO, and a commitment-strategy optimizer. Proves: staff-level FinOps + capacity + bare-metal economics with less heavy coding — pure analytical depth. Targets: capacity/FinOps-platform and "cost/observability" staff roles. Stretch: fold in training goodput so the model prices reliability, not just allocation.
+
+If you tell me your weekly hours, I'll turn the six posts + chosen capstone into a dated calendar (publish dates + the artifact each post ships).
