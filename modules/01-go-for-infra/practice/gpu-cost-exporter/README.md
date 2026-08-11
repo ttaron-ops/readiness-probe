@@ -37,6 +37,9 @@ gpu-cost-exporter/
 │   ├── cost/                       # CostSource interface + aggregation (the reusable core)
 │   ├── source/                     # real + fake implementations
 │   └── metrics/                    # Prometheus GaugeVec registration
+├── operator/                       # lesson 09: kubebuilder-scaffolded CostBudget CRD + reconciler
+│   ├── api/v1alpha1/                #   CostBudget types
+│   └── internal/controller/         #   Reconciler, wired to the same internal/cost core
 ├── trace.md                        # lesson 08 reading-source artifact
 ├── go.mod
 └── README.md

@@ -81,3 +81,13 @@ _(each run appends: date · modules enriched · commit shas)_
   Module README's lesson table and total-effort estimate updated (33 hrs → 44 hrs) to match the
   bumped per-lesson `est_time`s. **This closes the original 17-module enrichment plan — all
   modules are now `done`.** Future runs should switch to the SPEC.md QA pass.
+- **2026-08-11** · QA pass · `modules/01-go-for-infra` (oldest-enriched, 2026-08-10) ·
+  commit TBD. Full consistency sweep: verified the prev/next chain across all 9 lessons is
+  unbroken (01→09, null at both ends), all 12 template sections present in every lesson with
+  ≥3 `**Answer:**` self-check lines each (4–5 actual), and all 66 unique cited URLs across the
+  module resolve to real, on-topic content (spot-checked two unusually-specific-looking
+  `kubernetes.io` 2026 blog posts — both real). README lesson table and effort estimate (110 hrs)
+  match the lesson files exactly. Found one small drift (not a break): the
+  `practice/gpu-cost-exporter/README.md` suggested-layout diagram didn't show the `operator/`
+  directory that lesson 09's enriched Practice section now directs learners to scaffold — added
+  it. No other fixes needed.
