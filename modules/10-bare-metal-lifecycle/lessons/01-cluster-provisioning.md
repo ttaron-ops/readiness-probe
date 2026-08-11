@@ -4,8 +4,11 @@ title: "Cluster provisioning: bootstrap a control plane from nothing"
 module: "10"
 concept: "Cluster provisioning: bootstrap a control plane from nothing"
 status: not-started
-est_time: "8h"
+est_time: "10h"
+prev: null
+next: "02-etcd-operations.md"
 artifacts: []
+sources: 9
 ---
 
 # 10.1 · Cluster provisioning: bootstrap a control plane from nothing
@@ -14,20 +17,56 @@ artifacts: []
 >
 > Module: [🖥️ 10 — Bare metal and cluster lifecycle](../README.md) · Deliverable: [Capex-vs-cloud + KTHW/etcd writeup](../practice/capex-vs-cloud/README.md)
 
+## Where this fits
+
+This is lesson one of the module and the first lesson of the whole course to put you on bare
+metal with no managed control plane underneath you. Everything before this assumed a cluster
+already existed — you consumed one, tuned workloads on one, reasoned about its controllers. This
+lesson removes that floor: you generate the trust roots, mint the certs, and stand up the
+apiserver/etcd/controller-manager/scheduler yourself, so that from here on "the control plane" is
+a set of files and processes you built, not a button you clicked. Everything downstream in this
+module — etcd ownership (10.2), HA topology (10.3), declarative fleets (10.4), node provisioning
+(10.5) — assumes you can already answer "what cert does X present to Y and why," because that
+question is the one that pages you at 2am when any of those later systems misbehaves.
+
 ## Why this matters
-This is the actual job at a bare-metal GPU shop: no EKS "Create cluster" button provisions a control plane you never see. When the apiserver won't come up because a SAN is missing from its serving cert, or a kubelet is `Unauthorized` against the apiserver, you debug it by knowing exactly which cert is presented in which direction. You have consumed 40+ managed control planes; here you build one from a directory of `.pem` files and a handful of systemd units and static-pod manifests, so the PKI stops being a black box.
 
-## What's new here
-Module 02 taught the **anatomy**: what etcd is, that the apiserver is the only client that talks to etcd, what informers and controllers do, how the scheduler binds pods. It answered *what the pieces are and how they relate at runtime*.
+This is the actual job at a bare-metal GPU shop: no EKS "Create cluster" button provisions a
+control plane you never see. NVIDIA's Sr SSE (Kubernetes Node Lifecycle, DGX Cloud) posting asks
+candidates to "build and refine CAPI providers... for scalable node provisioning" against bare
+metal; CoreWeave's Kubernetes Platforms team explicitly owns "provisioning bare-metal and virtual
+clusters with Cluster API" and runs its own CKS "directly on bare metal, without a hypervisor."
+Both assume you already know how a control plane comes into existence by hand — CAPI providers
+and kubeadm are automation *over* the process this lesson makes you do manually.
 
-This lesson is **provisioning**: how those pieces come to exist on cold hardware. New material:
-- The **PKI graph** — every CA, leaf cert, its Subject/CN, its SANs, its `extendedKeyUsage` (server vs client auth), and its issuer. This is not in 02 at all.
-- **kubeconfig files as credential bundles** — admin, kubelet, controller-manager, scheduler each get their own client cert embedded in a kubeconfig.
-- **Static pods** as the bootstrap mechanism for the control plane, run by the kubelet directly with no apiserver involved (chicken-and-egg).
-- **Bootstrap tokens + TLS bootstrapping** — how a brand-new worker gets its first kubelet client cert without you hand-copying one per node.
-- The **kubeadm diff**: after doing it by hand, run `kubeadm init` and see precisely which of these steps it automated.
+The cost of not knowing it is concrete and it repeats in the wild: a self-managed cluster whose
+apiserver serving certificate quietly expired at the one-year kubeadm default froze every
+deployment and killed `kubectl` cluster-wide, with no warning until it happened (see
+[Real-world use cases](#real-world-use-cases) below) — an independent postmortem from a different
+team hit the identical failure class the same year. When the apiserver won't come up because a SAN
+is missing, or a kubelet is `Unauthorized`, you debug it by knowing exactly which cert is
+presented in which direction — nobody hands you that diagram; you have to have built one.
 
-## Core notes
+## What's new here (calibration)
+
+Per this module's calibration (see the [README](../README.md#calibrated-to-your-background---what-we-skip)):
+you already have **02**'s control-plane anatomy (what etcd/apiserver/controller-manager/scheduler
+*are* and how they relate at runtime), **04**'s GPU Operator and driver-rollout experience, **05**'s
+XID/NPD concepts, and general on-prem/PXE/colocation fluency — none of that is re-taught here.
+
+What's genuinely new in this lesson:
+- The **PKI graph** — every CA, leaf cert, its Subject/CN, its SANs, its `extendedKeyUsage`
+  (server vs client auth), and its issuer. None of this is in 02, which treated etcd/apiserver as
+  black boxes that "just talk to each other."
+- **kubeconfig files as credential bundles**, not just connection strings.
+- **Static pods** as the bootstrap mechanism that solves the control-plane chicken-and-egg problem.
+- **Bootstrap tokens + TLS bootstrapping** — how a worker gets its first cert without hand-copied
+  PEMs.
+- The **kubeadm diff** — running it by hand first, then `kubeadm init`, to see precisely what gets
+  automated, which is the artifact a Staff-level interview probe ("bootstrap a control plane by
+  hand — name every cert") is actually testing for.
+
+## Core concepts
 
 ### The PKI, end to end
 Kubernetes mTLS rests on (typically) **three independent CAs**. They are separate trust roots on purpose — compromising the front-proxy CA must not let you mint apiserver-trusted client certs.
@@ -85,7 +124,7 @@ Why static pods and not Deployments (self-check c): a Deployment is reconciled b
 Once a kubelet presents its `system:node:<name>` client cert (group `system:nodes`), two mechanisms constrain it: the **Node authorizer** (`--authorization-mode=Node,RBAC`) lets a node read/write only objects tied to *its own* pods (its Secrets, ConfigMaps, its Node status), and the **NodeRestriction admission plugin** stops a compromised kubelet from editing other nodes or labeling itself into privileged scheduling. This is why the CN must be exactly `system:node:<nodename>` and the group exactly `system:nodes` — the authorizer parses the node name straight out of the cert. A cert with the wrong CN authenticates fine but is authorized for nothing; a cert with `system:masters` would (dangerously) be cluster-admin. On managed clusters this was invisible; here you set the apiserver flags and sign the certs that make it work.
 
 ### HA: fronting multiple apiservers
-With more than one control-plane node, clients and kubelets hit a **load balancer VIP**, not one apiserver. Consequences you own: the VIP/DNS name **must** be in every apiserver serving cert's SANs (add it before init, or certs won't validate through the LB), and the LB does **L4 TCP passthrough** — it must not terminate TLS, because mTLS is end-to-end to the apiserver. `kubeadm init --control-plane-endpoint=<vip>:6443` bakes this in; forgetting it is why single-node kubeadm clusters are painful to convert to HA later.
+With more than one control-plane node, clients and kubelets hit a **load balancer VIP**, not one apiserver. Consequences you own: the VIP/DNS name **must** be in every apiserver serving cert's SANs (add it before init, or certs won't validate through the LB), and the LB does **L4 TCP passthrough** — it must not terminate TLS, because mTLS is end-to-end to the apiserver. `kubeadm init --control-plane-endpoint=<vip>:6443` bakes this in; forgetting it is why single-node kubeadm clusters are painful to convert to HA later. Lesson 10.3 builds this out fully with kube-vip.
 
 ### Bootstrap tokens and TLS bootstrapping
 Hand-copying a signed kubelet cert to every one of hundreds of GPU nodes does not scale. Instead:
@@ -102,8 +141,14 @@ Either way the apiserver→etcd link is a **client cert signed by the etcd CA**;
 ### The CRI and why the apiserver never talks to it
 The kubelet talks to the container runtime (**containerd**/CRI-O) over the **CRI** gRPC socket (`/run/containerd/containerd.sock`) — no TLS, a local Unix socket. The apiserver never touches the runtime; it tells the kubelet the desired state and the kubelet drives containerd. On bare metal you install and configure containerd yourself (cgroup driver must be `systemd` to match the kubelet, or pods flap). This is the layer EKS/GKE pre-baked into the node AMI.
 
-### Certificate lifetime
-kubeadm leaf certs default to **1 year**; the CAs to 10 years. Expired apiserver/kubelet certs are a classic silent 2am outage on clusters nobody upgraded — the apiserver refuses connections and nothing self-heals because renewal itself needs a working API. `kubeadm certs check-expiration` reports every cert's expiry; `kubeadm certs renew all` rotates the leaves (restart the static pods after). Kubelet **client** certs auto-rotate via CSR when TLS-bootstrapped; **serving** certs need `RotateKubeletServerCertificate` plus CSR approval. Put `check-expiration` in a monthly cron on every control-plane node — this is the cheapest outage you will ever prevent.
+### Certificate lifetime — and why it fails slowly, not all at once
+kubeadm leaf certs default to **1 year**; the CAs to 10 years. Expired apiserver/kubelet certs are a classic silent 2am outage on clusters nobody upgraded — the apiserver refuses connections and nothing self-heals because renewal itself needs a working API. Two independent public postmortems converge on this exact failure class: one describes a self-managed cluster whose apiserver certificate expired at the 1-year default, freezing all deployments and killing `kubectl` cluster-wide with no warning; another, an independent December-2019 write-up, walks the same failure with its own diagnosis steps (start from `x509` errors, work backwards to `kubeadm certs check-expiration`). See [Real-world use cases](#real-world-use-cases).
+
+The sharper trap for HA clusters built incrementally: because each cert is minted the day it's generated, and control-plane nodes are often added on *different days* (a node re-joined after maintenance, a new CP node added months later), their certs expire on *different days too* — producing a slow drip of failures (one etcd peer cert first, then another apiserver, weeks apart) rather than one clean simultaneous outage. That drip is *harder* to diagnose than a single hard failure because the cluster looks "mostly fine" while it's actually degrading.
+
+`kubeadm certs check-expiration` reports every cert's expiry; `kubeadm certs renew all` rotates the leaves (restart the static pods after). Kubelet **client** certs auto-rotate via CSR when TLS-bootstrapped; **serving** certs need `RotateKubeletServerCertificate` plus CSR approval. Put `check-expiration` in a monthly cron on every control-plane node — this is the cheapest outage you will ever prevent.
+
+At telco/edge scale, PKI ownership is a first-class platform concern, not an afterthought: Deutsche Telekom's ["Das Schiff"](https://github.com/telekom/das-schiff) CaaS platform runs Cluster API + Metal3 (+ vSphere) + Flux across hundreds of bare-metal edge locations in Germany, engineered so clusters keep running on correctly-issued certs and reconciled GitOps state even when the management plane is unreachable. That's the same PKI-ownership problem this lesson teaches, just at a scale where a manual `check-expiration` cron doesn't cut it — worth knowing this pattern exists even though the deep dive on CAPI/Metal3 itself is lesson 10.4's territory.
 
 ### Encryption at rest — a bare-metal concern EKS hid
 On managed control planes the provider encrypted etcd's disk for you (often with a KMS key). On bare metal, **Secrets sit in etcd in plaintext by default** — anyone with the etcd data dir or a snapshot can read every credential. You wire this yourself with an **`EncryptionConfiguration`** passed to the apiserver via `--encryption-provider-config`:
@@ -143,6 +188,22 @@ Almost every bootstrap failure is one cert or one SAN. Memorize the mapping:
 | aggregated API `401` | `front-proxy-client` / `requestheader-*` misconfig |
 Reach for `openssl x509 -noout -text` on the named cert first; it's faster than reading apiserver logs blind.
 
+## Perspectives
+
+**The developer/consumer view.** You've spent a career on the other side of this: `kubectl` "just worked" because someone else's control plane presented a cert your client already trusted. That someone is now you. The payoff is that app-level auth bugs (a workload's ServiceAccount token being silently rejected, a webhook failing TLS verification) stop being mysterious once you can trace which cert, which CA, and which SAN is in play.
+
+**The operator view.** Your job is no longer "does the cluster work" but "will the cluster still work in 11 months." Cert lifetime, SAN completeness for every future LB/VIP, and a monthly `check-expiration` cron are now yours. This is boring, unglamorous work — and it is exactly the work that silently protects uptime, which is why it shows up in interview probes.
+
+**The security/PKI view.** Three independent CAs are a deliberate blast-radius decision: compromising the front-proxy CA (which only signs one client cert) must not let an attacker mint apiserver-trusted identities. The `sa.key`/`sa.pub` pair sitting outside any CA is a reminder that not all trust in the cluster is cert-based — some of it is a bare keypair you must protect and keep synchronized by hand across every control-plane node.
+
+**The economics view.** Every one of these PKI and encryption-at-rest responsibilities was previously bundled into your managed-control-plane bill. When you build the capex-vs-cloud model in lesson 10.8, "self-managed control plane" needs a line item for the *engineering time* to run this cron, rotate these certs, and own this key management — not just hardware capex. A cluster that silently outages from an expired cert is not cheaper than EKS; it's a deferred cost that lands as an incident.
+
+## Real-world use cases
+
+- **"When Kubernetes Certificates Expire: A Production War Story"** — <https://medium.com/@olanipekunadekunleoluwole/when-kubernetes-certificates-expire-a-production-war-story-3bd4a54db3bf> — a self-managed cluster's apiserver certificate hit the 1-year kubeadm default, expired, and froze every deployment while `kubectl` died cluster-wide. Shows the exact "nobody rotated the leaf cert" failure this lesson's cert-lifetime section warns about, as it actually happened in production.
+- **"2019-12 K8s certificate expiration outage"** — <https://vadosware.io/post/2019-12-k8s-cert-expiration-outage/> — an independent postmortem of the same failure class, with concrete diagnosis steps. Pairs directly with this lesson's "bootstrap error → cert at fault" cheat sheet, generalized from bootstrap-time to steady-state ops: the same table you use to debug a fresh `kubeadm init` also triages a cluster that's been running fine for a year.
+- **Deutsche Telekom "Das Schiff"** — <https://github.com/telekom/das-schiff> — DT's CaaS platform runs CAPI + Metal3 (+ vSphere) + Flux across hundreds of bare-metal locations in Germany, engineered so clusters keep serving traffic on correctly-issued certs and reconciled GitOps state even when the management plane is unreachable. Shows PKI/bootstrap ownership at telco/edge fleet scale — a brief cross-reference here; the full CAPI/Metal3 story is lesson 10.4's.
+
 ## Worked example — tracing one apiserver→etcd write
 A `kubectl apply -f pod.yaml` on a hand-built cluster:
 1. kubectl loads `admin.conf`, presents client cert CN `kubernetes-admin` over TLS to `https://<apiserver>:6443`. The apiserver presents `apiserver.crt`; kubectl validates it against `ca.crt` and checks the SAN covers the address used.
@@ -168,7 +229,15 @@ Two passes on **3 cheap VMs** (KVM/multipass, or three `e2-small`/`t3.small`); o
 - `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -text` — read the SAN list kubeadm computed and compare to the hosts you hand-listed in Pass 1.
 - Run `kubeadm init phase certs all --dry-run` on a scratch host to dump the exact cert set — that output *is* the spine of your writeup table.
 
-**Acceptance:** (1) a hand-built control plane that passes `kubectl get nodes` Ready with a joined worker; (2) a written **"what kubeadm automated" diff** — the cert table, the static-pod-vs-systemd difference, and the bootstrap-token/TLS-bootstrap flow kubeadm did for you. Both feed the deliverable's KTHW writeup.
+**Acceptance:** (1) a hand-built control plane that passes `kubectl get nodes` Ready with a joined worker; (2) a written **"what kubeadm automated" diff** — the cert table, the static-pod-vs-systemd difference, and the bootstrap-token/TLS-bootstrap flow kubeadm did for you. Both feed the deliverable's KTHW writeup, and both are inputs to the 10.8 capex model's "engineering time to run this yourself" line.
+
+## Common pitfalls
+
+- **Forgetting the LB VIP in the apiserver SAN list before `kubeadm init`.** Certs are only regenerated with `kubeadm certs renew` on their normal fields, not automatically expanded with new SANs — retrofitting HA onto a single-node cluster after the fact usually means regenerating `apiserver.crt` by hand or reinitializing.
+- **Signing `apiserver-etcd-client` with the cluster CA instead of the etcd CA.** It's the single most common bootstrap error in this lesson's cheat sheet (`x509: certificate signed by unknown authority`) — etcd only trusts its own CA, never the cluster CA, even though both are "Kubernetes" CAs conceptually.
+- **Assuming 1-year cert expiry is "someone else's problem" like it was on EKS.** The two independent postmortems above show this is the single most common silent bare-metal outage. Put `kubeadm certs check-expiration` on a calendar, not in your memory.
+- **Treating an incrementally-built HA cluster's cert expiries as synchronized.** Because control-plane nodes are often added weeks or months apart, their leaf certs expire on different days — expect a slow drip of single-member failures, not one clean cluster-wide outage, and check *every* node's expiry, not just the first one you built.
+- **Confusing kubelet client-cert auto-rotation with serving-cert rotation.** Client certs (used to talk *to* the apiserver) rotate automatically via CSR once TLS bootstrapping is set up; serving certs (presented *to* the apiserver on inbound `logs`/`exec`) need `RotateKubeletServerCertificate` enabled and CSR approval — assuming both auto-rotate the same way leaves the serving cert to expire unnoticed.
 
 ## Self-check
 **(a) Which certificate does the apiserver present to etcd, and which to the kubelet?**
@@ -180,7 +249,28 @@ Two passes on **3 cheap VMs** (KVM/multipass, or three `e2-small`/`t3.small`); o
 **(c) Why are the control-plane components static pods rather than Deployments?**
 **Answer:** A Deployment is reconciled by the controller-manager → apiserver → etcd, none of which exist at bootstrap (chicken-and-egg). Static pods are run by the **kubelet directly from a manifest file** with no apiserver, so they can bring the API up. The apiserver later shows read-only mirror pods for visibility.
 
-## Resources
-1. **Kubernetes The Hard Way** — https://github.com/kelseyhightower/kubernetes-the-hard-way — the canonical from-scratch bootstrap; every cert and unit by hand. **Deep** (this is Pass 1). Why: nothing else forces you to name every PEM.
-2. **kubeadm PKI certificates reference** — https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-certs/ — the authoritative table of every cert, its CA, CN/SAN, and renewal. **Deep** for the cert graph. Why: your Pass-2 diff is basically this page.
-3. **TLS bootstrapping** — https://kubernetes.io/docs/reference/access-authn-authz/kubelet-tls-bootstrapping/ — the CSR/bootstrap-token flow in detail. **Skim.** Why: grounds self-check (b).
+**(d) Why do incrementally-built HA clusters tend to fail with a "slow drip" of cert-expiry incidents instead of one clean outage?**
+**Answer:** Each leaf cert's 1-year clock starts the day it's minted. Control-plane nodes added at different times (initial bootstrap, a later-added third CP node, a re-join after maintenance) get certs minted on different days, so they expire on different days too — one etcd peer cert first, an apiserver cert weeks later, and so on — which is harder to diagnose than a single simultaneous failure because the cluster looks mostly healthy in between.
+
+## Connections & what's next
+
+This lesson gave you the trust roots and the bootstrap mechanism; it deliberately stopped at "one cert per component, one node at a time." Three threads pick up from here: **10.2 (etcd operations)** takes the etcd you just stood up and makes you own its disk, its quorum, and its 2am restore — the PKI here is a prerequisite (you need `apiserver-etcd-client` and the etcd CA working before you can even reach etcd to break it on purpose). **10.3 (control-plane HA)** takes the single-node PKI you built here and grows it to 3 nodes behind a VIP, which is exactly why the SAN list matters now. **10.4 (declarative fleets: CAPI + Talos)** is where the manual cert-minting in this lesson gets automated away by a provider — you'll appreciate what CAPI is doing for you precisely because you did it by hand first.
+
+Next: **[10.2 · etcd operations](02-etcd-operations.md)** — you now know how the apiserver reaches etcd; the next lesson is about what happens to that etcd once it's yours to run.
+
+## References & further reading
+
+**Primary sources**
+- **Kubernetes The Hard Way** — <https://github.com/kelseyhightower/kubernetes-the-hard-way> — the canonical from-scratch bootstrap; every cert and unit by hand. Read for: doing Pass 1 step by step.
+- **kubeadm PKI certificates reference** — <https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/kubeadm-certs/> — the authoritative table of every cert, its CA, CN/SAN, and renewal. Read for: the cert graph this lesson's tables summarize.
+- **Certificate Management with kubeadm** — <https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-certs/> — `check-expiration`, `renew`, and automatic vs manual rotation. Read for: the monthly-cron habit this lesson pushes.
+- **TLS bootstrapping** — <https://kubernetes.io/docs/reference/access-authn-authz/kubelet-tls-bootstrapping/> — the CSR/bootstrap-token flow in detail. Read for: grounding self-check (b).
+
+**Real-world engineering blogs**
+- **"When Kubernetes Certificates Expire: A Production War Story"** — <https://medium.com/@olanipekunadekunleoluwole/when-kubernetes-certificates-expire-a-production-war-story-3bd4a54db3bf> — what it shows: a real cluster-wide freeze from one expired apiserver cert.
+- **"2019-12 K8s certificate expiration outage"** — <https://vadosware.io/post/2019-12-k8s-cert-expiration-outage/> — what it shows: an independent postmortem of the same failure class, with a diagnosis walkthrough.
+- **Deutsche Telekom "Das Schiff"** — <https://github.com/telekom/das-schiff> — what it shows: PKI/bootstrap ownership generalized to hundreds of bare-metal edge sites.
+
+**Deeper dives**
+- **kubeadm implementation details** — <https://kubernetes.io/docs/reference/setup-tools/kubeadm/implementation-details/> — the under-the-hood documentation of exactly what `kubeadm init`'s phases do; the natural next read after your Pass-2 diff.
+- **cfssl** — <https://github.com/cloudflare/cfssl> — the CA/cert toolkit KTHW uses; worth reading its README once to understand CSR profiles and the `-config`/`-profile` mechanism beyond copy-pasting commands.
