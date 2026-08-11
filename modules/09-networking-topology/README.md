@@ -3,7 +3,7 @@ id: "09"
 title: "Networking and topology"
 notion: "https://app.notion.com/p/3b33abaeb82381f69438c603703f933f"
 phase: "Phase 4 · Months 12–16 (deferrable stretch)"
-effort: "~40 hrs ≈ 3–4 weeks @ 10–12 hrs/wk"
+effort: "~51 hrs ≈ 4–5 weeks @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: ["02b"]
 unlocks: []
@@ -18,7 +18,7 @@ completed: null
 > fabric track — and conceptual depth is enough (hard to practice without a multi-node cluster).
 
 - **Notion page:** https://app.notion.com/p/3b33abaeb82381f69438c603703f933f
-- **Phase:** Phase 4 · **deferrable stretch** · **Est. effort:** ~40 hrs ≈ 3–4 weeks
+- **Phase:** Phase 4 · **deferrable stretch** · **Est. effort:** ~51 hrs ≈ 4–5 weeks
 - **Deliverable:** [Network architecture read + placement/procurement argument](practice/network-architecture-read/) —
   finishable with published architectures + a 2-GPU NCCL bench.
 
@@ -42,15 +42,15 @@ Builds outward: 02b matrix → fabric → protocol → K8s → cost. **IB-vs-RoC
 
 | # | Lesson | Hrs | Decision |
 |---|--------|-----|----------|
-| 01 | [Intra → inter handoff](lessons/01-intra-to-inter-handoff.md) | 5 | extend `topo -m` past the NIC; GPU→rail→NIC |
-| 02 | [Inter-node fabric (Clos, rail-optimized, oversubscription)](lessons/02-inter-node-fabric.md) | 6 | compute the oversubscription ratio |
-| 03 | [RDMA fundamentals](lessons/03-rdma-fundamentals.md) | 5 | why RDMA deletes the 01b datapath |
-| 04 | [**IB vs RoCEv2 + lossless**](lessons/04-ib-vs-roce-lossless.md) (highest yield) | 6 | procurement: when each wins |
-| 05 | [GPUDirect over the fabric + SHARP](lessons/05-gpudirect-and-sharp.md) | 5 | which NIC per GPU; is the IB premium worth it? |
-| 06 | [Kubernetes multi-NIC (Multus/SR-IOV/Network Operator)](lessons/06-k8s-multi-nic.md) | 5 | how RDMA reaches a pod (the K8s differentiator) |
-| 07 | [**Bandwidth as a cost input**](lessons/07-bandwidth-as-cost.md) | 5 | turn placement into a bandwidth + $ statement |
+| 01 | [Intra → inter handoff](lessons/01-intra-to-inter-handoff.md) | 7 | extend `topo -m` past the NIC; GPU→rail→NIC |
+| 02 | [Inter-node fabric (Clos, rail-optimized, oversubscription)](lessons/02-inter-node-fabric.md) | 8 | compute the oversubscription ratio |
+| 03 | [RDMA fundamentals](lessons/03-rdma-fundamentals.md) | 7 | why RDMA deletes the 01b datapath |
+| 04 | [**IB vs RoCEv2 + lossless**](lessons/04-ib-vs-roce-lossless.md) (highest yield) | 8 | procurement: when each wins |
+| 05 | [GPUDirect over the fabric + SHARP](lessons/05-gpudirect-and-sharp.md) | 7 | which NIC per GPU; is the IB premium worth it? |
+| 06 | [Kubernetes multi-NIC (Multus/SR-IOV/Network Operator)](lessons/06-k8s-multi-nic.md) | 7 | how RDMA reaches a pod (the K8s differentiator) |
+| 07 | [**Bandwidth as a cost input**](lessons/07-bandwidth-as-cost.md) | 7 | turn placement into a bandwidth + $ statement |
 
-Total ≈ **40 hrs ≈ 3–4 weeks** (conceptual; drop the week-4 buffer to compress to 3). Spine = L2 + L4 + the capstone.
+Total ≈ **51 hrs ≈ 4–5 weeks** (enriched depth adds a week over the original estimate). Spine = L2 + L4 + the capstone.
 
 ## Resource spine
 
