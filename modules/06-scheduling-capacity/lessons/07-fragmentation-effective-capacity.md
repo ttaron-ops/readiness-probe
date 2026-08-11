@@ -150,9 +150,9 @@ job queue (GPU asks):        [8, 8, 4, 4, 2, 2, 1]
 6. `2` → node3 (2 free → 0). ✅
 7. `1` → node7 (1 free → 0). ✅
 
-All 7 mixed jobs placed — because the *mix* matches the holes. But the two 8-GPU asks consumed the only two whole-node holes. **A third 8-GPU job cannot start**, despite 48−34 = 14 GPUs still free (on nodes with 5,5,1,4,3 free). Those 14 GPUs are real, paid-for, and **unplaceable for the flagship job size.**
+All 7 mixed jobs placed — because the *mix* matches the holes. But the two 8-GPU asks consumed the only two whole-node holes. **A third 8-GPU job cannot start**, despite 48−29 = 19 GPUs still free (on nodes with 5,5,5,1,3 free). Those 19 GPUs are real, paid-for, and **unplaceable for the flagship job size.**
 
-The headline for your write-up: *"At our current 8-GPU job profile, effective capacity is 2 jobs, not the 6 the free-GPU count implies. 14 free GPUs (~$1k/hr internal, snapshot) are stranded by node-level fragmentation. A bin-pack placement policy plus consolidating the two 5-free nodes recovers one whole node = one more flagship job, at a defrag cost of ~1 checkpoint-restart."*
+The headline for your write-up: *"At our current 8-GPU job profile, effective capacity is 2 jobs, not the 6 the free-GPU count implies. 19 free GPUs (~$57/hr internal at a ~$3/GPU-hr snapshot) are stranded by node-level fragmentation. A bin-pack placement policy plus consolidating two of the three 5-free nodes recovers one whole node = one more flagship job, at a defrag cost of ~1 checkpoint-restart."*
 
 **Extending it — is the defrag worth it?** Consolidating the two 5-free nodes (moving their occupants onto one node, freeing the other) requires migrating the running jobs on those nodes: assume 1 checkpoint-restart cycle per job moved, ≈20 minutes of lost wall-clock on the 2 consolidated jobs' 3 occupied GPUs each (6 GPU-slots total) — call it 2 GPU-hours of defrag cost. The payoff is one recovered whole-node (8-GPU) slot. At the ~$3/GPU-hr internal snapshot used above, the recovered slot is worth ~$24/hr the moment a flagship job occupies it — so the defrag cost (2 GPU-hours ≈ $6 at the same rate) pays for itself in **15 minutes** of the recovered slot running a real job. Below that horizon (a slot that sits idle for under 15 minutes before someone else reclaims it) the defrag is a net loss; above it, it's a clear win. This is the actual go/no-go arithmetic behind "should we consolidate," not a hand-wave.
 
@@ -217,8 +217,8 @@ Expected output:
 fleet: 12 nodes, 48 free GPUs
   k  naive  real  stranded   frag%
   1     48    48         0    0.0%
-  2     24    18        12   25.0%
-  4     12     7        20   41.7%
+  2     24    21         6   12.5%
+  4     12     9        12   25.0%
   8      6     2        32   66.7%
 ```
 
