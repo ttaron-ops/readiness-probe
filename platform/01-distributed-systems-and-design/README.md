@@ -4,7 +4,7 @@ track: "A — Platform excellence"
 title: "Distributed systems & system design"
 notion: null                # repo-native module (added in the 12–15mo rebuild), not from the original Notion plan
 phase: "Track A · deepen module"
-effort: "8–10 weeks ≈ ~38 hrs @ 10–12 hrs/wk"
+effort: "8–10 weeks ≈ ~45 hrs @ 10–12 hrs/wk"
 status: not-started        # not-started | in-progress | checkpoint-passed
 prerequisites: []
 unlocks: []
@@ -40,19 +40,19 @@ and the inference path are three *different* points in the CAP/PACELC/Little's-L
 
 ## Lessons
 
-| # | Lesson | Staff delta |
-|---|--------|-------------|
-| 01 | [Consistency models](lessons/01-consistency-models.md) | linearizable vs serializable; PACELC; the K8s stale-cache bug |
-| 02 | [Consensus and quorums](lessons/02-consensus-and-quorums.md) | Raft ReadIndex/PreVote; why etcd is fsync-bound |
-| 03 | [Replication and partitioning](lessons/03-replication-and-partitioning.md) | W+R>N; fixed-partition rebalancing; hot shards |
-| 04 | [Caching](lessons/04-caching.md) | caches as modal systems; stampede; KV-cache & weight distribution |
-| 05 | [Queueing and backpressure](lessons/05-queueing-and-backpressure.md) | Little's Law; shed-don't-defer; metastable failure |
-| 06 | [Failure and resilience](lessons/06-failure-and-resilience.md) | gray failure / SDC; retry budgets; checkpoint-interval math |
-| 07 | [Data-intensive patterns](lessons/07-data-intensive-patterns.md) | exactly-once reality; CDC; the billing-pipeline idempotency key |
-| 08 | [A repeatable system-design method](lessons/08-system-design-method.md) | BOTE in GPU units; drive the interview; name tradeoffs |
-| 09 | [Design rehearsal](lessons/09-design-rehearsal.md) | timed reps on the real GPU-platform prompts |
+| # | Lesson | Hrs | Staff delta |
+|---|--------|-----|-------------|
+| 01 | [Consistency models](lessons/01-consistency-models.md) | 4 | linearizable vs serializable; PACELC; the K8s stale-cache bug |
+| 02 | [Consensus and quorums](lessons/02-consensus-and-quorums.md) | 4 | Raft ReadIndex/PreVote; why etcd is fsync-bound |
+| 03 | [Replication and partitioning](lessons/03-replication-and-partitioning.md) | 5 | W+R>N; fixed-partition rebalancing; hot shards |
+| 04 | [Caching](lessons/04-caching.md) | 4.5 | caches as modal systems; stampede; KV-cache & weight distribution |
+| 05 | [Queueing and backpressure](lessons/05-queueing-and-backpressure.md) | 5 | Little's Law; shed-don't-defer; metastable failure |
+| 06 | [Failure and resilience](lessons/06-failure-and-resilience.md) | 5 | gray failure / SDC; retry budgets; checkpoint-interval math |
+| 07 | [Data-intensive patterns](lessons/07-data-intensive-patterns.md) | 6 | exactly-once reality; CDC; the billing-pipeline idempotency key |
+| 08 | [A repeatable system-design method](lessons/08-system-design-method.md) | 6 | BOTE in GPU units; drive the interview; name tradeoffs |
+| 09 | [Design rehearsal](lessons/09-design-rehearsal.md) | 5 | timed reps on the real GPU-platform prompts |
 
-Total ≈ **38 hrs ≈ 8–10 weeks**. **Spine:** L1 (PACELC), L2 (etcd), L6 (gray failure),
+Total ≈ **44.5 hrs of lessons ≈ 8–10 weeks** (with practice/portfolio time). **Spine:** L1 (PACELC), L2 (etcd), L6 (gray failure),
 L8 (the method).
 
 ## Deliverable & checkpoint
