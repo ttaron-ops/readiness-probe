@@ -27,11 +27,15 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 | 14 | `platform/01-distributed-systems-and-design` | done | 2026-08-11 |
 | 15 | `platform/02-platform-networking` | done | 2026-08-11 |
 | 16 | `platform/03-observability` | done | 2026-08-11 |
-| 17 | `modules/12-capstone-interview` | pending | — |
+| 17 | `modules/12-capstone-interview` | done | 2026-08-11 |
 
 > Note on order: the platform "deepen" modules (14–16) are enriched after the GPU track because
 > they synthesize and reference it; the capstone (17) is last so it can point at the enriched
 > chain. If you'd rather deepen the platform foundations earlier, move rows 14–16 up.
+>
+> **All 17 modules are now enriched.** Future runs should follow the SPEC.md QA pass instead of
+> the pending-module workflow: pick the oldest-enriched module per run, verify every prev/next
+> link resolves and every reference URL still works, fix and commit.
 
 ## Run log
 
@@ -62,3 +66,18 @@ _(each run appends: date · modules enriched · commit shas)_
   unbroken prev/next chain in each module. Only the two other modules already `done` on this same
   date preceded this run — this was a second run today per the schedule. This closes out the
   original 17-module plan except the capstone (17), which is last by design.
+- **2026-08-11** · `modules/12-capstone-interview` (all 9 lessons) ·
+  commit `d4e2906`. Only 1 module remained pending (the capstone, last by design), so this run did
+  1 module per the spec's "last run may do 1" allowance. All 9 lessons rewritten to the full
+  template (Where this fits / Perspectives / Real-world use cases / Common pitfalls / Connections
+  & what's next / three-bucket References), roughly doubling depth while preserving every existing
+  decision tree, rubric, and worked example. New verified links added throughout (CoreWeave's
+  "Why Distributed Training Fails at Scale" and Mission Control, Meta's cluster-reliability paper
+  arXiv:2410.21680 — the actual source of the 14%→4% lemon-node stat previously cited uncredited,
+  Together AI, NVIDIA KAI-Scheduler, Oxide Computer's public RFD corpus, the FinOps FOCUS spec,
+  Will Larson/staffeng.com, and first-person staff-engineer essays); fixed 6 URL-less or vague
+  citations from the original lessons (Red Hat, CoreWeave Kueue, AWS EKS cost attribution,
+  Together multi-node training, and two broken Stackademic/iuriio.com links in lesson 08).
+  Module README's lesson table and total-effort estimate updated (33 hrs → 44 hrs) to match the
+  bumped per-lesson `est_time`s. **This closes the original 17-module enrichment plan — all
+  modules are now `done`.** Future runs should switch to the SPEC.md QA pass.
