@@ -23,8 +23,8 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 | 10 | `modules/08-distributed-training` | done | 2026-08-10 |
 | 11 | `modules/09-networking-topology` | done | 2026-08-11 |
 | 12 | `modules/10-bare-metal-lifecycle` | done | 2026-08-11 |
-| 13 | `modules/11-gpu-cost-economics` | pending | — |
-| 14 | `platform/01-distributed-systems-and-design` | pending | — |
+| 13 | `modules/11-gpu-cost-economics` | done | 2026-08-11 |
+| 14 | `platform/01-distributed-systems-and-design` | done | 2026-08-11 |
 | 15 | `platform/02-platform-networking` | pending | — |
 | 16 | `platform/03-observability` | pending | — |
 | 17 | `modules/12-capstone-interview` | pending | — |
@@ -49,3 +49,8 @@ _(each run appends: date · modules enriched · commit shas)_
   commits `218fb2a` (Module 07), `12b2f7b` (Module 08)
 - **2026-08-11** · `modules/09-networking-topology`, `modules/10-bare-metal-lifecycle` ·
   commits `efa7afb` (Module 09), `cece3c3` (Module 10)
+- **2026-08-11** · `modules/11-gpu-cost-economics`, `platform/01-distributed-systems-and-design` ·
+  commits `3d1f9d5` (Module 11), `6e6f648` (platform/01). Module 11 lesson 10 corrected to the
+  current FOCUS spec (v1.3 split-cost allocation columns, Dec 2025; v1.4, June 2026) and lesson 09
+  / the deliverable's OpenCost source citations fixed to the verified `pkg/cloud/models/models.go`
+  path.
