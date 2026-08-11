@@ -82,7 +82,7 @@ _(each run appends: date · modules enriched · commit shas)_
   bumped per-lesson `est_time`s. **This closes the original 17-module enrichment plan — all
   modules are now `done`.** Future runs should switch to the SPEC.md QA pass.
 - **2026-08-11** · QA pass · `modules/01-go-for-infra` (oldest-enriched, 2026-08-10) ·
-  commit TBD. Full consistency sweep: verified the prev/next chain across all 9 lessons is
+  commit `d839662`. Full consistency sweep: verified the prev/next chain across all 9 lessons is
   unbroken (01→09, null at both ends), all 12 template sections present in every lesson with
   ≥3 `**Answer:**` self-check lines each (4–5 actual), and all 66 unique cited URLs across the
   module resolve to real, on-topic content (spot-checked two unusually-specific-looking
