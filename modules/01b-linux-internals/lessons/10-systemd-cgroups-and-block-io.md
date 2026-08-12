@@ -188,4 +188,4 @@ From here: consolidate everything into the **[Anatomy of a Container](../practic
 - [Meta resctl — iocost / IO resource protection docs](https://facebookmicrosites.github.io/resctl-demo-website/docs/demo_docs/res_protection/IO/) — what it shows: why Meta built and upstreamed a cost-model I/O controller once raw `io.max`/`io.weight` bandwidth caps proved insufficient for fleet-scale noisy-neighbor disk contention.
 
 **Deeper dives**
-- Brendan Gregg, *Systems Performance* (2nd ed.) — Disks chapter (I/O stack, latency vs utilization) + [biolatency (BCC)](https://www.brendangregg.com/blog/2016-10-08/linux-bcc-biolatency.html) — the latency-histogram tool used in this lesson's worked example.
+- Brendan Gregg, *Systems Performance* (2nd ed.) — Disks chapter (I/O stack, latency vs utilization) + [Poor Disk Performance (biolatency in practice)](https://www.brendangregg.com/blog/2021-05-09/poor-disk-performance.html) — the latency-histogram tool used in this lesson's worked example.

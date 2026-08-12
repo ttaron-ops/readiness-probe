@@ -331,5 +331,5 @@ Next: **[04 · PSI — saturation the right way](04-psi.md)**, which takes the p
 - **Omio Engineering — "CPU limits and aggressive throttling in Kubernetes"** — https://engineering.omio.com/cpu-limits-and-aggressive-throttling-in-kubernetes-c5b20bd8a718 — an independent rediscovery of the same mechanism; what it shows: the 200ms-quota-in-20ms math and a real mitigation debate (raise vs remove limits vs patch kernel).
 
 **Deeper dives**
-- **CPU throttling / GOMAXPROCS-vs-quota deep-dive** — https://victoriametrics.com/blog/kubernetes-cpu-requests-limits/ (and Uber's `automaxprocs` README) — a walkthrough of CFS-period throttling and the runtime-parallelism mismatch, confirming the "throttled at 40%" mechanism end to end.
+- **CPU throttling / GOMAXPROCS-vs-quota deep-dive** — https://victoriametrics.com/blog/kubernetes-cpu-go-gomaxprocs/ (and Uber's `automaxprocs` README) — a walkthrough of CFS-period throttling and the runtime-parallelism mismatch, confirming the "throttled at 40%" mechanism end to end.
 - **LWN — the `512ac999` quota-expiry fix** — https://lwn.net/Articles/792268/ — a technical dissection of the exact kernel bug behind the Indeed postmortem; cross-reference with lesson 01's scheduling material, which covers the same commit from the run-queue/fairness angle rather than the throttling-consequence angle covered here.
