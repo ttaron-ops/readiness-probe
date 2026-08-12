@@ -91,3 +91,16 @@ _(each run appends: date · modules enriched · commit shas)_
   `practice/gpu-cost-exporter/README.md` suggested-layout diagram didn't show the `operator/`
   directory that lesson 09's enriched Practice section now directs learners to scaffold — added
   it. No other fixes needed.
+- **2026-08-12** · QA pass · `modules/01b-linux-internals` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commit `76f6a8a`. Full consistency sweep: verified the prev/next chain across all 10
+  lessons is unbroken (01→10, null at both ends), all 12 template sections present in every lesson
+  with ≥3 `**Answer:**` self-check lines each (4–5 actual), README lesson table matches the 10
+  lesson files exactly with hour estimates summing to the stated 65 hrs, and checkpoint.md /
+  practice/anatomy-of-a-container links resolve and stay consistent with lesson content. Collected
+  and spot-checked all 51 unique cited URLs (direct WebFetch to external domains was blocked by the
+  session's egress proxy policy, so verification used WebSearch instead). Found and fixed 2 dead/
+  mismatched links: lesson 03's VictoriaMetrics CPU-throttling deep-dive pointed at a nonexistent
+  slug (`kubernetes-cpu-requests-limits/`), corrected to the real `kubernetes-cpu-go-gomaxprocs/`
+  article; lesson 10's Brendan Gregg biolatency citation pointed at a 2016 post that is actually
+  about `runqlat`, corrected to his 2021 "Poor Disk Performance" post which is the real biolatency
+  walkthrough. No other fixes needed.
