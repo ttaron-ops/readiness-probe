@@ -104,3 +104,19 @@ _(each run appends: date · modules enriched · commit shas)_
   article; lesson 10's Brendan Gregg biolatency citation pointed at a 2016 post that is actually
   about `runqlat`, corrected to his 2021 "Poor Disk Performance" post which is the real biolatency
   walkthrough. No other fixes needed.
+- **2026-08-13** · QA pass · `modules/02-kubernetes-controllers` (next-oldest-enriched, 2026-08-10,
+  not yet QA'd) · no commit needed for the module — zero issues found, working tree unchanged.
+  Full consistency sweep: verified the prev/next chain across all 10 lessons is unbroken
+  (01→10, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (4–5 actual), README lesson table (hours 18/10/16/22/20/26/
+  16/20/16/30, summing to the stated ~194 hrs) matches the 10 lesson files exactly, and
+  checkpoint.md / practice/gpu-cost-operator links resolve and stay consistent with lesson
+  content. Collected 75 unique cited URLs; spot-checked ~40 (every non-canonical/blog citation,
+  every specific GitHub issue/KEP number, and the two most scrutiny-worthy 2026-dated vendor
+  posts) via WebSearch (direct WebFetch to external domains was again blocked by the session's
+  egress proxy policy). All checked URLs — including kubernetes/kubernetes#110720,
+  controller-runtime#392, kubernetes/kubernetes#80313, and KEP-4381 — verified real and accurate;
+  the remaining ~35 unchecked URLs are canonical, predictable paths on stable official sources
+  (kubernetes.io/docs, pkg.go.dev, book.kubebuilder.io, client-go/sample-controller) following the
+  same conventions as every checked-and-confirmed citation. No dead or mismatched links found; no
+  fixes were necessary.
