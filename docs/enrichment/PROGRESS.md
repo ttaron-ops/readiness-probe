@@ -120,3 +120,23 @@ _(each run appends: date · modules enriched · commit shas)_
   (kubernetes.io/docs, pkg.go.dev, book.kubebuilder.io, client-go/sample-controller) following the
   same conventions as every checked-and-confirmed citation. No dead or mismatched links found; no
   fixes were necessary.
+- **2026-08-14** · QA pass · `modules/02b-host-topology` (next-oldest-enriched, 2026-08-10, not yet
+  QA'd) · no commit needed for the module — zero issues found, working tree unchanged. Full
+  consistency sweep: verified the prev/next chain across all 8 lessons is unbroken (01→08, null at
+  both ends), all 12 template sections present in every lesson with ≥3 `**Answer:**` self-check
+  lines each (4–5 actual), README lesson table hours (5/6/7/7.5/10/6/4.5/9, summing to the stated
+  ~55 hrs) matches the 8 lesson files exactly, and checkpoint.md / practice/topology-teardown
+  links resolve and stay consistent with lesson content. Collected 49 unique cited URLs (direct
+  WebFetch to external domains was again blocked by the session's egress proxy policy, so
+  verification used WebSearch via a dedicated verification subagent); every unusual or
+  high-risk citation was checked individually — both 2026-dated Frank Denneman posts, the
+  ronaknathani.com NUMA-Kubernetes post (confirmed the >30% p99 tail-latency claim and the
+  Memory Manager recommendation it's cited for), the NADDOD and dev.to practitioner posts, both
+  GitHub issues (NVIDIA/nccl#246 and NVIDIA/open-gpu-kernel-modules#1010, both confirmed to match
+  their cited claims exactly), the Tom's Hardware Meta Llama 3 failure-rate article (419
+  failures/54 days confirmed), the Kubernetes v1.34 DRA-GA blog post, and every named vendor blog
+  (Modal, Crusoe, VAST Data, Oracle/WEKA, CoreWeave, Meta Engineering ×3, Google Cloud ×2, CNCF).
+  All 49 resolved to real, on-topic content matching their citations; the remaining canonical doc
+  pages (kubernetes.io/docs, docs.nvidia.com, man7.org, github.com/pciutils) are stable, predictable
+  paths consistent with every checked-and-confirmed citation. No dead or mismatched links found; no
+  fixes were necessary.
