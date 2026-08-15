@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 lesson: "01.5"
 title: "Testing in Go"
 module: "01"
@@ -11,6 +10,7 @@ next: "06-modules-and-layout.md"
 artifacts: []
 sources: 8
 ---
+{% raw %}
 
 # 01.5 · Testing in Go
 
@@ -555,3 +555,5 @@ against becomes a compiler-enforced API contract there.
 - A Comprehensive Guide to Testing in Go (JetBrains) —
   <https://blog.jetbrains.com/go/2022/11/22/comprehensive-guide-to-testing-in-go/> — end-to-end
   tour: tables, fakes, coverage, fuzzing. Good consolidation with practical patterns.
+
+{% endraw %}

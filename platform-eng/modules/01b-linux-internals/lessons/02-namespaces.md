@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 lesson: "01b.2"
 title: "Namespaces"
 module: "01b"
@@ -11,6 +10,7 @@ next: "03-cgroups-v2-and-k8s-enforcement.md"
 artifacts: []
 sources: 6
 ---
+{% raw %}
 
 # 01b.2 · Namespaces
 
@@ -225,3 +225,5 @@ This lesson is the "views" half of the container thesis; [03 — cgroups v2 and 
 **Deeper dives**
 - "How Containers Work" zine (Julia Evans) — https://wizardzines.com/zines/containers/ — builds the exact namespaces + cgroups + rootfs mental model this lesson teaches, with hand-drawn clarity and runnable experiments; the fastest path to being able to *explain* a container, which is the interview payload.
 - namespaces comic (Julia Evans) — https://wizardzines.com/comics/namespaces/ — one-page visual of the namespace types and what each isolates; a fast recall aid before an interview.
+
+{% endraw %}

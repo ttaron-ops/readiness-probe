@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 lesson: "01b.3"
 title: "cgroups v2 and Kubernetes resource enforcement"
 module: "01b"
@@ -11,6 +10,7 @@ next: "04-psi.md"
 artifacts: []
 sources: 7
 ---
+{% raw %}
 
 # 01b.3 · cgroups v2 and Kubernetes resource enforcement
 
@@ -334,3 +334,5 @@ Next: **[04 · PSI — saturation the right way](04-psi.md)**, which takes the p
 **Deeper dives**
 - **CPU throttling / GOMAXPROCS-vs-quota deep-dive** — https://victoriametrics.com/blog/kubernetes-cpu-go-gomaxprocs/ (and Uber's `automaxprocs` README) — a walkthrough of CFS-period throttling and the runtime-parallelism mismatch, confirming the "throttled at 40%" mechanism end to end.
 - **LWN — the `512ac999` quota-expiry fix** — https://lwn.net/Articles/792268/ — a technical dissection of the exact kernel bug behind the Indeed postmortem; cross-reference with lesson 01's scheduling material, which covers the same commit from the run-queue/fairness angle rather than the throttling-consequence angle covered here.
+
+{% endraw %}

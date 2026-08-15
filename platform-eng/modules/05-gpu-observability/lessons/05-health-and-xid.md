@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 lesson: "05.5"
 title: "GPU health and XID errors"
 module: "05"
@@ -11,6 +10,7 @@ next: "06-inference-slos.md"
 artifacts: []
 sources: 10
 ---
+{% raw %}
 # 05.5 · GPU health and XID errors
 
 > **Concept.** An XID is the GPU's own crash code; your job is to classify each one as "the silicon is dying — cordon and drain" versus "the tenant's kernel is buggy — log and move on," and wire that decision into node conditions automatically.
@@ -260,3 +260,5 @@ This lesson sits between attribution (04/05.4) and inference SLOs (05.6): a name
 **Deeper dives**
 - NVIDIA — GPU Memory Error Management (RMA Policy — Thresholds for Row Remapping) — https://docs.nvidia.com/deploy/a100-gpu-mem-error-mgmt/latest/rma-policy-thresholds-for-row-remapping.html — the precise thresholds that turn a remap-capacity trend into an RMA decision.
 - NVIDIA — Error Recovery and Response Flags — https://docs.nvidia.com/deploy/a100-gpu-mem-error-mgmt/latest/error-recovery-and-response-flags.html — how row-remap and other flags interact with driver-level recovery behavior.
+
+{% endraw %}

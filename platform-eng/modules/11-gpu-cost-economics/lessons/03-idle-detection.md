@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 lesson: 03
 title: "Idle GPU detection and the cost of false positives"
 module: 11
@@ -11,6 +10,7 @@ next: "04-fragmentation-cost.md"
 artifacts: ["Prometheus idle recording rule + alert + weekly idle-$ report line, added to the gpu-cost synthesis deliverable"]
 sources: 9
 ---
+{% raw %}
 
 # Idle GPU detection and the cost of false positives
 
@@ -215,3 +215,5 @@ Next, lesson 04 takes the *other* half of "free capacity" — GPUs that are unal
 
 **Deeper dives**
 9. **Kubernetes Horizontal Pod Autoscaling** — <https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/> — for going further on the QPS/queue-depth-based autoscaling lever that replaces idle-reclaim for serving workloads.
+
+{% endraw %}

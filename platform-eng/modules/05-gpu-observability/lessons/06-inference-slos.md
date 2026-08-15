@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 lesson: "05.6"
 title: "Inference SLOs: TTFT, TPOT, and why request-latency lies"
 module: "05"
@@ -11,6 +10,7 @@ next: "07-profiling-escalation.md"
 artifacts: []
 sources: 7
 ---
+{% raw %}
 # 05.6 · Inference SLOs: TTFT, TPOT, and why request-latency lies
 
 > **Concept.** A streaming LLM endpoint has *two* latencies with different physics — time-to-first-token and per-token cadence — and putting your SLO on total request latency measures your users' verbosity, not your service's health.
@@ -251,3 +251,5 @@ This lesson is the module's second demonstration of the same core thesis from 05
 **Deeper dives**
 - Spheron — "LLM Inference SLO Engineering: TTFT, ITL, and P99 Latency Budgets for Production AI (2026)" — https://www.spheron.network/blog/llm-inference-slo-ttft-itl-latency-budget-guide-2026/ — perception-grounded TTFT/ITL budget numbers by workload (chat, voice, long-response) to calibrate your own SLOs against.
 - Ray — "Prefill/decode disaggregation" user guide — https://docs.ray.io/en/latest/serve/llm/user-guides/prefill-decode.html — the operational how-to behind the Anyscale benchmark above, for going from the concept to a deployable config.
+
+{% endraw %}
