@@ -37,6 +37,16 @@ per [`SPEC.md`](SPEC.md), then marks them `done` with the date and pushes to `ma
 > the pending-module workflow: pick the oldest-enriched module per run, verify every prev/next
 > link resolves and every reference URL still works, fix and commit.
 
+## External depth library
+
+Layered on top of enrichment (2026-08-15), independent of the QA-pass cycle: every module now has a
+`resources/depth-map.md` mapping its lessons into
+[`harut8/system-design`](https://github.com/harut8/system-design). Index and attribution note:
+[`docs/EXTERNAL-DEPTH.md`](../EXTERNAL-DEPTH.md). Three things were genuinely additive and were
+built into the course rather than linked — the fake GPU fleet lab, `platform/03` lesson 10, and the
+design-drill ladder. **Future QA passes should validate the depth-map links too**, and note that
+the source repo is actively written, so chapter filenames may drift from the `9bcf6bf` snapshot.
+
 ## Run log
 
 _(each run appends: date · modules enriched · commit shas)_

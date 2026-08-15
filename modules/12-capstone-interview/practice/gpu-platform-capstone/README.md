@@ -4,6 +4,12 @@ The single body of evidence you lead with in every application. It threads all e
 artifacts into **one coherent "reference GPU platform"** a hiring manager understands without
 meeting you, plus the public proof and the rehearsed narration around it.
 
+> **Label the simulation, every time.** Most of this runs on the
+> [fake GPU fleet lab](../../../04-gpu-on-kubernetes/practice/fake-gpu-fleet/README.md).
+> *"Benchmarked against the default scheduler on a 200-node **simulated** fleet, trace published"*
+> is accurate, impressive, and cannot be punctured; *"I built GPU scheduling infrastructure"*
+> cannot survive one follow-up question.
+
 ## The organizing thesis
 
 > **Making a multi-tenant GPU fleet observable, attributable, schedulable, and survivable.**

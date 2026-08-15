@@ -33,6 +33,11 @@ number on the deciding tradeoff.
 | Model-weight distribution (cold-start thundering herd) | training/serving | L4, L6 |
 | Distributed lock / leader election (→ etcd) | control | L1, L2 |
 
+> **Also run the [design drills](design-drills.md)** — the same system designed at three scales
+> (one rack / one fleet / multi-region) with a "what flips, and at what number" table. The
+> portfolio proves you can design six systems; the drills prove you know which decisions are
+> scale-dependent, which is the harder staff signal.
+
 > Do at least one **contrast rep**: the same system (e.g. the checkpoint store) designed twice
 > under different binding constraints — once for restart RTO (fast local + async), once for
 > zero-loss durability (sync/quorum) — and write up how the architecture *and the named tradeoff

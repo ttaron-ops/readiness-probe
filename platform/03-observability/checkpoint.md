@@ -21,6 +21,10 @@ and answer cold. You've passed when you can, **unaided**:
       query (per-rank step-time `> 1.3 × median`).
 - [ ] **6 · Make tracing pay off** — head vs tail sampling, why all spans of a trace must reach one
       collector (the `loadbalancing` exporter), and the exemplar link from a latency panel to a trace.
+- [ ] **7 · Serve the question the hot path can't** — explain why `$/useful-GPU-hour by team, last
+      quarter` is unanswerable in PromQL (cardinality *and* the missing join to a time-versioned
+      rate card), design the two-path tee, and name where a 200-node fleet should **stop** on the
+      escalation ladder (Prometheus → +downsampling → one ClickHouse → lakehouse).
 
 ## Depth probes (answer cold)
 

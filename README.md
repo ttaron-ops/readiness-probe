@@ -60,11 +60,28 @@ The month-by-month calendar, milestones, and readiness gate live in
 platform/<NN>-<slug>/      # Track A — deepen modules (lessons/, practice/, resources/, checkpoint.md)
 platform/interview-refresh/ #          light refresh pages for the areas you already operate
 modules/<NN>-<slug>/       # Track B — GPU modules (map to Notion) + Track C in module 12
+  └── resources/depth-map.md  #        lesson-level pointers into the external depth library
 docs/
 ├── ROADMAP.md             # month-by-month calendar, milestones, readiness gate
 ├── CONVENTIONS.md         # structure, mandatory fields, definition of done
+├── EXTERNAL-DEPTH.md      # the external depth library — index of all 17 depth maps
 └── templates/             # module.md and lesson.md starting points
 ```
+
+## Two things to know before you start
+
+**You don't need GPUs to start.** The
+[**fake GPU fleet lab**](modules/04-gpu-on-kubernetes/practice/fake-gpu-fleet/) stands up a
+50–200-node heterogeneous fleet with forged extended resources and a synthetic DCGM exporter, so
+Modules 04, 05, 06, 11 and the capstone are all buildable on a laptop. Rent one real GPU for one
+afternoon at the end of Module 05 to *validate* the simulation — not to develop against it.
+
+**Depth reading is a lesson input, never a substitute.** Every module carries a
+`resources/depth-map.md` pointing into [`harut8/system-design`](https://github.com/harut8/system-design),
+a ~400k-line systems-internals library, at lesson granularity. Open a chapter when an artifact is
+blocked on internals you don't have — see [`docs/EXTERNAL-DEPTH.md`](docs/EXTERNAL-DEPTH.md) for
+the index, the honest limits of that source, and the attribution note. *Build, do not read* still
+governs: a lesson is `done` only when its artifact exists.
 
 Both module and lesson files carry **YAML frontmatter** with a `status` field so
 progress is machine-readable. See [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) for
