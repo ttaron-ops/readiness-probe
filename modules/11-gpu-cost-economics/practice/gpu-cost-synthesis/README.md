@@ -5,6 +5,12 @@ This is the capstone of the whole cost thread. It fuses everything from `01` (th
 staff-level FinOps-for-GPUs evidence. Three artifacts, all finishable with the operator you
 already built + published data — **no large GPU fleet required**.
 
+> Two supports for this artifact: the
+> [fake GPU fleet lab](../../../04-gpu-on-kubernetes/practice/fake-gpu-fleet/README.md) (§4 gives
+> you two providers with *structurally different* billing models to normalise), and
+> [`platform/03` L10 — the telemetry lakehouse](../../../../platform/03-observability/lessons/10-telemetry-lakehouse.md),
+> which is the analytics path any "last quarter, by team" number actually requires.
+
 ## A) The finished `gpu-cost-operator` — both ledgers, attribution-aware
 
 Take the `gpu-cost-operator` you carried from `02` → `04` and finish it so it emits, per

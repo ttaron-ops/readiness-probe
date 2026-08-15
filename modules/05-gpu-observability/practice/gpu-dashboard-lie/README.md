@@ -7,6 +7,13 @@ for Module 11, and the core query of your `gpu-cost-operator`.
 > One GPU node, a weekend: GPU Operator + dcgm-exporter (with `SM_ACTIVE` enabled) +
 > Prometheus/Grafana + vLLM. The argument is per-GPU — no multi-node needed.
 
+> **Build it first without hardware.** The
+> [fake GPU fleet lab](../../../04-gpu-on-kubernetes/practice/fake-gpu-fleet/README.md) gives you
+> a synthetic DCGM exporter emitting the three workload shapes this dashboard must tell apart
+> (training / inference / idle-but-allocated), plus injectable XIDs and stragglers. Develop every
+> panel and PromQL query against it, then spend the rented-GPU weekend **validating** rather than
+> debugging.
+
 ## Three components
 
 ### 1. Allocated-vs-utilised GPU-hours dashboard (per namespace) — the CFO panel

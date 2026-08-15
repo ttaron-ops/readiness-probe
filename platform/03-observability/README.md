@@ -49,9 +49,10 @@ scales it to thousands of GPUs rather than re-teaching it.
 | 07 | [SLOs and alerting](lessons/07-slos-and-alerting.md) | multi-window multi-burn-rate, from first principles |
 | 08 | [Continuous profiling and eBPF](lessons/08-profiling-and-ebpf.md) | on-CPU vs off-CPU; fleet-wide eBPF profiling |
 | 09 | [GPU and ML observability at fleet scale](lessons/09-gpu-and-ml-observability.md) | the synthesis: goodput alerts, NCCL, stragglers |
+| 10 | [The telemetry lakehouse](lessons/10-telemetry-lakehouse.md) | the second path: SQL accounting over months, and when *not* to build it |
 
-Total ≈ **37 hrs ≈ 7–9 weeks**. **Spine:** L1 (cardinality), L2 (PromQL traps), L7 (burn-rate),
-L9 (fleet synthesis).
+Total ≈ **43 hrs ≈ 8–10 weeks**. **Spine:** L1 (cardinality), L2 (PromQL traps), L7 (burn-rate),
+L9 (fleet synthesis), L10 (the cost of the cardinality trade).
 
 ## Deliverable & checkpoint
 

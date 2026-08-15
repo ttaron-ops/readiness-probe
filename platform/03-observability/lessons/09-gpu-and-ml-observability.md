@@ -6,7 +6,7 @@ concept: "fleet GPU observability"
 status: not-started
 est_time: "6 hrs"
 prev: "08-profiling-and-ebpf.md"
-next: null
+next: "10-telemetry-lakehouse.md"
 artifacts: ["fleet GPU + NCCL signal plan", "goodput-regression burn-rate alert", "straggler-detection query"]
 sources: 10
 ---
@@ -160,7 +160,9 @@ Feeds the module deliverable directly: **[fleet observability design](../practic
 
 ## Connections & what's next
 
-This closes the module's through-line: **cardinality is the master constraint, and delivered work (goodput) is the master SLI** — every lesson from L1 (cardinality as the signal-fit/cost matrix) through L8 (off-CPU profiling as the fleet-wide substrate) was building toward exactly this application. There is no lesson 10 in this module; the deliverable and checkpoint are what's next. Turn this lesson's DCGM+NCCL signal plan and goodput-regression SLO/straggler alert directly into the **[fleet observability design](../practice/fleet-observability/README.md)**, then work the **[checkpoint](../checkpoint.md)** — items 4 and 5 (sizing a fleet metrics system, alerting on goodput) are this lesson's material stated as pass criteria.
+This closes the module's through-line on the **hot path**: **cardinality is the master constraint, and delivered work (goodput) is the master SLI** — every lesson from L1 (cardinality as the signal-fit/cost matrix) through L8 (off-CPU profiling as the fleet-wide substrate) was building toward exactly this application. Turn this lesson's DCGM+NCCL signal plan and goodput-regression SLO/straggler alert directly into the **[fleet observability design](../practice/fleet-observability/README.md)**, then work the **[checkpoint](../checkpoint.md)** — items 4 and 5 (sizing a fleet metrics system, alerting on goodput) are this lesson's material stated as pass criteria.
+
+One thread is deliberately left hanging. To keep this fleet inside its cardinality budget you dropped `pod`, `workload_id` and `gpu_uuid` from your metric labels — which are exactly the dimensions a *cost* question needs. **[Lesson 10 — the telemetry lakehouse](10-telemetry-lakehouse.md)** is the other half of that trade: a second path off the same DCGM source, tuned for accounting rather than alerting, that answers the questions this one structurally cannot.
 
 Two sibling modules pick up where this one stops: **[modules/05-gpu-observability](../../../modules/05-gpu-observability/README.md)** is the single-node prerequisite this lesson explicitly builds on (DCGM internals, the util-lie, per-node MFU/goodput/XID) — go there first if any of that felt unfamiliar rather than merely "referenced." **[modules/11-gpu-cost-economics](../../../modules/11-gpu-cost-economics/README.md)** is the downstream consumer — every dollar figure in allocated-vs-utilised cost attribution sits on top of the goodput and attribution signals this lesson defines at fleet scale.
 

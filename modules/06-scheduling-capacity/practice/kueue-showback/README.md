@@ -5,6 +5,10 @@ One repo, three joined artifacts — **all runnable on a GPU-less `kind` cluster
 and TAS all demonstrate correctly against extended-resource nodes, so no real GPUs are
 needed.
 
+> Use the [fake GPU fleet lab](../../../04-gpu-on-kubernetes/practice/fake-gpu-fleet/README.md)
+> for the fleet-shaped parts — fragmentation, bin-packing and gang deadlock only become visible
+> across 50–200 heterogeneous nodes, which a single kind node cannot show you.
+
 ## 1. A working Kueue setup (reproducible)
 
 Checked-in manifests + a `Makefile`/script that stands it up on kind:
