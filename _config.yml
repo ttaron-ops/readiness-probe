@@ -5,3 +5,13 @@ description: >-
   and checkpoint answers. 12–15 month prep to land Senior Platform Engineer
   roles running GPU fleets.
 show_downloads: false
+
+# Lesson content contains literal {{ }} (Go templates, Prometheus label
+# templates, Go struct literals) that Liquid otherwise tries to parse as
+# template syntax, which fatally breaks the build. None of this content
+# needs Liquid templating, so disable it site-wide.
+defaults:
+  - scope:
+      path: ""
+    values:
+      render_with_liquid: false
