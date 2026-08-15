@@ -150,3 +150,29 @@ _(each run appends: date · modules enriched · commit shas)_
   pages (kubernetes.io/docs, docs.nvidia.com, man7.org, github.com/pciutils) are stable, predictable
   paths consistent with every checked-and-confirmed citation. No dead or mismatched links found; no
   fixes were necessary.
+- **2026-08-15** · QA pass · `modules/03-gpu-hardware` (next-oldest-enriched, 2026-08-10, not yet
+  QA'd) · commit `376ad03`. Full consistency sweep: verified the prev/next chain across all 7 lessons
+  is unbroken (01→07, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (4–5 actual), README lesson table hours (7/8/6/7/7/6/10,
+  summing to the stated ~51 hrs) matches the 7 lesson files exactly, and checkpoint.md /
+  practice/gpu-efficiency-report / resources/depth-map.md links resolve and stay consistent with
+  lesson content. Collected 50 unique cited URLs and ran them through a dedicated verification
+  subagent (WebFetch was blocked for nearly every external domain by the session's egress proxy
+  except github.com, so most checks used WebSearch corroboration); every priority citation — the
+  Hao AI Lab DistServe retrospective, the Meta Engineering GEM-training post (20–25% MFU / 12-month
+  efficiency goal, confirmed real despite its 2026-08-03 date), both Character.AI inference posts,
+  NVIDIA/dcgm-exporter#662, NVIDIA/nccl#584, pytorch/pytorch#43546, the Williams/Waterman/Patterson
+  Roofline paper (CACM 2009) and its escholarship.org mirror, and the Google Cloud "4.4% GPU
+  Utilization" B200 benchmark (including its specific 292× ridge-point figure, independently
+  confirmed) — checked out. Found and fixed one real accuracy issue: lesson 06 (lines 110, 183)
+  characterized NVIDIA/nccl#584 and pytorch/pytorch#43546 as evidence of NCCL hanging on
+  "version/config mismatch," but both filed issues actually trace to a mismatched/out-of-order
+  collective call across ranks, not a driver/toolkit version skew — reworded both citations to
+  describe the actual root cause while keeping the "hangs instead of erroring cleanly" claim they
+  do support. Also downgraded the lesson 4 Hao AI Lab citation's self-flagged "not independently
+  fetched" caveat to "verified" now that a live check confirmed the title and content. The
+  `clustermax.semianalysis.com` / `gpu-index.semianalysis.com` pricing figures ($3.15/hr cohort
+  median, down from >$7/hr in early 2024) were spot-checked against current market data — today's
+  broader H100 market median (~$2.29–$3.12/hr per third-party trackers) is close enough to the
+  cited figure that no fix was needed, and the lesson already explicitly flags it as a dated
+  snapshot to re-pull at build time per the spec's sourcing rule. No other fixes were necessary.
