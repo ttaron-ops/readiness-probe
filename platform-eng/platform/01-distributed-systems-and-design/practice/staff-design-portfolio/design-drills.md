@@ -6,7 +6,7 @@ This is **one system designed three times**, and it trains a different and harde
 > **Method adapted from** the `tasks/` → `solutions/` → `implementation/` structure in
 > [`harut8/system-design`](https://github.com/harut8/system-design), which solves each design
 > problem at four scale tiers (10k → 100k → 1m → 10m users) with a separate architecture per tier.
-> Re-aimed here at GPU-platform prompts. See [`docs/EXTERNAL-DEPTH.md`](../../../../docs/EXTERNAL-DEPTH.md).
+> Re-aimed here at GPU-platform prompts. See [`docs/EXTERNAL-DEPTH.md`](../../../../../docs/EXTERNAL-DEPTH.md).
 
 ## Why the ladder beats one-shot reps
 
@@ -112,7 +112,7 @@ staff-design-portfolio/
 ## Depth reading
 
 Only when a tier is blocked on internals you don't have — see
-[`docs/EXTERNAL-DEPTH.md`](../../../../docs/EXTERNAL-DEPTH.md):
+[`docs/EXTERNAL-DEPTH.md`](../../../../../docs/EXTERNAL-DEPTH.md):
 
 - [`SYSTEM-DESIGN-GUIDE.md`](https://github.com/harut8/system-design/blob/main/SYSTEM-DESIGN-GUIDE.md)
   — the requirements → estimation → API → high-level → deep-dive → tradeoffs framework, and a

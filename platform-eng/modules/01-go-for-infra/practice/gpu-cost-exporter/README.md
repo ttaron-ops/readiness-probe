@@ -61,5 +61,5 @@ gpu-cost-exporter/
 
 - Keep the business logic **trivial and correct** — the point is the machinery, not clever math.
 - Open-source-by-default, but confirm the licence/employer conversation before adding
-  any real Skyro data or internals (see [ROADMAP Phase 0](../../../../docs/ROADMAP.md)).
+  any real Skyro data or internals (see [ROADMAP Phase 0](../../../../../docs/ROADMAP.md)).
 - No secrets, kubeconfigs, or real cost figures in git (the repo `.gitignore` guards these).

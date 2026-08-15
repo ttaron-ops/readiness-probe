@@ -80,6 +80,6 @@ gpu-cost-operator/
 ## Guardrails
 
 - Open-source-by-default, but confirm the licence/employer conversation first
-  (see [ROADMAP Phase 0](../../../../docs/ROADMAP.md)).
+  (see [ROADMAP Phase 0](../../../../../docs/ROADMAP.md)).
 - No secrets, kubeconfigs, or real cost figures in git (repo `.gitignore` guards these).
 - Keep business logic trivial and correct — the point is the machinery.

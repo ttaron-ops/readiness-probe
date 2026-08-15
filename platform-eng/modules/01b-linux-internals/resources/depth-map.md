@@ -2,7 +2,7 @@
 
 Pointers into [`harut8/system-design`](https://github.com/harut8/system-design). **Open a chapter
 only when a lesson's artifact is blocked on internals you don't have** — see
-[`docs/EXTERNAL-DEPTH.md`](../../../docs/EXTERNAL-DEPTH.md) for how to use this library and the
+[`docs/EXTERNAL-DEPTH.md`](../../../../docs/EXTERNAL-DEPTH.md) for how to use this library and the
 attribution/licensing note.
 
 > **One of the two densest matches in the repo.** `python-mastery/00–12` is really an OS-and-hardware

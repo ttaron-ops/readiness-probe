@@ -15,26 +15,26 @@ repo holds the work** — notes, lessons, code, benchmarks, and checkpoint answe
 
 The course runs three tracks **in parallel**, not one linear list.
 
-### Track A — Platform excellence  →  [`platform/`](platform/)
+### Track A — Platform excellence  →  [`platform/`](platform-eng/platform/)
 Refresh and deepen core platform engineering to a senior/staff bar. Only the two—
 now three—genuinely high-leverage areas are first-class **deepen modules**;
 everything you already operate daily is a light **interview refresh**.
 
 | Module | Lessons | |
 |--------|:---:|---|
-| 🧩 [Distributed systems & system design](platform/01-distributed-systems-and-design) | 9 | deepen |
-| 🌐 [Platform networking depth](platform/02-platform-networking) | 8 | deepen |
-| 🔭 [Observability engineering](platform/03-observability) | 9 | deepen |
-| 🔁 [Interview refresh](platform/interview-refresh) | 6 pages | light — IaC · CI/CD & GitOps · cloud/multi-cloud · security · SRE · k8s ops |
+| 🧩 [Distributed systems & system design](platform-eng/platform/01-distributed-systems-and-design) | 9 | deepen |
+| 🌐 [Platform networking depth](platform-eng/platform/02-platform-networking) | 8 | deepen |
+| 🔭 [Observability engineering](platform-eng/platform/03-observability) | 9 | deepen |
+| 🔁 [Interview refresh](platform-eng/platform/interview-refresh) | 6 pages | light — IaC · CI/CD & GitOps · cloud/multi-cloud · security · SRE · k8s ops |
 
-### Track B — GPU specialization  →  [`modules/`](modules/)
+### Track B — GPU specialization  →  [`modules/`](platform-eng/modules/)
 The gap-closing path, mapped 1:1 to the [Notion study plan](https://app.notion.com/p/3b23abaeb82380beb8a1d5dd935b9fd0).
 
-**Core:** [01 🐹 Go](modules/01-go-for-infra) · [01b 🐧 Linux internals](modules/01b-linux-internals) · [02 ⚙️ K8s controllers](modules/02-kubernetes-controllers) · [02b 🧬 Host topology](modules/02b-host-topology) · [03 🔌 GPU hardware](modules/03-gpu-hardware) · [04 📦 GPU on Kubernetes](modules/04-gpu-on-kubernetes) · [05 📊 GPU observability](modules/05-gpu-observability) · [06 🗓️ Scheduling & capacity](modules/06-scheduling-capacity) · [07 🚀 Inference serving](modules/07-inference-serving) · [11 💰 GPU cost & unit economics](modules/11-gpu-cost-economics)
+**Core:** [01 🐹 Go](platform-eng/modules/01-go-for-infra) · [01b 🐧 Linux internals](platform-eng/modules/01b-linux-internals) · [02 ⚙️ K8s controllers](platform-eng/modules/02-kubernetes-controllers) · [02b 🧬 Host topology](platform-eng/modules/02b-host-topology) · [03 🔌 GPU hardware](platform-eng/modules/03-gpu-hardware) · [04 📦 GPU on Kubernetes](platform-eng/modules/04-gpu-on-kubernetes) · [05 📊 GPU observability](platform-eng/modules/05-gpu-observability) · [06 🗓️ Scheduling & capacity](platform-eng/modules/06-scheduling-capacity) · [07 🚀 Inference serving](platform-eng/modules/07-inference-serving) · [11 💰 GPU cost & unit economics](platform-eng/modules/11-gpu-cost-economics)
 
-**Stretch (deferrable — learn on the job or for a specific employer):** [08 🧮 Distributed training](modules/08-distributed-training) · [09 🔗 Networking & topology](modules/09-networking-topology) · [10 🖥️ Bare metal & lifecycle](modules/10-bare-metal-lifecycle)
+**Stretch (deferrable — learn on the job or for a specific employer):** [08 🧮 Distributed training](platform-eng/modules/08-distributed-training) · [09 🔗 Networking & topology](platform-eng/modules/09-networking-topology) · [10 🖥️ Bare metal & lifecycle](platform-eng/modules/10-bare-metal-lifecycle)
 
-### Track C — Evidence & interview  →  [`modules/12-capstone-interview`](modules/12-capstone-interview)
+### Track C — Evidence & interview  →  [`modules/12-capstone-interview`](platform-eng/modules/12-capstone-interview)
 The public proof that converts knowledge into offers.
 - **Flagship:** GPU cost/efficiency controller — Stage 1 Metrics MVP → Stage 2 CRDs → Stage 3 fractional attribution
 - **Writing:** the "your GPU dashboard is lying" post + two more
@@ -57,10 +57,11 @@ The month-by-month calendar, milestones, and readiness gate live in
 ## Layout
 
 ```
-platform/<NN>-<slug>/      # Track A — deepen modules (lessons/, practice/, resources/, checkpoint.md)
-platform/interview-refresh/ #          light refresh pages for the areas you already operate
-modules/<NN>-<slug>/       # Track B — GPU modules (map to Notion) + Track C in module 12
-  └── resources/depth-map.md  #        lesson-level pointers into the external depth library
+platform-eng/
+├── platform/<NN>-<slug>/      # Track A — deepen modules (lessons/, practice/, resources/, checkpoint.md)
+├── platform/interview-refresh/ #          light refresh pages for the areas you already operate
+└── modules/<NN>-<slug>/       # Track B — GPU modules (map to Notion) + Track C in module 12
+      └── resources/depth-map.md  #        lesson-level pointers into the external depth library
 docs/
 ├── ROADMAP.md             # month-by-month calendar, milestones, readiness gate
 ├── CONVENTIONS.md         # structure, mandatory fields, definition of done
@@ -71,7 +72,7 @@ docs/
 ## Two things to know before you start
 
 **You don't need GPUs to start.** The
-[**fake GPU fleet lab**](modules/04-gpu-on-kubernetes/practice/fake-gpu-fleet/) stands up a
+[**fake GPU fleet lab**](platform-eng/modules/04-gpu-on-kubernetes/practice/fake-gpu-fleet/) stands up a
 50–200-node heterogeneous fleet with forged extended resources and a synthetic DCGM exporter, so
 Modules 04, 05, 06, 11 and the capstone are all buildable on a laptop. Rent one real GPU for one
 afternoon at the end of Module 05 to *validate* the simulation — not to develop against it.

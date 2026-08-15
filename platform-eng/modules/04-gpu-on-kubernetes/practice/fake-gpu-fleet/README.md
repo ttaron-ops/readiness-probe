@@ -7,7 +7,7 @@ the allocation accounting, the queueing, the attribution, the cost model.
 
 > **Adapted from** [`k8s-learn/gpu-platform-tasks.md`](https://github.com/harut8/system-design/blob/main/k8s-learn/gpu-platform-tasks.md)
 > in [`harut8/system-design`](https://github.com/harut8/system-design), re-aimed at this course's
-> deliverables. See [`docs/EXTERNAL-DEPTH.md`](../../../../docs/EXTERNAL-DEPTH.md) for attribution
+> deliverables. See [`docs/EXTERNAL-DEPTH.md`](../../../../../docs/EXTERNAL-DEPTH.md) for attribution
 > and licensing.
 
 ## The idea that makes it work

@@ -2,7 +2,7 @@
 
 Pointers into [`harut8/system-design`](https://github.com/harut8/system-design). **Open a chapter
 only when a lesson's artifact is blocked on internals you don't have** — see
-[`docs/EXTERNAL-DEPTH.md`](../../../docs/EXTERNAL-DEPTH.md) for how to use this library and the
+[`docs/EXTERNAL-DEPTH.md`](../../../../docs/EXTERNAL-DEPTH.md) for how to use this library and the
 attribution/licensing note.
 
 > **The `databases/` track is the hidden match for this module.** It is 24 chapters, 1,000–3,600
