@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 lesson: "01b.2"
 title: "Namespaces"
 module: "01b"

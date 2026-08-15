@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 lesson: "01b.3"
 title: "cgroups v2 and Kubernetes resource enforcement"
 module: "01b"

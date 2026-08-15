@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 lesson: "01.5"
 title: "Testing in Go"
 module: "01"

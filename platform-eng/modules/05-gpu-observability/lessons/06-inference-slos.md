@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 lesson: "05.6"
 title: "Inference SLOs: TTFT, TPOT, and why request-latency lies"
 module: "05"

@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 lesson: "05.5"
 title: "GPU health and XID errors"
 module: "05"

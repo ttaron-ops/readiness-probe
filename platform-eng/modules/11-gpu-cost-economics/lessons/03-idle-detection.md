@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 lesson: 03
 title: "Idle GPU detection and the cost of false positives"
 module: 11
