@@ -11,8 +11,18 @@ links to its directory here, and every file here links back to Notion.
 | **Module** | "What must I master, and how do I know I'm done?" | `modules/<NN>-<slug>/README.md` |
 | **Lesson** | "What's the one thing I'm learning now, and what did I build?" | `modules/<NN>-<slug>/lessons/<NN>-<slug>.md` |
 
-A lesson maps to one **must-know concept** from the module's Notion page. Finish a
-lesson in roughly one sitting (1–3 hrs).
+A lesson maps to one **must-know concept** from the module's Notion page.
+
+## What a lesson contains
+
+A lesson is a **self-contained textbook chapter** on its concept: you read it start to
+finish and come away understanding the topic, with no external lookup required. Links
+are optional depth, never prerequisites. The full content standard — section weights,
+the mandatory ASCII diagrams, inlining source knowledge, accuracy rules — lives in
+[`docs/LESSON-CONTENT-SPEC.md`](LESSON-CONTENT-SPEC.md). Write every lesson to it.
+
+This does not soften *build, do not read*: the practice artifact is still the gate.
+The lesson simply has to teach you enough to do the build.
 
 ## Mandatory fields
 
