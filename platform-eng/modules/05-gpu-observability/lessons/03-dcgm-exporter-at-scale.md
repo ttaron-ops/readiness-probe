@@ -591,6 +591,65 @@ today has 40 distinct `pod` label values attached to its 25 counters for as long
 retention window says, even though at most one is live at a time. Cardinality is an integral
 over the window, not an instantaneous count.
 
+That sentence is the whole trap, so draw it. One physical GPU, one counter, over five days
+of a 15-day retention window, with a pod-churning training workload:
+
+```
+  ONE GPU · ONE COUNTER · WHAT PROMETHEUS ACTUALLY HOLDS OVER TIME
+ ═══════════════════════════════════════════════════════════════════════════════════════
+
+  wall clock ───▶   day 1        day 2        day 3        day 4        day 5
+
+  pods scheduled    p1 p2 p3     p4 p5 p6     p7 p8 p9     p10 …        p13 …
+  on this GPU       ●──●──●      ●──●──●      ●──●──●      ●──●──●      ●──●──●
+                    (one at a time; each holds the card for a few hours)
+
+  ── WITHOUT pod labels ────────────────────────────────────────────────────────────────
+  series alive      ▓▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓▓
+  distinct series   ─ 3 ────────── 6 ────────── 9 ────────── 12 ───────── 15 ──▶
+                    (the `pod` label alone still churns — K grows with pod count,
+                     but each pod contributes exactly ONE combination)
+
+  ── WITH pod labels, NO allowlist ─────────────────────────────────────────────────────
+  each pod also carries job-id=<uuid>, pod-template-hash=<hash>,
+  controller-revision-hash=<hash> …
+
+  distinct series   ─ 3 ────────── 6 ────────── 9 ────────── 12 ───────── 15 ──▶
+                    …identical count, because those labels CO-VARY with the pod.
+                    The blow-up is not extra labels per pod — it is that EVERY
+                    label value is unique per run, so nothing is ever reused:
+
+  ── WHAT ACTUALLY DIFFERS ─────────────────────────────────────────────────────────────
+   allowlist ON  ( app=trainer, team=vision )
+       ┌──────────────────────────────────────────────────────────────────┐
+       │ pod label values are SHARED across runs                          │
+       │ K stops growing once every service has been seen once            │
+       │        K ──▶ 3 … 6 … 9 … plateaus at the pod-churn number        │
+       └──────────────────────────────────────────────────────────────────┘
+
+   allowlist OFF ( job-id=e91f…, pod-template-hash=7d9f… )
+       ┌──────────────────────────────────────────────────────────────────┐
+       │ every run mints a new value that will NEVER be seen again        │
+       │ K grows LINEARLY for the whole retention window and only stops   │
+       │ when 15-day-old blocks are compacted away                        │
+       │        K ──▶ 3 … 6 … 9 … 450 (day 15) … steady state at 450      │
+       └──────────────────────────────────────────────────────────────────┘
+
+  ── THE TIMING TRAP ───────────────────────────────────────────────────────────────────
+   day 0 : you flip enablePodLabels. Series count barely moves. "Looks fine."
+   day 1 : +4%.   Nobody notices.
+   day 7 : +50%.  Someone mentions Prometheus feels slow.
+   day 15: +450×. The pod OOMs, and it OOMs on the day the FIRST blocks would
+           have expired — i.e. exactly when you stopped being able to blame the
+           change you made two weeks ago.
+ ═══════════════════════════════════════════════════════════════════════════════════════
+```
+
+**The operational lesson from the timeline: the blast radius of this change is not visible
+on the day you make it.** It matures over exactly one retention window. Which is why the
+Practice section asks you to set a recording rule on the series count *before* touching the
+config, and why the change should never go out on a Friday.
+
 **Fleet: 65 nodes × 8 GPUs = 520 GPUs. Retention 15 d. Scrape 30 s.**
 
 *Posture 0 — device labels only (`--kubernetes=false`).*
