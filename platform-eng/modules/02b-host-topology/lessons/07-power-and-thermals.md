@@ -44,7 +44,7 @@ The stakes are not only per-node. Production ML fleets have found that synchroni
 - **New:** the **power limit model** — min / default / max / requested / enforced, what `nvidia-smi -pl` actually writes, why persistence mode matters, and how DVFS converges on a clock that fits the budget.
 - **New:** **node and rack power arithmetic you can re-run** — the full 8-GPU node budget against the DGX H100's published 10.2 kW, three-phase circuit capacity from first principles, and how many nodes a 415 V/32 A N+1 rack actually holds.
 - **New:** **cooling arithmetic** — `Q = ṁ·cp·ΔT` worked for both air and liquid, the ~3,500× volumetric-heat-capacity ratio between water and air that explains the industry's move to direct-to-chip liquid, and the ΔT a real 120 kW rack runs at.
-- **New:** the fleet-scale phenomenon of **synchronized power ramping**, the adjacent **Xid/SXid** hardware-fault layer that a throttle reading cannot distinguish itself from, and the production health-check practice that operationalises all of this continuously.
+- **New:** **synchronized power ramping** at fleet scale, the adjacent **Xid/SXid** fault layer, and the production health-check practice that operationalises all of this continuously.
 
 ## Core concepts
 
@@ -621,7 +621,7 @@ And record the ratio you actually care about for cost: `clocks.sm / clocks.max.s
 
 ## Perspectives
 
-**Developer.** Throttling is invisible from training code — a developer sees "throughput is lower than expected" with no signal distinguishing power/thermal from a data or communication bottleneck. Framework profilers report step time, not clock state. Telling them apart requires the platform-level tools in this lesson, not application profiling. The one thing a developer *can* do is shape the workload: the activity factor α is theirs, and a kernel schedule that smooths power (the Google Cloud result in §11) is a code-level fix to a facility-level problem.
+**Developer.** Throttling is invisible from training code — a developer sees "throughput is lower than expected" with no signal distinguishing power/thermal from a data or communication bottleneck, because framework profilers report step time, not clock state. The one thing a developer *can* do is shape the workload: the activity factor α is theirs, and a kernel schedule that smooths power (the Google Cloud result in §11) is a code-level fix to a facility-level problem.
 
 **Operator / facilities.** Power and cooling are shared, finite resources at the rack, row and facility level. Your job includes setting deliberate power caps to protect the circuit, and then checking whether *observed* throttling matches the *intended* cap. A mismatch — thermal throttling while the power budget still has headroom — means the cooling design is under-provisioned for the deployed density. That is a capacity-planning finding, not a per-job bug, and §9's series-resistance model tells you which stage to investigate.
 
