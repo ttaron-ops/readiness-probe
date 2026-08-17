@@ -8,7 +8,7 @@ est_time: "10h"
 prev: "04-server-architecture-8gpu.md"
 next: "06-storage-nvme.md"
 artifacts: []
-sources: 12
+sources: 13
 ---
 # 02b.5 · Kubernetes topology alignment — Topology, CPU, and Memory Managers
 > **Concept.** How Kubernetes aligns a pod's CPUs, memory, and GPU onto one NUMA node — Topology Manager policies (guarantee vs attempt), the required CPU/Memory Manager static policies, the device-plugin `TopologyInfo` trap that silently defeats it, and where Dynamic Resource Allocation (DRA) is taking this next.

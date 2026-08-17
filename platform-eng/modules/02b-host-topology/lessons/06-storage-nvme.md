@@ -8,7 +8,7 @@ est_time: "6h"
 prev: "05-topology-alignment-k8s.md"
 next: "07-power-and-thermals.md"
 artifacts: []
-sources: 11
+sources: 12
 ---
 # 02b.6 · NVMe and storage placement for GPU data paths
 > **Concept.** Local NVMe (or the NIC serving remote storage) that does not share the GPU's PCIe switch/root complex contends for the same PCIe path the GPU feeds on, and the stall shows up as "GPU idle" that no utilization metric explains — and GPUDirect Storage only pays off when that placement is correct.
