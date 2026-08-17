@@ -8,7 +8,7 @@ est_time: "30h"
 prev: "09-scheduler-and-gpu-scheduling.md"
 next: null
 artifacts: []
-sources: 14
+sources: 16
 ---
 
 # 02.10 · Capstone build — gpu-cost-operator v0.1 under envtest
@@ -282,8 +282,10 @@ type GPUCostPolicyStatus struct {
 // +kubebuilder:resource:scope=Cluster,shortName=gcp
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Currency",type=string,JSONPath=`.spec.currency`
-// +kubebuilder:printcolumn:name="Classes",type=integer,JSONPath=`.spec.prices.length()`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// (printcolumn JSONPath is the apiserver's restricted subset — no function calls,
+//  so there is no way to print len(spec.prices); expose a count in status if you
+//  want one.)
 
 type GPUCostPolicy struct {
 	metav1.TypeMeta `json:",inline"`

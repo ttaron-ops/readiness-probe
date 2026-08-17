@@ -365,7 +365,7 @@ Disaggregation is running in production. Moonshot AI's **Mooncake**, described a
 
 It adds real costs, and a platform engineer's value here is knowing them before recommending the architecture:
 
-- **KV transfer.** Every request's KV cache must move from the prefill pool to the decode pool. For a 2,048-token prompt to Llama-3-70B with FP8 GQA KV that is 320 MB per request — at 400 Gb/s (50 GB/s) that is 6.4 ms of pure transfer, on top of a 250 ms prefill. Tolerable there; for a 32k-token prompt it is 5.1 GB and 102 ms, which is no longer noise.
+- **KV transfer.** Every request's KV cache must move from the prefill pool to the decode pool. For a 2,048-token prompt to Llama-3-70B with FP8 GQA KV that is `2,048 × 163,840 B = 336 MB` per request — at 400 Gb/s (50 GB/s) that is **6.7 ms** of pure transfer, on top of a 250 ms prefill: noise. For a 32k-token prompt it is `32,768 × 163,840 = 5.37 GB` and **107 ms**, which is no longer noise. The transfer cost scales with prompt length, exactly like the prefill it is trying to offload.
 - **Two fleets to plan and operate** instead of one, with a ratio between them that must track your actual prompt-to-generation length distribution. Get the ratio wrong and one pool idles while the other queues.
 - **A new failure surface**: the KV transfer path, and a request that is now split across two machines' lifetimes.
 - **Scale threshold.** The win only materialises past a certain scale or SLO tightness; below it the complexity dominates.
@@ -481,7 +481,7 @@ H200 @ ~$3.70/hr: 1,732 tok/s → 6.235M tok/hr → $0.59 per 1M tokens
                                     for 1.23× the hourly rate.
 ```
 
-**And note where that 7.9× came from:** 1.43× is bandwidth, and 5.5× is *batch size*, which is a capacity effect. If you argued this purchase on bandwidth alone you would have claimed 43% and lost the argument on price. *(Rates are illustrative 2026-era snapshots; the ratio is set by hardware, the absolute by the market.)*
+**And note where that 7.9× came from.** Decompose the 9.74× throughput ratio by changing one thing at a time: hold the batch at 4 and move only to the H200's bandwidth → `(70e9 + 4 × 1.342e9) ÷ 4.8e12 = 15.70 ms` → 255 tok/s, a **1.43×** gain, exactly the bandwidth ratio. Then raise the batch from 4 to 49 on the H200 → 1,732 tok/s, a further **6.80×**. `1.43 × 6.80 = 9.74` ✓. So **bandwidth contributed 1.4× and capacity-enabled batching contributed 6.8×.** If you argued this purchase on bandwidth alone you would have claimed 43% and lost the argument on price. *(Rates are illustrative 2026-era snapshots; the ratio is set by hardware, the absolute by the market.)*
 
 ## Practice
 

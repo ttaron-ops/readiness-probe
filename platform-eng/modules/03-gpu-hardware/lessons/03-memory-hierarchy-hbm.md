@@ -468,16 +468,23 @@ H200, 70B FP8, 8k ctx:  68.6 tok/s × 49 seqs × ~0.75 ≈  2,520 tok/s
                                         ~23% more expensive per hour.
 ```
 
-The bandwidth lever contributed 1.43× of that; **the capacity lever contributed 12×.** If you only ever quote "H200 is 43% faster for inference" you have told a small fraction of the story. (The realisation factor of ~0.75 covers KV reads on top of weight reads, attention overhead and imperfect bandwidth utilisation; lesson 03.4 unpacks it and shows where the batching curve actually flattens.)
+The bandwidth lever contributed 1.43× of that; **the capacity lever contributed 12×.** If you only ever quote "H200 is 43% faster for inference" you have told a small fraction of the story.
+
+**Flag this as a first-order estimate, deliberately.** Multiplying the single-stream ceiling by the batch assumes the *whole* per-token byte count is amortised across the batch, and it is not: the weight read is shared, the KV read is not. At batch 49 with 8k contexts the KV traffic (65.8 GB per step) is nearly as large as the weight traffic (70 GB), so the real figure is roughly 1,730 tok/s, not 2,520 — about 30% lower. Lesson 03.4 replaces this multiplication with a two-term model that gets it right and, more importantly, predicts *where the curve bends*. Use `ceiling × batch × 0.75` for a napkin sizing; use the two-term model before you commit a capacity plan.
 
 **Step 7 — cost.**
 
 ```
-H100 at ~$3.00/hr →   144 tok/s → 518,400 tok/hr → $5.79 per 1M output tokens
-H200 at ~$3.70/hr → 2,520 tok/s → 9.07M tok/hr   → $0.41 per 1M output tokens
+first-order estimate (ceiling × batch × 0.75):
+  H100 at ~$3.00/hr →   144 tok/s →  518,400 tok/hr → $5.79 per 1M output tokens
+  H200 at ~$3.70/hr → 2,520 tok/s →    9.07M tok/hr → $0.41 per 1M output tokens
+
+refined with lesson 03.4's two-term model (KV reads not amortised):
+  H100 at ~$3.00/hr →   178 tok/s →  640,800 tok/hr → $4.68 per 1M output tokens
+  H200 at ~$3.70/hr → 1,732 tok/s →    6.24M tok/hr → $0.59 per 1M output tokens
 ```
 
-A 14× difference in cost per token, from the same compute die, decided entirely by memory. *(Rates are illustrative 2026-era snapshots; lesson 03.7 covers sourcing live pricing. The point is the ratio, which is set by hardware, not the absolute, which is set by the market.)*
+Either way the conclusion is the same shape: **an 8–14× difference in cost per token, from the same compute die, decided entirely by memory.** The refinement matters for the absolute figure you put in a capacity plan, not for the decision. *(Rates are illustrative 2026-era snapshots; lesson 03.7 covers sourcing live pricing. The ratio is set by hardware; the absolute is set by the market.)*
 
 ## Practice
 
