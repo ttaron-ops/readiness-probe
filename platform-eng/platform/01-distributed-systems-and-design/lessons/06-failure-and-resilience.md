@@ -487,15 +487,11 @@ Two structural fixes:
 
 Gray failure on a GPU fleet has specific physical causes, and naming them is what lets you design the right probe.
 
-- **Marginal HBM cells.** At the density and clock rates of modern HBM stacks, individual cells sit close to the edge of reliably retaining charge. Under a particular combination of voltage droop, temperature, and access pattern (refresh timing interacting with a hot row), a cell returns the wrong value. ECC catches single-bit errors and reports them — that path is *not* silent, and you should be scraping `DCGM_FI_DEV_ECC_SBE_VOL_TOTAL` / `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL`. The silent path is corruption that ECC does not cover: errors in logic and datapath rather than in protected memory arrays.
-- **Single-event upsets.** High-energy particles flip bits in memory or in combinational logic. Per-device the rate is tiny; multiply by tens of thousands of devices running continuously and it stops being negligible. This is the classic argument for why fleet-scale reliability engineering differs in kind, not degree, from single-machine reliability.
-- **Marginal silicon under thermal and power stress.** A part that passed factory test can drift as it ages and as it runs sustained near its power limit. The result is not a crash but an occasionally-wrong arithmetic result — the defect is data-dependent and often reproducible only under specific input patterns, which is precisely why it survives manufacturing test and every subsequent health check.
+- **Marginal HBM cells.** At modern HBM density and clock rates, individual cells sit close to the edge of reliably retaining charge; under a particular combination of voltage droop, temperature, and access pattern, a cell returns the wrong value. ECC catches and *reports* single-bit errors — that path is not silent, and you should be scraping `DCGM_FI_DEV_ECC_SBE_VOL_TOTAL` / `DCGM_FI_DEV_ECC_DBE_VOL_TOTAL`. The silent path is what ECC does not cover: errors in logic and datapath rather than in protected memory arrays.
+- **Single-event upsets.** High-energy particles flip bits in memory or combinational logic. Per-device the rate is tiny; across tens of thousands of devices running continuously it stops being negligible — the classic argument for why fleet-scale reliability differs in kind, not degree, from single-machine reliability.
+- **Marginal silicon under thermal and power stress.** A part that passed factory test drifts as it ages and runs sustained near its power limit. The result is an occasionally-wrong arithmetic result, data-dependent and often reproducible only under specific input patterns — which is exactly why it survives manufacturing test and every subsequent health check.
 
-None of these raise an exception. They produce **a wrong number**, silently folded into a gradient or an activation. The detection strategy that follows is active and numerical:
-
-- **Deterministic replay.** Re-run a suspect step with fixed seeds and deterministic kernels on different hardware; compare bitwise. Google's published account of SDC at Gemini training scale describes exactly this, plus proactive SDC scanners run on otherwise-idle machines, with SDC events observed roughly **every one to two weeks at ~10,000-chip scale**.
-- **In-band invariants.** Gradient-norm and loss spike detectors, checksummed all-reduce results, periodic self-consistency checks on a known input. Cheap, and they catch the corruption that matters (the one that reaches the model) rather than every corruption.
-- **Out-of-band burn-in.** A short numerical test suite run on every node before it re-enters the schedulable pool after any maintenance event.
+None of these raise an exception. They produce **a wrong number**, silently folded into a gradient or an activation. The detection strategy that follows is active and numerical: **deterministic replay** (re-run a suspect step with fixed seeds and deterministic kernels on different hardware, compare bitwise — Google reports doing exactly this at ~10,000-chip scale, plus proactive scanners on idle machines); **in-band invariants** (gradient-norm and loss-spike detectors, checksummed all-reduce results), which are cheap and catch the corruption that actually reaches the model; and **out-of-band burn-in**, a short numerical test suite every node passes before re-entering the schedulable pool after any maintenance event.
 
 ### 12 · Correlated failure, and the availability arithmetic that exposes it
 
@@ -536,11 +532,7 @@ Same 2 replicas, u = 10⁻³, with just 1 % of that being common-mode:
 
 **Gang-scheduled jobs are the degenerate case.** A 1,024-GPU training job is all-or-nothing: any one GPU failing kills the job. That is serial composition over 1,024 components, and it means job-level MTBF is `MTBF_gpu / N` — redundancy has nothing to protect, because there is no request to reroute. Worked in the example section below.
 
-**Blast-radius controls: cells and shuffle sharding.** If you cannot make failures independent, bound how many tenants each one reaches.
-
-*Cells*: partition the fleet into *m* independent stacks with no shared control plane, and pin each tenant to one. A failure takes out `1/m` of tenants. Simple, and the cost is `m` copies of every operational burden.
-
-*Shuffle sharding*: give each tenant a random subset of *k* workers out of *n*. Two tenants collide completely only if they drew the same subset. The arithmetic is a binomial coefficient and it is startlingly good:
+**Blast-radius controls: cells and shuffle sharding.** If you cannot make failures independent, bound how many tenants each one reaches. *Cells*: partition the fleet into *m* independent stacks with no shared control plane and pin each tenant to one; a failure takes out `1/m` of tenants, at a cost of `m` copies of every operational burden. *Shuffle sharding*: give each tenant a random subset of *k* workers out of *n*, so two tenants collide completely only if they drew the same subset. The arithmetic is a binomial coefficient and it is startlingly good:
 
 ```
 n = 100 workers, k = 5 per tenant
