@@ -8,7 +8,7 @@ est_time: "3.5 hrs"
 prev: "06-logging-pipelines.md"
 next: "08-profiling-and-ebpf.md"
 artifacts: ["mwmbr-alert-set.promql"]
-sources: 13
+sources: 14
 ---
 
 # A03.7 · SLOs and alerting
@@ -379,7 +379,8 @@ A firing alert rule is not a page. Between `expr` evaluating true and a phone bu
         │                  `keep_firing_for` (default 0s) holds FIRING
         │                  for N more after the condition clears
         │                       ▼
-        └─ push to Alertmanager every evaluation, with EndsAt = now + 4×interval
+        └─ push (min gap --rules.alert.resend-delay, default 1m), carrying
+           EndsAt = now + 4 × max(group interval, resend-delay)
                                 │
    ALERTMANAGER                 ▼
      ┌──────────────────────────────────────────────────────────────────┐
@@ -412,7 +413,7 @@ Five behaviours in there decide whether your carefully derived alert is useful:
 
 **`group_interval` doubles as the notification-pipeline context timeout.** A slow receiver (a webhook that takes 90 s) under a small `group_interval` (30 s) has its notification *cancelled* mid-flight. If pages are silently not arriving and the receiver looks healthy, this is the first thing to check.
 
-**Alerts resolve by timeout, not by the rule going quiet.** Prometheus sends `EndsAt = now + 4 × evaluation_interval` on each push; Alertmanager's `resolve_timeout` (default `5m`) governs alerts that arrive without an explicit end. So an alert whose Prometheus died stays firing for minutes, and an alert that genuinely cleared resolves a few evaluation intervals later. Do not build "the alert cleared" automation on sub-minute precision.
+**Alerts resolve by timeout, not by the rule going quiet.** Prometheus re-sends a firing alert no more often than `--rules.alert.resend-delay` (default `1m`) and stamps each send with `EndsAt = now + 4 × max(group interval, resend-delay)` (`rules/alerting.go`: `alert.ValidUntil = ts.Add(4 * delta)`, commented as "allow for two Eval or Alertmanager send failures"). Alertmanager's `resolve_timeout` (default `5m`) governs alerts that arrive without any end time at all. So an alert whose Prometheus died stays firing for minutes, and an alert that genuinely cleared resolves a few evaluation intervals later. Do not build "the alert cleared" automation on sub-minute precision.
 
 **HA is position-based waiting plus a gossiped notification log.** With three Alertmanagers, replica 0 sends immediately, replica 1 waits 15 s, replica 2 waits 30 s (`--cluster.peer-timeout`, default `15s`); each writes an nflog entry that gossips to the others, and the dedup stage drops the send if a peer already notified. Consequence: **a network partition between Alertmanager replicas produces duplicate pages, not missing ones** — a deliberate trade you should be able to name.
 
@@ -874,6 +875,7 @@ Checkpoint item 2 is this lesson stated as a pass criterion: derive the tiers an
 - Prometheus — alerting rules reference: `prometheus/prometheus`, `docs/configuration/alerting_rules.md` (`for`, `keep_firing_for`, the `ALERTS` synthetic series, templating). *Verified defaults: `for: 0s`, `keep_firing_for: 0s`.*
 - Prometheus — recording rules reference: `prometheus/prometheus`, `docs/configuration/recording_rules.md` (group `interval`, `limit`, `query_offset`, sequential evaluation with a shared timestamp, skipped-iteration behaviour and `rule_group_iterations_missed_total`).
 - Prometheus — configuration reference: `prometheus/prometheus`, `docs/configuration/configuration.md`. *Verified: `global.evaluation_interval` default `1m`, `global.scrape_interval` default `1m`, `rule_query_offset` default `0s`.*
+- Prometheus — rule-manager source: `prometheus/prometheus`, `rules/alerting.go` and `cmd/prometheus/main.go`. *Verified: `alert.ValidUntil = ts.Add(4 * max(group interval, resendDelay))` sent as `EndsAt`, with the source comment "allow for two Eval or Alertmanager send failures"; `--rules.alert.resend-delay` default `1m`; `--rules.alert.for-grace-period` default `10m`.*
 - Alertmanager — configuration reference: `prometheus/alertmanager`, `docs/configuration.md`. *Verified: `group_wait: 30s`, `group_interval: 5m`, `repeat_interval: 4h`, `resolve_timeout: 5m`, `repeat_interval` rounding, `group_interval` as notification context timeout, inhibit-rule `equal` semantics including the missing-label-equals-empty rule.*
 - Alertmanager — notification pipeline source: `prometheus/alertmanager`, `notify/notify.go`. *The stage order in §9's diagram is read directly from `PipelineBuilder.New` and `createReceiverStage`.*
 - Alertmanager — cluster flags: `prometheus/alertmanager`, `cmd/alertmanager/main.go`. *Verified: `--cluster.peer-timeout` default `15s`, which is the per-position notification delay in HA.*
