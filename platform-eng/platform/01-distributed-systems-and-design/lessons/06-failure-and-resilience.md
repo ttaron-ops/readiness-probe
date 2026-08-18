@@ -21,7 +21,7 @@ sources: 22
 
 Lesson 05 gave you the theory of overload: shed cheap and early, don't defer, and watch for the sustaining feedback loop that turns a spike into a metastable outage. All of that assumed one thing you were never asked to question — that you can *tell* the system is overloaded, or a node is dead, or a request needs to be shed. That assumption is the subject of this lesson, and it turns out to be provably imperfect. Deciding *when* to shed a request, retry a call, or fail a node over all reduce to the same underlying question: is the thing on the other end slow, or is it dead? This lesson is the layer underneath everything in lesson 05 — the failure-detection substrate that every backpressure, retry, and shedding decision is built on top of, and the reason none of those decisions can ever be made with certainty.
 
-It is also where the module's numbers stop being about steady-state throughput and start being about *expected loss*: how much work a failure costs you, how far a failure spreads, and how much compute you are willing to burn in advance to bound both.
+It is also where the module's numbers stop being about steady-state throughput and start being about *expected loss*: how much work a failure costs, how far it spreads, and how much compute you burn in advance to bound both.
 
 ## Why this matters
 
@@ -101,7 +101,7 @@ Chandra and Toueg (1996) gave the vocabulary that makes "imperfect" precise. A f
 
 Perfect accuracy is unattainable under asynchrony (that's FLP again). So real detectors aim for **eventually strong** (`◇S`) behaviour: strong completeness plus *eventual* weak accuracy — after some unknown point, at least one correct process stops being suspected. That is exactly enough to make consensus solvable, which is why it is the class Raft-style systems implicitly assume.
 
-Practically, this table tells you where to spend. **Completeness is cheap** — lengthen the timeout, you get it. **Accuracy is expensive** — it requires either a longer timeout (worse detection latency) or a smarter model of what "late" means. The smarter model is the accrual detector.
+This tells you where to spend. **Completeness is cheap** — lengthen the timeout and you get it. **Accuracy is expensive**: it needs either a longer timeout (worse detection latency) or a smarter model of what "late" means. The smarter model is the accrual detector.
 
 ### 3 · Phi-accrual detectors: the tunable version of the same tradeoff
 
@@ -130,7 +130,7 @@ Kubernetes gives you three probe types and they encode three different questions
 | `readinessProbe` | Should this pod receive traffic now? | Remove from Service endpoints. | Making it expensive, so it fails under the load it was meant to shield you from. |
 | `startupProbe` | Has slow initialisation finished? | Suppress the other two until it passes. | Omitting it on a model server that takes 4 minutes to load weights, so liveness kills it at 3. |
 
-The structural trap is the **deep health check**: a probe that validates the dependency graph rather than the process. Deep checks have excellent completeness and terrible correlated accuracy — when the shared dependency degrades, *every* instance fails the check *at the same instant*, and the health-check system removes 100% of your capacity in response to a partial degradation. This is the mechanism behind "the load balancer took the whole fleet out of rotation."
+The structural trap is the **deep health check**: a probe that validates the dependency graph rather than the process. Deep checks have excellent completeness and terrible *correlated* accuracy — when the shared dependency degrades, every instance fails the check at the same instant, and the health-check system removes 100 % of your capacity in response to a partial degradation. That is the mechanism behind "the load balancer took the whole fleet out of rotation."
 
 Production systems defend against it by capping how much of a fleet the ejection machinery may remove. Envoy's outlier detection — the same code path Istio's `outlierDetection` configures — has this as a first-class default:
 
@@ -377,9 +377,9 @@ The comparison that matters for design:
 
 **Three failure modes of breakers, with mechanisms:**
 
-1. **The breaker converts a partial outage into a total one.** This is Marc Brooker's objection, and the mechanism is precise: suppose 20 % of a dependency's shards are down. Every caller sees ~20 % errors. With `errorThresholdPercentage = 50` you are safe — but set it to 15 %, or let the failing shard be hot enough to push the observed rate over 50 %, and the breaker opens for *all* traffic, including the 80 % that was working. You have taken a 20 %-degraded system to 100 % down for everyone behind that breaker. Continuous mechanisms — load shedding, retry budgets, per-host ejection — degrade proportionally; a breaker is a step function.
-2. **The mode is never tested.** OPEN and HALF-OPEN are code paths that run only during incidents. The fallback behind an open breaker is usually the least-exercised branch in the service. Brooker's broader point about fallbacks applies: a fallback path that has not carried production traffic is not known to work.
-3. **Synchronised half-open probing.** With Hystrix's single probe there is at most one in-flight test per breaker instance — but a fleet of 500 pods all opened their breakers within the same second and will all probe 5 s later, simultaneously. The recovering dependency gets a 500-request spike precisely when it is least able to take it. **The fix is jitter on the sleep window**, which neither Hystrix nor resilience4j does by default. If you deploy breakers at fleet scale, randomise `waitDurationInOpenState` per instance (e.g. `60 s × Uniform(0.5, 1.5)`).
+1. **The breaker converts a partial outage into a total one.** Suppose 20 % of a dependency's shards are down, so every caller sees ~20 % errors. With `errorThresholdPercentage = 50` you are safe — but set it to 15 %, or let the failing shard be hot enough to push the observed rate over 50 %, and the breaker opens for *all* traffic including the 80 % that was working. A 20 %-degraded system becomes 100 % down for everyone behind that breaker. Continuous mechanisms — shedding, budgets, per-host ejection — degrade proportionally; a breaker is a step function.
+2. **The mode is never tested.** OPEN and HALF-OPEN run only during incidents, so the fallback behind an open breaker is usually the least-exercised branch in the service. A fallback path that has never carried production traffic is not known to work.
+3. **Synchronised half-open probing.** With Hystrix's single probe there is one in-flight test per breaker *instance* — but 500 pods that opened their breakers in the same second will all probe 5 s later, simultaneously, and the recovering dependency gets a 500-request spike precisely when it can least take it. **The fix is jitter on the sleep window**, which neither Hystrix nor resilience4j does by default: randomise `waitDurationInOpenState` per instance (e.g. `60 s × Uniform(0.5, 1.5)`).
 
 **The staff position:** prefer *per-host* ejection with a blast-radius cap (Envoy-style) plus a retry budget over a *per-dependency* breaker, because both degrade continuously and both have a bound on how much damage a wrong decision does. Reach for a classic breaker when the failure is genuinely all-or-nothing — a dependency that is either up or down, with an expensive timeout — and then jitter the sleep window and rehearse the open path.
 
@@ -581,10 +581,10 @@ f(τ_opt) = δ/√(2δM) + √(2δM)/(2M)
 
 Two facts fall out that are worth more than the formula:
 
-- **At the optimum, the two costs are exactly equal.** Checkpoint overhead equals expected rework, each contributing `√(δ/(2M))`. If your monitoring says you spend 3 % of wall-clock writing checkpoints and lose 12 % to rework, you are checkpointing too rarely — and you can see that without recomputing anything.
-- **The waste at the optimum is `√(2δ/M)`, so it improves with the *square root* of checkpoint cost.** Halving `δ` (async, sharded, or overlapped checkpointing) reduces waste by only 1/√2 ≈ 29 %, not 50 %. That tempers how much engineering to spend on faster checkpoint writes, and it is why elasticity — changing `M` and the failure's *scope* — is the complementary lever rather than a redundant one.
+- **At the optimum, the two costs are exactly equal**, each contributing `√(δ/(2M))`. If your monitoring shows 3 % of wall-clock spent writing checkpoints and 12 % lost to rework, you are checkpointing too rarely — visible without recomputing anything.
+- **Waste at the optimum is `√(2δ/M)`, so it improves with the *square root* of checkpoint cost.** Halving `δ` reduces waste by only 1/√2 ≈ 29 %, not 50 %. That bounds how much engineering to spend on faster writes, and it is why elasticity — changing the failure's *scope* — is complementary rather than redundant.
 
-Daly (2006) refines the model to account for restart/recovery time and for failures that strike during the checkpoint write itself; in the regime `δ ≪ M` — which is where you want to be operating anyway — the correction is small and of order `δ`, so the Young form is the one to carry in your head. Use Daly's when `δ` approaches a meaningful fraction of `M`, which is the signal that your checkpoint path itself is the problem.
+Daly (2006) refines the model for restart/recovery time and for failures during the checkpoint write itself; in the `δ ≪ M` regime — where you want to be anyway — the correction is of order `δ`, so the Young form is the one to carry. Reach for Daly's when `δ` approaches a meaningful fraction of `M`, which is itself the signal that your checkpoint path is the problem.
 
 **Elasticity is a different term in the same equation.** Checkpointing bounds the *rework per failure*. Elastic training bounds the *scope of a failure*: a localised GPU or node failure drops those units out of the job and the rest continues at reduced scale, rather than the whole gang halting. Google's Gemini-scale account describes continuing at roughly **97 % of prior throughput** on fewer chips after a localised failure instead of a full restart. In the cost model, that converts a full `τ/2` rework event into a small throughput haircut — it attacks the `τ/(2M)` term without touching `δ`. The two levers stack.
 
