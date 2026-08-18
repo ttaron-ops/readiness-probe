@@ -259,6 +259,117 @@ The second hard problem. Here is the same write under the three common strategie
 
 **The production default is TTL *and* explicit invalidation, and now you know why it is not belt-and-braces cargo cult.** Explicit invalidation cuts the common-case staleness window to near zero but cannot be relied on: it races (as drawn), it can be lost in transit, and it does not reach every tier. The TTL is the bound on every one of those failures. Choose the TTL as "how long am I willing to be wrong when an invalidation is lost," not as "how long is this value probably good for."
 
+### Where the cache sits decides what it can promise
+
+The same "cache" word covers four topologies with different consistency and failure properties. Pick deliberately.
+
+```
+   ① CLIENT-SIDE / IN-PROCESS (L1)
+      [app process | local map] ──▶ origin
+      latency  ~100 ns          coherence  worst — N copies, no invalidation path
+      capacity  small (heap)    failure    a restart is a cold start for that replica
+      Use for: tiny, hot, tolerant-of-staleness data (feature flags, config,
+      routing tables). Always with a short TTL, because you cannot invalidate it.
+
+   ② SHARED REMOTE (L2: Redis, memcached)
+      [app] ──0.2–1 ms──▶ [cache tier] ──▶ origin
+      latency  ~0.2–1 ms        coherence  one copy per key ⇒ invalidation works
+      capacity  large           failure    THE CACHE TIER IS NOW A DEPENDENCY:
+                                           if it is down, you are at h = 0
+      Use for: the general case. Note the failure line — decide NOW whether a
+      cache-tier outage means "slow" (fall through to origin) or "down" (fail
+      fast), and make sure the fall-through path cannot melt the origin.
+
+   ③ TIERED (L1 + L2)
+      [app | L1] ──▶ [L2] ──▶ origin
+      Best latency and best origin protection, WORST coherence: an L2
+      invalidation does not reach the L1s (see the coherence section).
+      Use when L2 round trips are themselves the bottleneck — and pay for it
+      with short L1 TTLs, an invalidation bus, or versioned keys.
+
+   ④ EDGE / CDN
+      [client] ──▶ [PoP cache] ──▶ [shield/origin]
+      Adds a "shield" tier whose entire job is stampede control: all PoPs miss
+      to the shield, the shield misses once to the origin. That is fleet-wide
+      single-flight implemented as a topology rather than as a lock.
+```
+
+Cross-cutting that, the *access pattern* is a separate choice, and it decides who owns correctness:
+
+```python
+# CACHE-ASIDE (lazy loading). The APPLICATION owns the cache protocol.
+def get_quota(tenant):
+    v = cache.get(f"quota:{tenant}")
+    if v is not None:
+        return v                       # hit
+    v = db.query("SELECT … WHERE tenant = %s", tenant)   # miss: load
+    cache.set(f"quota:{tenant}", v, ttl=jitter(60))      # populate (JITTERED)
+    return v
+# Pros: the cache never holds data nobody asked for; a cache outage degrades to
+#       "slow", not "broken"; trivially portable across stores.
+# Cons: every miss costs a full round trip plus a query; the stale-set race is
+#       YOURS to handle (see coherence); every call site can get it wrong.
+
+# READ-THROUGH. The CACHE owns the load path (a loader function).
+#   Same latency profile, but the protocol lives in one place, so the
+#   single-flight and jitter policies are applied consistently by construction.
+#   This is what Caffeine's LoadingCache and Go's singleflight-wrapped loaders
+#   give you, and it is why library-level caching beats hand-rolled `if miss`.
+
+# WRITE-BACK (write-behind): write to cache, flush to origin asynchronously.
+#   Buys enormous write throughput, and buys a DURABILITY problem: an
+#   acknowledged write lives only in the cache until the flush. This is
+#   lesson 03's async replication with the RPO arithmetic
+#   (RPO_records = flush_lag × write_rate) — a cache is not the right place
+#   for data you cannot lose, and choosing write-back is choosing an RPO.
+```
+
+**The one-line rule:** cache-aside when the application must stay in control and the cache is optional; read-through when you want the stampede and TTL policy in one place; write-back only when you have explicitly accepted an RPO and written it down.
+
+### Sizing: the hit-rate curve is logarithmic, and that changes the argument
+
+The question "how big should the cache be" has a real answer, and it is not "as big as we can afford."
+
+Real access distributions are approximately Zipfian: the *i*-th most popular item receives traffic proportional to `1/i^α`, with `α` typically near 1 for web-scale workloads. Under that assumption with `α = 1`, and a cache holding the `C` most popular of `N` items, the steady-state hit rate is approximately the ratio of two harmonic sums:
+
+```
+   h(C) ≈ H(C) / H(N)  ≈  ln(C) / ln(N)          (α = 1, LRU, stationary popularity)
+
+   N = 10,000,000 distinct keys ⇒ ln(N) ≈ 16.1
+
+     C           ln(C)     h(C)     Δh from previous row
+     1,000        6.9      43%        —
+     10,000       9.2      57%      +14 points   (10× the memory)
+     100,000     11.5      71%      +14 points   (another 10×)
+     1,000,000   13.8      86%      +14 points   (another 10×)
+     10,000,000  16.1     100%      +14 points   (the whole dataset)
+
+   ⇒ EACH 10× OF CACHE BUYS THE SAME CONSTANT INCREMENT. Memory cost grows
+     geometrically; hit rate grows arithmetically.
+```
+
+Now combine it with the load arithmetic from the top of this section, because that is where the argument actually lands:
+
+```
+   λ = 10,000 req/s.  origin load = λ(1−h).
+
+     C = 100,000  → h = 0.71 → origin 2,900 rps
+     C = 1,000,000→ h = 0.86 → origin 1,400 rps      (10× memory, HALF the load)
+     C = 10,000,000→h = 1.00 → origin     0 rps      (100× memory)
+
+   The relative *origin-load* improvement stays worthwhile even as the hit-rate
+   increments flatten — halving origin load is always worth arguing about. So
+   the sizing question is not "where does the hit-rate curve flatten" but
+   "what origin capacity am I trying to avoid buying, and is cache memory
+   cheaper than that capacity?" Those are directly comparable in currency.
+```
+
+Three practical corrections to the model, each of which matters more than the model's precision:
+
+- **Popularity is not stationary.** Real workloads churn: today's hot keys are not tomorrow's. The formula assumes a fixed distribution, so it is an upper bound. Measure instead: sample your access log, compute the hit rate an LRU of size `C` *would* have achieved (a one-pass simulation over the trace), and plot the real curve. That plot is a twenty-line script and it settles cache-sizing arguments permanently.
+- **`α` is the whole ballgame.** At `α = 1.2` the head is much heavier and a small cache does far better; at `α = 0.7` the tail is fat and caching helps far less. Fit `α` from your own data before quoting any of these numbers.
+- **The working set may not be the key count.** For KV-cache the unit is tokens, not requests; for CDN it is bytes, not objects. Size in the unit that actually consumes the memory, which for variable-size entries means the size-weighted distribution, not the popularity distribution.
+
 ### Eviction: the policy question is what unit is shared
 
 Eviction is usually taught as an algorithm menu (LRU, LFU, ARC, 2Q, S3-FIFO, TinyLFU). The more useful framing for a system designer:
