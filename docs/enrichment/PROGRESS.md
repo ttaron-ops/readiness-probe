@@ -176,3 +176,29 @@ _(each run appends: date · modules enriched · commit shas)_
   broader H100 market median (~$2.29–$3.12/hr per third-party trackers) is close enough to the
   cited figure that no fix was needed, and the lesson already explicitly flags it as a dated
   snapshot to re-pull at build time per the spec's sourcing rule. No other fixes were necessary.
+- **2026-08-18** · QA pass · `modules/04-gpu-on-kubernetes` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commit `7bc177c`. Full consistency sweep via two parallel subagents (structural
+  check + link verification). Verified the prev/next chain across all 10 lessons is unbroken
+  (01→10, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (4–5 actual), README lesson-table hours (10/12/12/9/11/10/
+  10/7/12/16, summing to the stated ~109 hrs) match the 10 lesson files exactly, and checkpoint.md
+  / practice/per-pod-attribution links resolve and stay consistent with lesson content. Found and
+  fixed a real factual error: lesson 09 and the README claimed the DRA kubelet multi-ResourceClaim
+  bug (`kubernetes/kubernetes#135901`) and a device double-allocation race were fixed in Kubernetes
+  **1.34.2** — a live fetch of `CHANGELOG-1.34.md` showed both fix PRs (#136480, #136566) actually
+  landed under **v1.34.4** (released 2026-02-10); corrected all 6 occurrences across README and
+  lesson 09 (Core concepts, Worked example, Practice, Common pitfalls, Self-check ×2, References).
+  Also fixed: `dcgm-exporter#642` (central to lessons 07/10's attribution-hole thesis) had closed
+  2026-04-06 with a maintainer confirming `DCGM_FI_DEV_GPU_UTIL` is device-aggregate by design —
+  updated the "open, unresolved" framing in both lessons to the stronger, maintainer-confirmed
+  version; standardized lesson 07's name ("attribution trap"→"attribution hole") to match its use
+  everywhere else in the module; fixed a `cloudzero.com` vs `www.cloudzero.com` URL mismatch
+  between lessons 07 and 10; added 3 previously title-only-but-verified-real URLs (2 NVIDIA
+  Developer Blog posts in lesson 03, 1 Modal blog post in lesson 04); corrected `sources:`
+  frontmatter counts in lessons 01/03/04/06/07/08 to match actual reference counts; linked the
+  shared `practice/fake-gpu-fleet/` lab from the module README (built for this module per
+  depth-map.md but never referenced from README/checkpoint/lessons); and added the L5 200-node
+  driver-upgrade runbook as a named artifact in the `per-pod-attribution` deliverable spec, which
+  previously only mentioned the failure-mode log even though L5's Practice section directs it
+  there. All other checked URLs (GitHub issues/PRs, named vendor blogs, canonical NVIDIA/K8s docs)
+  verified real and accurate — no fabricated links found.
