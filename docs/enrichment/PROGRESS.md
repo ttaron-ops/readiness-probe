@@ -202,3 +202,40 @@ _(each run appends: date · modules enriched · commit shas)_
   previously only mentioned the failure-mode log even though L5's Practice section directs it
   there. All other checked URLs (GitHub issues/PRs, named vendor blogs, canonical NVIDIA/K8s docs)
   verified real and accurate — no fabricated links found.
+- **2026-08-18** · QA pass · `modules/05-gpu-observability` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commits `f453c86`, `54fde94`. Full consistency sweep via a dedicated link-verification
+  subagent plus direct spot-checks: verified the prev/next chain across all 8 lessons is unbroken
+  (01→08, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (4–5 actual), README lesson-table hours (7/6/6/5/6/7/6/10,
+  summing to the stated ~53 hrs) match the 8 lesson files exactly, and checkpoint.md /
+  practice/gpu-dashboard-lie / resources/depth-map.md links resolve and stay consistent with
+  lesson content. Directly fetched (not just search-corroborated) the module's highest-risk,
+  most-specific citations: DCGM's `dcgm_errors.h` enum values (all 7 cited constants —
+  `DCGM_FR_VOLATILE_DBE_DETECTED`=4, `DCGM_FR_PENDING_ROW_REMAP`=85, `DCGM_FR_ROW_REMAP_FAILURE`=80,
+  `DCGM_FR_NVLINK_ERROR_THRESHOLD`=13, `DCGM_FR_UNCONTAINED_ERROR`=81, `DCGM_FR_SXID_ERROR`=109,
+  `DCGM_FR_XID_ERROR`=101 — match exactly), dcgm-exporter's live `default-counters.csv` (confirms
+  `SM_ACTIVE`/`SM_OCCUPANCY` really do ship commented out while `GPU_UTIL`/`GR_ENGINE_ACTIVE`/
+  `PIPE_TENSOR_ACTIVE`/`DRAM_ACTIVE` are enabled), vLLM's `optimization.md` (chunked-prefill V1
+  default, decode-priority scheduling, and the `max_num_batched_tokens` TTFT/ITL tradeoff all match
+  verbatim), both cited GitHub issues (`NVIDIA/DCGM#287` and `NVIDIA/dcgm-exporter#34`, both real
+  with matching quoted text), Meta's Llama 3 paper interruption stats (466 total / 419 unexpected /
+  58.7% GPU-related, all confirmed via search corroboration since arxiv.org was proxy-blocked), and
+  Anyscale's PD-disaggregation TTFT figures (355ms/389ms and 165ms/190ms pairs at concurrency 256,
+  both confirmed). Found and fixed five issues across two rounds: (1) lesson 02's `sources:`
+  frontmatter said 6 but the References section actually has 7 bullets; (2) lesson 05 cited
+  NVSentinel's "1,100+ nodes / ~40,000 GPUs across AWS/GCP/Azure/OCI" stat to the bare GitHub repo
+  link — traced the figure to NVIDIA's own NVSentinel docs site
+  (`docs.nvidia.com/nvsentinel/getting-started/overview/`) and re-pointed the citation there
+  (bumping `sources:` 10→11); (3) lesson 01's acecloud.ai citation attached specific numbers (a
+  24-GPU H100 fleet, tensor-active 0.55, throughput "nearly tripled") that repeated targeted
+  searches could not corroborate, even though the article itself is real and on-topic — removed the
+  unconfirmed specifics per the spec's "never invent a quote" rule, keeping only the article's
+  verifiable general content; (4) lesson 07's Nsight Compute case-study citation ("87.5%" memory
+  reduction, "68%" duration reduction) was likewise uncorroborated after search — softened all
+  three occurrences to describe the walkthrough's real, verifiable shape without asserting
+  unconfirmed percentages. The DCGM field-ids "Field Identifiers" URL was flagged as a possibly
+  wrong slug by the verification subagent but confirmed real and correctly named on independent
+  re-search (a different, also-real "Field APIs" page just kept surfacing instead) — left
+  unchanged. All other citations (Cloudflare, BentoML, Spheron, ScaleOps, Red Hat, Datadog, Imbue,
+  AKS/NPD, DigitalOcean, and the canonical NVIDIA/K8s/Grafana doc pages) verified real and accurate
+  — no other fixes were necessary.
