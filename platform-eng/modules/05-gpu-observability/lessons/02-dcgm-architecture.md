@@ -8,7 +8,7 @@ est_time: "6h"
 prev: "01-lie-and-truth.md"
 next: "03-dcgm-exporter-at-scale.md"
 artifacts: []
-sources: 6
+sources: 7
 ---
 
 # 05.2 · DCGM architecture and the cost of profiling
