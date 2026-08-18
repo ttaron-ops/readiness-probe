@@ -76,23 +76,19 @@ someone who trades this capacity for a living.
 - **Lesson 7** gave you fragmentation, defrag payback, and the `T_ckpt/2` term. §10 picks that
   term up and §11 optimises it.
 - **Genuinely new here:**
-  - **The PriorityClass API in full** — the value ranges, the reserved band above 1 billion, the
-    two auto-created system classes and their exact values, `globalDefault` semantics when more
-    than one exists, and `preemptionPolicy: Never` as a distinct thing from low priority.
-  - **The victim-selection algorithm as executable steps**, including the *reprieve* loop that
-    minimises the victim set, the group-aware `MoreImportantVictim` ordering introduced with the
-    pod-group work, and the five ordered node-choice tiebreaks.
-  - **Where the grace period comes from**, precisely: the scheduler deletes victims with default
-    `DeleteOptions`, so the victim gets its own `terminationGracePeriodSeconds` — the scheduler
-    never shortens your checkpoint-on-SIGTERM budget.
-  - **`kube-scheduler`'s anti-cascade guard**, which is a real mechanism in the code and the
-    modern echo of Borg's "production never preempts production" rule.
-  - **The optimal checkpoint interval, derived** — `T* = √(2C/λ)`, the Young/Daly result, applied
-    to preemption rate instead of hardware failure rate, with the equal-cost property at the
-    optimum and a sensitivity curve.
-  - **The commitment ladder as a newsvendor problem**, with the critical-ratio solution
-    `P(demand > Q*) = R/D` and a full worked 128-GPU ladder that lands on **P40 of demand, not
-    P50** — plus the annual saving and blended rate that fall out.
+  - **The PriorityClass API in full** — value ranges, the reserved band above 1 billion, the two
+    auto-created system classes and their exact values, `globalDefault` semantics, and
+    `preemptionPolicy: Never` as a distinct thing from low priority.
+  - **The victim-selection algorithm as executable steps** — the *reprieve* loop that minimises the
+    victim set, the group-aware `MoreImportantVictim` ordering, and the five ordered node tiebreaks.
+  - **Where the grace period comes from**: the scheduler deletes victims with bare `DeleteOptions`,
+    so the victim keeps its own `terminationGracePeriodSeconds`.
+  - **`kube-scheduler`'s anti-cascade guard** — a real mechanism in the code, and the modern echo of
+    Borg's "production never preempts production" rule.
+  - **The optimal checkpoint interval, derived** — `T* = √(2C/λ)`, the Young/Daly result applied to
+    preemption rate, with the equal-cost property at the optimum and a sensitivity curve.
+  - **The commitment ladder as a newsvendor problem** — critical ratio `P(demand > Q*) = R/D`, and a
+    worked 128-GPU ladder that lands on **P40 of demand, not P50**.
 
 ## Core concepts
 
@@ -102,21 +98,20 @@ A shared GPU fleet serves work with genuinely different urgency. Production infe
 wait. A researcher's interactive session should not wait long. A hyperparameter sweep can wait
 indefinitely and can be killed at any moment, provided it resumes.
 
-Queueing alone (lessons 3–4) handles the *arrival* side of this: a workload that does not fit
-waits until quota frees. What queueing cannot do is take capacity back from work that is
-**already running**. And without that, two things you want are impossible:
+Queueing alone (lessons 3–4) handles the *arrival* side: a workload that does not fit waits until
+quota frees. What queueing cannot do is take capacity back from work that is **already running**,
+and without that, two things you want are impossible. **A guaranteed floor for production** — if
+prod's quota is fully consumed by research work that borrowed it, prod waits, which is exactly what
+a floor exists to prevent. And **backfilling deliberate headroom** — lesson 7 §12's fourth
+stranding mechanism: a team reserving 32 GPUs and running 20 has 12 idle by design, and filling
+them with batch work is free money *if and only if* you can evict that work the instant the owner
+returns.
 
-- **A guaranteed floor for production.** If prod's quota is fully consumed by research work that
-  borrowed it, prod waits — which is exactly the thing a floor is supposed to prevent.
-- **Backfilling deliberate headroom.** Lesson 7 §12's fourth stranding mechanism. A team reserving
-  32 GPUs and running 20 has 12 idle by design. Filling those 12 with batch work is free money —
-  *if and only if* you can evict that batch work the instant the owner comes back.
-
-Preemption is the mechanism for both. It is also, done badly, a way to set money on fire: every
-eviction destroys work, and if the evicted work cannot resume, you have converted a scheduling
-problem into a compute-hours loss. The rest of this lesson is about doing it well, which means
-knowing exactly who gets evicted (§2–§9), what each eviction costs (§10), how to minimise that
-cost (§11–§12), and how the whole thing changes what you should buy (§13–§15).
+Preemption is the mechanism for both, and done badly it is a way to set money on fire: every
+eviction destroys work, and if the evicted work cannot resume you have converted a scheduling
+problem into a compute-hours loss. The rest of this lesson is who gets evicted (§2–§9), what each
+eviction costs (§10), how to minimise it (§11–§12), and how all of that changes what you buy
+(§13–§15).
 
 ### 2. Priority as a number: the PriorityClass API
 
@@ -218,15 +213,11 @@ conflating them is a classic interview stumble.
 | Changing it | immutable on a running pod | changing the class does not affect Workloads already created |
 
 The division of labour: **Kueue decides which Workload holds quota; `kube-scheduler` decides which
-pod holds a node.** A best-effort Workload that Kueue evicts to reclaim quota has all of its pods
-deleted and the Job re-suspended — a clean, whole-workload operation. A pod that
-`kube-scheduler` preempts is one pod, and if it belongs to a gang the rest of the gang is now
-below quorum (§10 prices that).
-
-For the tier design in §2, you want both: pod priorities so that if `kube-scheduler` ever has to
-choose, it chooses correctly; and Workload priorities so that Kueue's quota reclaim picks the
-right victim first. Mirror the ordering across the two systems — the values need not match, but
-the *ranking* must, or the two layers will disagree about who is expendable.
+pod holds a node.** A Workload Kueue evicts has all its pods deleted and the Job re-suspended — a
+clean whole-workload operation. A pod `kube-scheduler` preempts is one pod, and if it belongs to a
+gang the survivors are now below quorum (§10 prices that). You want both systems configured, with
+the *ranking* mirrored across them — the values need not match, but if the orderings disagree the
+two layers disagree about who is expendable.
 
 ### 4. The victim-selection algorithm, step by step
 
@@ -419,57 +410,42 @@ window marked. This is the picture to be able to draw.
              │  "0/64 nodes are available: 64 Insufficient nvidia.com/gpu"
              ▼
   t+0.00s    PostFilter → DefaultPreemption.Preempt()
-             │  Step 0  PodEligibleToPreemptOthers: policy != Never ✓, no terminating
-             │          victims on a previously nominated node ✓
-             │  Step 1  nodesWherePreemptionMightHelp → 64 nodes minus the ones whose
-             │          failure was UnschedulableAndUnresolvable
-             │  Step 2  sample: max(10% × 64, 100) → all 64 dry-run
-             │  Step 3  per node: remove all strictly-lower-priority pods, re-Filter,
-             │          sort by MoreImportantVictim, reprieve back the important ones
-             │  Step 4  five ordered tiebreaks → node gpu-node-41
+             │  Step 0 eligible ✓   Step 1 candidate nodes   Step 2 sample
+             │  Step 3 remove-all → re-Filter → sort → reprieve
+             │  Step 4 five ordered tiebreaks → node gpu-node-41
              ▼
   t+0.02s    VICTIM CHOSEN: best-effort workload B, 2 pods on gpu-node-41
-             │  patch B's pods: status.conditions += DisruptionTarget
-             │      reason=PreemptionByScheduler
-             │      message="default-scheduler: preempting to accommodate a higher
-             │                priority pod"
+             │  patch: status.conditions += DisruptionTarget
+             │         reason=PreemptionByScheduler
              │  DELETE pod  (metav1.DeleteOptions{} — B keeps its OWN grace period)
              │  P.status.nominatedNodeName = gpu-node-41
              ▼
-  t+0.03s    ┌─── SIGTERM delivered to B's containers ──────────────────────────────┐
-             │                                                                       │
-             │  ██████ CHECKPOINT LOSS WINDOW ██████                                 │
-             │                                                                       │
-             │  work destroyed = (now − B's last checkpoint)                          │
-             │  expected value over a uniformly-timed eviction  =  T_ckpt / 2         │
-             │                                                                       │
-             │  IF B catches SIGTERM and can flush within the grace period:           │
-             │      loss ≈ 0 (it checkpoints at the moment of death)                  │
-             │  IF B cannot (no handler, or flush > grace period):                    │
-             │      loss = T_ckpt / 2 in expectation                                  │
-             │  IF B does not checkpoint at all:                                      │
-             │      loss = B's ENTIRE elapsed runtime                                 │
-             └───────────────────────────────────────────────────────────────────────┘
+  t+0.03s    ┌─── SIGTERM delivered to B's containers ─────────────────────────────┐
+             │  ██████ CHECKPOINT LOSS WINDOW ██████                                │
+             │  work destroyed = now − B's last checkpoint                          │
+             │      E[loss] = T_ckpt / 2   for a uniformly-timed eviction           │
+             │  · B catches SIGTERM and flushes in time  → loss ≈ 0                 │
+             │  · no handler, or flush > grace period    → loss = T_ckpt / 2        │
+             │  · B does not checkpoint at all           → loss = ENTIRE runtime    │
+             └─────────────────────────────────────────────────────────────────────┘
              │  clock running: terminationGracePeriodSeconds (default 30 s)
              ▼
-  t+30s      SIGKILL if still alive.  containers exit.  GPUs actually released.
-             │  ← only NOW is the capacity real; the DELETE at t+0.02s was a promise
+  t+30s      SIGKILL if still alive. containers exit. GPUs ACTUALLY released.
+             │  ← the DELETE at t+0.02s was only a promise
              ▼
-  t+31s      P re-attempts.  Filter passes on gpu-node-41.  P binds.
+  t+31s      P re-attempts, Filter passes on gpu-node-41, P binds.
              │
-             │  MEANWHILE, from t+0.03s to t+30s:
-             │     P cannot preempt anywhere else — Step 0's guard blocks it.
-             │     THIS IS THE ANTI-CASCADE MECHANISM.  Without it, P would see the
-             │     node as still-full on its next attempt and preempt a SECOND
-             │     victim elsewhere, and a third, until the terminations landed.
+             │  MEANWHILE t+0.03s → t+30s: P cannot preempt anywhere else — Step 0's
+             │  guard blocks it. THIS IS THE ANTI-CASCADE MECHANISM. Without it P
+             │  would see the node still full and preempt a SECOND victim elsewhere,
+             │  then a third, until the terminations landed.
              ▼
-  t+35s      B's controller re-creates it → Kueue re-queues Workload B, suspended,
-             │  holding ZERO GPUs (lesson 2 §9) until quota frees again
+  t+35s      B's controller re-creates it → Kueue re-queues Workload B, SUSPENDED,
+             │  holding ZERO GPUs (lesson 2 §9) until quota frees
              ▼
-  t+???      B is re-admitted and RESTARTS: image (cached) + model + optimizer state
-             │  load + framework/NCCL init + warm-up  =  T_restart
-             └── total cost of this one preemption:
-                    m_B × ( loss + T_restart )   GPU-hours,   m_B = B's GPU count
+  t+???      B re-admitted and RESTARTS: image (cached) + model/optimizer load +
+             │  framework/NCCL init + warm-up  =  T_restart
+             └── cost of this one preemption:  m_B × ( loss + T_restart )  GPU-hours
 ```
 
 Two facts on that timeline are worth stating explicitly because they surprise people:
@@ -503,16 +479,13 @@ explicit guard:
 | Step 0's guard: not eligible while a previously nominated node still has victims terminating | the *rapid* cascade — one pod preempting on node after node while earlier victims drain |
 | `preemptionPolicy: Never` on a tier | that tier initiating any chain at all |
 
-But note what is **not** prevented: a *chain across tiers* is still possible. Prod evicts
-research; research's Workload re-queues and, if research is configured with
-`reclaimWithinCohort: LowerPriority`, may evict best-effort somewhere else. That is two links, and
-it is by design — each link moves work strictly down the ladder, so the chain terminates at the
-bottom tier. **A ladder is cascade-safe when every preemption strictly decreases the tier of the
-work being disturbed, so the chain is bounded by the number of tiers.** Design for that property
-explicitly; it is the generalisation of Borg's rule and it is the sentence to say out loud.
-
-The `preemptionPolicy: Never` on `gpu-research` in §2 is doing exactly this work: research gets
-queue priority over best-effort without the ability to start a chain.
+What is **not** prevented is a chain *across* tiers: prod evicts research, and research's requeued
+Workload may (with `reclaimWithinCohort: LowerPriority`) evict best-effort elsewhere. That is by
+design — each link moves work strictly down the ladder, so the chain terminates at the bottom
+tier. **A ladder is cascade-safe when every preemption strictly decreases the tier of the work
+disturbed, bounding the chain by the number of tiers.** That is the generalisation of Borg's rule,
+and the `preemptionPolicy: Never` on `gpu-research` in §2 is what buys it: queue priority over
+best-effort without the ability to start a chain.
 
 ### 9. Kueue's layer: quota reclaim, not node reclaim
 
@@ -600,14 +573,13 @@ uniformly within a checkpoint interval of length `T_ckpt`, and:
 That is the term lesson 7 §10 used for defrag payback, and it is the same term because a defrag
 *is* a preemption you initiated yourself.
 
-**Three corrections to that formula that separate a good answer from a complete one:**
+**Three corrections that separate a good answer from a complete one:**
 
-**(a) No checkpointing collapses the model.** If the job has no resume path, `loss` is not
-`T_ckpt/2` — it is the job's **entire elapsed runtime**. A 40-hour, 8-GPU job preempted at hour 39
-costs 312 GPU-hours. At a **$2.35/GPU-hr H100 on-demand snapshot** (specialized-neocloud segment,
-see §15) that is $733 destroyed by one scheduling decision. This is why the best-effort tier's
-description in §2 says workloads without a resume path are rejected from the tier — it is an
-admission criterion, not a suggestion.
+**(a) No checkpointing collapses the model.** With no resume path, `loss` is not `T_ckpt/2` — it is
+the job's **entire elapsed runtime**. A 40-hour, 8-GPU job preempted at hour 39 costs 312
+GPU-hours; at a **$2.35/GPU-hr H100 on-demand snapshot** (specialized-neocloud segment, §15) that
+is $733 destroyed by one scheduling decision. Hence the best-effort tier's admission criterion in
+§2: no documented resume path, no admission.
 
 **(b) Gang amplification.** `kube-scheduler` preempts *pods*. Evicting one pod from a healthy
 8-pod gang does not free 1 GPU of useful capacity — it strands 7 more, because the remaining ranks
@@ -621,25 +593,25 @@ block in the collective barrier (lesson 1) and produce nothing until the gang is
                                    ↑ the WHOLE gang pays, not the evicted pod
 ```
 
-And `T_requeue` is not small: the gang must re-admit atomically (lesson 2), which means queueing
-behind everything else, possibly with a `required` topology constraint (lesson 6) that is harder
-to satisfy than when it first ran. **This is the argument for whole-workload eviction granularity
-— Kueue's default, Volcano's `gangpreempt` bundles, KAI's whole-workload preempt — and it is a
-correctness argument with a dollar attached, not a preference.**
+And `T_requeue` is not small: the gang must re-admit atomically (lesson 2), queueing behind
+everything else, possibly under a `required` topology constraint (lesson 6) that is harder to
+satisfy than when it first ran. **This is the argument for whole-workload eviction granularity —
+Kueue's default, Volcano's `gangpreempt` bundles, KAI's whole-workload preempt — a correctness
+argument with a dollar attached, not a preference.**
 
-**(c) The benefit side must be named too.** A preemption is only worth its cost if the capacity it
-frees is used by work that could not otherwise have run. The full inequality, mirroring lesson 7's
+**(c) The benefit side must be named too.** A preemption is only worth its cost if the freed
+capacity runs work that could not otherwise have run. The full inequality, mirroring lesson 7's
 defrag condition:
 
 ```
   preemption is worth it  ⟺  value(preemptor's work) > Σ_victims m_v ( loss_v + T_restart_v ) × rate
 ```
 
-For a prod inference pod reclaiming its own floor, the left side is "the service stays up" and the
-comparison is not close. For a research job evicting a sweep to shave 20 minutes off a queue wait,
-it may well be.
+For prod reclaiming its own floor, the left side is "the service stays up" and the comparison is
+not close. For a research job evicting a sweep to shave 20 minutes off a queue wait, it may well
+be.
 
-**Fleet-level rate.** What you actually budget for is the steady-state overhead:
+**Fleet-level rate.** What you budget for is the steady-state overhead:
 
 ```
   wasted_GPU_hours_per_day = Σ over running preemptible jobs j of
@@ -815,11 +787,11 @@ CPU autoscaling rests on an assumption that is simply false for accelerators: th
 elastic. Three independent mechanisms break it.
 
 **(a) Supply is finite and booked forward.** In a shortage, on-demand H100/H200/B200 capacity is
-*out of stock* in your region and zone — for hours or days, not seconds. Cluster Autoscaler's
-behaviour in that case is instructive: it creates a scale-up request, the cloud API returns a
-capacity error, and CA marks the node group as *backoff* and stops asking for a while. Your pending
-pods stay pending, and the autoscaler is behaving correctly. There is no price at which the
-capacity appears, because it is physically allocated to someone else's contract.
+*out of stock* in your region and zone for hours or days. Cluster Autoscaler's behaviour is
+instructive: it issues a scale-up request, the cloud API returns a capacity error, and CA marks the
+node group as *backoff* and stops asking. Your pods stay pending and the autoscaler is behaving
+correctly — there is no price at which the capacity appears, because it is physically allocated to
+someone else's contract.
 
 **(b) Cold start is minutes, not seconds.** A GPU node has to complete a chain no CPU node does:
 
@@ -839,10 +811,9 @@ slow for spiky GPU demand.
 node is ~$19/hr, ~$165k/yr. A mis-sized scale-up is an immediate, large bill rather than a rounding
 error, which changes the decision from "react and correct" to "plan and commit."
 
-**The consequence, and it is the framing for the rest of the lesson: for GPUs you commit capacity
-ahead of demand and *schedule* within it — which is what this entire module has been about — rather
-than autoscaling to meet demand.** Elasticity is replaced by a portfolio decision, and that
-portfolio decision has a right answer.
+**The consequence: for GPUs you commit capacity ahead of demand and *schedule* within it — which is
+what this whole module has been about — rather than autoscaling to meet it.** Elasticity is
+replaced by a portfolio decision, and that decision has a right answer.
 
 ### 14. The commitment ladder, derived as a newsvendor problem
 
@@ -1030,40 +1001,34 @@ supply risk, and framing it that way is how you get it funded.**
 
 ## Perspectives
 
-**Developer / training loop.** Checkpoint frequency is a decision the training code owner makes,
-and its economic consequences are paid by the platform. A team checkpointing every 30 minutes
-"because it's slow" — unaware that `torch.distributed.checkpoint`'s async sharded path exists — is
-capping how much idle fleet headroom the platform can harvest, and does not know it. The fix is
-not to ask nicely: it is to show the §11 arithmetic (`T* = √(2C/λ)`, 8.12% → 2.13% overhead) and
-point at the specific API. The developer's other obligation is the SIGTERM handler: a job that
+**Developer / training loop.** Checkpoint frequency is decided by the training code owner and paid
+for by the platform. A team checkpointing every 30 minutes "because it's slow", unaware that
+`torch.distributed.checkpoint`'s async sharded path exists, is capping how much idle fleet headroom
+the platform can harvest and does not know it. The fix is not to ask nicely: show the §11
+arithmetic and point at the API. The other developer obligation is the SIGTERM handler — a job that
 ignores SIGTERM throws away the entire grace-period budget the platform deliberately gave it.
 
-**Operator.** You own two knobs the arithmetic above turns into real money.
-`terminationGracePeriodSeconds` must be *just over* the measured checkpoint-flush time — long
-enough for a clean final save, short enough that a hung victim does not block reclaim for minutes
-(§6). And the tier ladder must be cascade-safe (§8): every preemption should move work strictly
-down a tier, which means `preemptionPolicy: Never` on the middle tier and `reclaimWithinCohort:
-Any` only on the protected floor. You also own the honest observation that preemption *capacity*
-is bounded: §11's inversion says a 5%-overhead budget tolerates ~1.7 evictions/day per job with
-synchronous checkpointing. Publish that number to the teams; it is the reason their sweep gets
-killed twice a day and not twenty times.
+**Operator.** Two knobs the arithmetic turns into money. `terminationGracePeriodSeconds` must be
+*just over* the measured flush time — long enough for a clean final save, short enough that a hung
+victim does not block reclaim for minutes (§6). And the ladder must be cascade-safe (§8):
+`preemptionPolicy: Never` on the middle tier, `reclaimWithinCohort: Any` only on the protected
+floor. You also own the honest observation that preemption *capacity* is bounded — §11's inversion
+says a 5% overhead budget tolerates ~1.7 evictions/day per job on synchronous checkpointing.
+Publish that number; it is why a team's sweep gets killed twice a day and not twenty times.
 
-**Hardware / systems.** Async sharded checkpointing works by exploiting a real hardware asymmetry,
-and understanding *why* separates "I heard checkpointing got faster" from an answer that survives a
-follow-up. The GPU-blocking part of a checkpoint is only the device→host copy, which runs at
-PCIe/NVLink-to-host bandwidth (tens of GB/s). The slow part — the durable write to network storage
-— happens on CPU threads, overlapped with the next training step, and never touches the GPU's
-critical path. Sharding then divides the state by world size, so `C` *improves* as the job grows
-instead of degrading. The cost is host RAM for the staged copy, which is a real budget line on a
-node running 8 ranks.
+**Hardware / systems.** Async sharded checkpointing exploits a real hardware asymmetry, and knowing
+*why* separates "I heard checkpointing got faster" from an answer that survives a follow-up. The
+GPU-blocking part is only the device→host copy, at PCIe/NVLink-to-host bandwidth (tens of GB/s);
+the slow durable write to network storage runs on CPU threads, overlapped with the next step, never
+touching the GPU's critical path. Sharding then divides state by world size, so `C` *improves* as
+the job grows. The cost is host RAM for the staged copy — a real budget line on a node running 8
+ranks.
 
-**Economics / market structure.** The price-inversion thesis is a **neocloud GPU-rental** phenomenon
-and must be distinguished from **hyperscaler retail**, where absolute pricing is several times
-higher and moves on a different cycle. Treating "the price of an H100" as one number across both is
-the fastest way to sound naive to someone who works in that market daily. The deeper economic point
-is §14's: commitment sizing is a newsvendor problem whose answer is a quantile of *your own*
-demand distribution, so the showback report this module builds is not a reporting nicety — it is
-the input to a seven-figure decision.
+**Economics / market structure.** The price-inversion thesis is a **neocloud GPU-rental**
+phenomenon and must be distinguished from **hyperscaler retail**, where absolute pricing is several
+times higher and moves on a different cycle. The deeper point is §14's: commitment sizing is a
+newsvendor problem whose answer is a quantile of *your own* demand distribution — so the showback
+report this module builds is not a reporting nicety, it is the input to a seven-figure decision.
 
 ## Real-world use cases
 
@@ -1121,33 +1086,15 @@ the input to a seven-figure decision.
 The full 128-GPU design: three research teams plus one production service. This is the artefact
 the checkpoint asks you to defend, built end to end.
 
-**Step 1 — the tier ladder.** Three pod PriorityClasses (§2) mirrored by three Kueue
-WorkloadPriorityClasses (§3), so both layers agree on who is expendable:
+**Step 1 — the tier ladder.** The three pod PriorityClasses from §2, mirrored by three Kueue
+`WorkloadPriorityClass` objects (§3) so both layers agree on who is expendable. Same `apiVersion:
+kueue.x-k8s.io/v1beta2`, `kind: WorkloadPriorityClass`, one `value` field each:
 
-```yaml
-apiVersion: kueue.x-k8s.io/v1beta2
-kind: WorkloadPriorityClass
-metadata:
-  name: wpc-prod
-value: 900000
-description: "Mirrors PriorityClass gpu-prod. Never evicted from quota."
----
-apiVersion: kueue.x-k8s.io/v1beta2
-kind: WorkloadPriorityClass
-metadata:
-  name: wpc-research
-value: 500000
-description: "Mirrors gpu-research. Reclaimable when borrowing above nominal quota."
----
-apiVersion: kueue.x-k8s.io/v1beta2
-kind: WorkloadPriorityClass
-metadata:
-  name: wpc-best-effort
-value: -10
-description: >
-  Mirrors gpu-best-effort. Runs on idle reserved headroom. First evicted, always.
-  Admission requires a documented checkpoint/resume path.
-```
+| WorkloadPriorityClass | `value` | mirrors | meaning |
+|---|---|---|---|
+| `wpc-prod` | 900000 | `gpu-prod` | never evicted from quota |
+| `wpc-research` | 500000 | `gpu-research` | reclaimable when borrowing above nominal quota |
+| `wpc-best-effort` | -10 | `gpu-best-effort` | first evicted, always; admission requires a documented checkpoint/resume path |
 
 **Step 2 — the quota split**, sized from §14's ladder (88 reserved: 32 prod + 56 research):
 
@@ -1186,15 +1133,14 @@ preemption:
   withinClusterQueue: Never
 ```
 
-**Defence, in the form an interviewer wants.** The ladder is cascade-safe because every preemption
-moves work strictly down a tier: prod → research or best-effort; research → best-effort only;
-best-effort → nothing. The chain length is bounded by three, and it terminates at a tier whose
-workloads all checkpoint. `borrowWithinCohort: Never` everywhere means no team can take capacity
-from a peer merely to burst above its own quota — borrowing is only ever from *genuinely idle*
-capacity, which keeps the fairness story simple and the fair-sharing configuration compatible.
-`withinClusterQueue: LowerOrNewerEqualPriority` on research queues implements "within your own
-team, the newest job yields", which matches `kube-scheduler`'s own latest-start-time tiebreak and
-protects accumulated work.
+**Defence, in the form an interviewer wants.** The ladder is cascade-safe: every preemption moves
+work strictly down a tier (prod → research or best-effort; research → best-effort only;
+best-effort → nothing), so the chain is bounded by three and terminates at a tier whose workloads
+all checkpoint. `borrowWithinCohort: Never` everywhere means no team can take capacity from a peer
+merely to burst above its own quota — borrowing is only ever from *genuinely idle* capacity, which
+keeps the fairness story simple and stays compatible with Fair Sharing.
+`withinClusterQueue: LowerOrNewerEqualPriority` implements "within your own team, the newest job
+yields", matching `kube-scheduler`'s latest-start-time tiebreak and protecting accumulated work.
 
 **Step 4 — the survivability contract.** For the best-effort tier, admission requires:
 
@@ -1214,9 +1160,8 @@ spec:
           #      step counter, LR schedule, dataloader position and RNG state
 ```
 
-Point 3's list is the part people get wrong: resuming weights but not the optimizer state, LR
-schedule or data position is not a resume, it is a subtly corrupted restart that costs more than it
-saves.
+Point 3's list is what people get wrong: resuming weights but not the optimizer state, LR schedule
+or data position is not a resume — it is a subtly corrupted restart that costs more than it saves.
 
 **Step 5 — size the checkpoint interval.** Measure `C` for a representative best-effort job, count
 evictions per day from the Kueue eviction events, then apply §11:
@@ -1289,18 +1234,16 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
 `nvidia.com/gpu` resources.
 
 1. **The tier ladder, applied and proven.** Create the three `PriorityClass`es from §2 and the
-   three `WorkloadPriorityClass`es from the Worked example. Then prove `preemptionPolicy: Never`
-   does what §2 claims:
-   - Fill the cluster with `gpu-best-effort` pods.
-   - Submit a `gpu-research` pod (`preemptionPolicy: Never`). Confirm it **pends** rather than
-     evicting anything, and that `kubectl describe pod` shows no preemption attempt.
-   - Submit a `gpu-prod` pod (`preemptionPolicy: PreemptLowerPriority`). Confirm it **does** evict,
-     and capture the victim's `DisruptionTarget` condition:
-     ```bash
-     kubectl get pod <victim> -o jsonpath='{.status.conditions[?(@.type=="DisruptionTarget")]}' | jq
-     ```
-     You are looking for `"reason": "PreemptionByScheduler"` and the message naming the scheduler.
-   - Capture the preemptor's `status.nominatedNodeName` in the window before it binds.
+   three `WorkloadPriorityClass`es from the Worked example, then prove `preemptionPolicy: Never`
+   does what §2 claims. Fill the cluster with `gpu-best-effort` pods. Submit a `gpu-research` pod
+   (`Never`) and confirm it **pends** rather than evicting anything, with no preemption attempt in
+   `kubectl describe pod`. Then submit a `gpu-prod` pod (`PreemptLowerPriority`), confirm it **does**
+   evict, and capture the victim's condition — you want `"reason": "PreemptionByScheduler"` and the
+   message naming the scheduler:
+   ```bash
+   kubectl get pod <victim> -o jsonpath='{.status.conditions[?(@.type=="DisruptionTarget")]}' | jq
+   ```
+   Also capture the preemptor's `status.nominatedNodeName` in the window before it binds.
 
 2. **Survivable preemption demo.** Configure `cq-best-effort` (nominalQuota 0) below `cq-prod` in
    one cohort with `reclaimWithinCohort: Any` on prod. Run a fake "training" pod that writes a
@@ -1318,17 +1261,15 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
      in the whole practice.
 
 3. **Commitment-ladder model.** Write `capacity/commitment_ladder.py`. Inputs: a demand
-   distribution (from the showback report, or the §14 table to start), a firm baseline, and
-   reserved/on-demand/spot rates **labelled by market segment**. Outputs:
-   - the critical ratio `R/D` and the resulting `Q*` as the `(1 − R/D)` quantile;
-   - a brute-force cost table over candidate `Q` values that *confirms* the analytic answer — do
-     both, because agreement between them is what makes the model trustworthy;
-   - the blended $/GPU-hr, the break-even utilisation, the saving versus all-on-demand;
-   - **expected idle reserved GPU-hours per year**, which is the harvestable capacity;
-   - a sensitivity run: re-solve for `R/D ∈ {0.35, 0.50, 0.60, 0.75}` and show how `Q*` moves.
-     This is what you show when someone asks "what if we sign a 3-year instead?"
-
-   Apply it to the 128-GPU fleet and put the result in the capstone doc.
+   distribution (from the showback report, or §14's table to start), a firm baseline, and
+   reserved/on-demand/spot rates **labelled by market segment**. Outputs: the critical ratio `R/D`
+   and the resulting `Q*` as the `(1 − R/D)` quantile; a brute-force cost table over candidate `Q`
+   values that *confirms* the analytic answer (do both — agreement is what makes the model
+   trustworthy); the blended $/GPU-hr, break-even utilisation and saving versus all-on-demand;
+   **expected idle reserved GPU-hours per year**, which is the harvestable capacity; and a
+   sensitivity run over `R/D ∈ {0.35, 0.50, 0.60, 0.75}` showing how `Q*` moves — the answer to
+   "what if we sign a 3-year instead?" Apply it to the 128-GPU fleet and put the result in the
+   capstone doc.
 
 **Acceptance:**
 - The `gpu-research` pod demonstrably pends without preempting while `gpu-prod` demonstrably
@@ -1366,14 +1307,13 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
 
 - **Setting `terminationGracePeriodSeconds` without measuring the flush time.** Too short and every
   preemption costs the full `T_ckpt/2` because the final save never lands; too long and reclaim
-  stalls. Measure the async-flush-plus-final-sync time for your actual model size and set the
-  period just above it.
+  stalls. Measure the async-flush-plus-final-sync time for your model size and set it just above.
 
 - **Copying Borg's "production never preempts production" without the reason.** It exists to stop
-  preemption cascades, where evicting one same-tier task forces a chain of further evictions. State
-  the rule *and* the mechanism, and then say how you get the same property in Kubernetes: strictly-
-  lower-priority victims, `preemptionPolicy: Never` on middle tiers, and a ladder where every
-  preemption moves work strictly down a tier so the chain is bounded.
+  cascades, where evicting one same-tier task forces a chain of further evictions. State the rule
+  *and* the mechanism, then say how you get it in Kubernetes: strictly-lower-priority victims,
+  `preemptionPolicy: Never` on middle tiers, and a ladder where every preemption moves work
+  strictly down a tier.
 
 - **Pricing a gang preemption as one pod.** Evicting one pod from a healthy 8-pod gang does not
   free 1 GPU — it strands 7, because the survivors block in the collective barrier. Real cost is
@@ -1388,130 +1328,117 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
 
 - **Believing "just autoscale the GPU cluster."** Supply is not elastic: in a shortage on-demand
   capacity is out of stock and Cluster Autoscaler backs off on capacity errors; cold start is 5–15
-  minutes (instance boot + driver + device-plugin registration + a 10–20 GB image + model weights);
-  and the unit is a lumpy ~$19/hr node. You commit ahead of demand and schedule within it.
+  minutes; and the unit is a lumpy ~$19/hr node. You commit ahead of demand and schedule within it.
 
 ## Self-check
 
 - **Why is preemption economically useless without checkpointing?** *Answer:* Preemption's value is
-  reclaiming capacity you already paid for and giving it to work that needs it more. The cost is
+  reclaiming capacity you already paid for and giving it to work that needs it more; its cost is
   the work destroyed in the victim. With checkpointing at interval `T_ckpt`, an eviction landing
-  uniformly within the cycle destroys `T_ckpt/2` in expectation, so
-  `E[cost] = m × (T_ckpt/2 + T_restart)` GPU-hours — bounded, small, and tunable. Without
-  checkpointing, `loss` is not `T_ckpt/2`, it is the job's **entire elapsed runtime**: a 40-hour
-  8-GPU job preempted at hour 39 costs 312 GPU-hours ≈ $733 at a $2.35/GPU-hr neocloud snapshot,
-  which typically exceeds everything the reclaim bought. So preemption is a cost optimisation only
-  when the workload resumes; otherwise it is a compute-hours bonfire. It is a joint
-  scheduler-and-training-loop property, not a scheduler knob — which is why the best-effort tier's
-  admission criterion is a documented resume path.
+  uniformly in the cycle destroys `T_ckpt/2` in expectation, so
+  `E[cost] = m × (T_ckpt/2 + T_restart)` GPU-hours — bounded, small, tunable. Without it, `loss` is
+  the job's **entire elapsed runtime**: a 40-hour 8-GPU job preempted at hour 39 costs 312
+  GPU-hours ≈ $733 at a $2.35/GPU-hr neocloud snapshot, typically more than the reclaim bought. So
+  preemption is a cost optimisation only when the workload resumes — a joint scheduler-and-
+  training-loop property, not a scheduler knob, which is why the best-effort tier's admission
+  criterion is a documented resume path.
 
 - **Walk the victim-selection algorithm.** *Answer:* It runs in `PostFilter`, after the pod fails
-  `Filter` everywhere. (0) `PodEligibleToPreemptOthers`: reject if `preemptionPolicy: Never`, or if
-  the pod already has a nominated node with victims still terminating from its previous preemption
-  — the anti-cascade guard. (1) Restrict to nodes whose failure was `Unschedulable` rather than
-  `UnschedulableAndUnresolvable`. (2) Dry-run only a sample: `minCandidateNodesPercentage: 10` with
-  a floor of `minCandidateNodesAbsolute: 100` nodes, so preemption is approximate at scale.
-  (3) Per node: take all pods with **strictly lower** priority; remove them all and re-run `Filter`
-  — if it still does not fit, the node is out; sort by `MoreImportantVictim` descending; split into
-  PDB-violating and non-violating; then **reprieve** — add pods back one at a time, most important
-  first, violating group first, keeping each one that the preemptor can still fit around. The
-  survivors are reprieved; the rest are the minimal victim set. (4) Across nodes, five ordered
-  tiebreaks: fewest PDB violations → lowest highest-priority victim → smallest sum of victim
-  priorities → fewest victims → latest earliest-start-time (destroy the youngest work) → first
-  node. (5) Execute: patch `DisruptionTarget`/`PreemptionByScheduler`, delete with bare
-  `DeleteOptions{}`, set `nominatedNodeName`, requeue the preemptor.
+  `Filter` everywhere. **(0)** `PodEligibleToPreemptOthers`: reject if `preemptionPolicy: Never`, or
+  if the pod already has a nominated node with victims still terminating from its previous
+  preemption — the anti-cascade guard. **(1)** Keep only nodes whose failure was `Unschedulable`,
+  not `UnschedulableAndUnresolvable`. **(2)** Dry-run a *sample*:
+  `minCandidateNodesPercentage: 10` with a floor of `minCandidateNodesAbsolute: 100` nodes, so
+  preemption is approximate at scale. **(3)** Per node: take all pods with **strictly lower**
+  priority; remove them all and re-run `Filter` — if it still does not fit, the node is out; sort by
+  `MoreImportantVictim` descending; split into PDB-violating and non-violating; then **reprieve** —
+  add pods back one at a time, most important first, violating group first, keeping each one the
+  preemptor can still fit around. Survivors are reprieved; the rest are the minimal victim set.
+  **(4)** Across nodes, five ordered tiebreaks: fewest PDB violations → lowest highest-priority
+  victim → smallest priority sum → fewest victims → latest earliest-start-time (destroy the
+  youngest work) → first node. **(5)** Execute: patch `DisruptionTarget`/`PreemptionByScheduler`,
+  delete with bare `DeleteOptions{}`, set `nominatedNodeName`, requeue the preemptor.
 
 - **What ordering does `MoreImportantVictim` use, and what does it protect?** *Answer:* Five rules
-  in sequence. (1) **Priority** — higher is more important, and this dominates. (2) **Workload
-  type** — `CompositePodGroup` > `PodGroup` > individual `Pod`, to preserve group integrity: at
-  equal priority the scheduler would rather kill a lone pod than break a gang. (3) For two
-  individual pods, **earlier start time** (longer runtime) is more important — FCFS, and it
-  protects accumulated work. (4) For two groups of the same type, **more members** is more
-  important, because rescheduling a massive job is expensive. (5) Tie-break on the group with the
-  oldest pod. Rules 2 and 4 encode gang amplification; rules 3 and 5 encode "older work has more to
-  lose" — the same instinct as node-choice tiebreak 5.
+  in sequence. (1) **Priority** — higher is more important, and it dominates. (2) **Workload type**
+  — `CompositePodGroup` > `PodGroup` > individual `Pod`, to preserve group integrity: at equal
+  priority the scheduler would rather kill a lone pod than break a gang. (3) For two individual
+  pods, **earlier start time** (longer runtime) wins — FCFS, protecting accumulated work. (4) For
+  two groups of the same type, **more members** wins, because rescheduling a massive job is
+  expensive. (5) Tie-break on the group with the oldest pod. Rules 2 and 4 encode gang
+  amplification; 3 and 5 encode "older work has more to lose", the same instinct as node tiebreak 5.
 
 - **Where does the victim's grace period come from, and why does it matter economically?**
-  *Answer:* From the victim itself. After patching the `DisruptionTarget` condition, the scheduler
-  calls `Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})` — **no `GracePeriodSeconds`
-  override** — so the pod's own `terminationGracePeriodSeconds` applies, defaulting to 30 seconds.
-  Economically it is the budget for a checkpoint-on-SIGTERM: long enough and the loss window
-  collapses to nearly zero, too short and every preemption costs the full `T_ckpt/2`. But it is
-  also the interval during which the GPU is *not yet free* — the DELETE is a promise, the capacity
-  is real at container exit — and during which the preemptor cannot preempt anywhere else, because
-  Step 0's guard sees the terminating victim on its nominated node. So: set it just above your
-  measured flush time, and measure rather than guess.
+  *Answer:* From the victim. After patching `DisruptionTarget`, the scheduler calls
+  `Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})` — **no `GracePeriodSeconds` override** — so
+  the pod's own `terminationGracePeriodSeconds` applies, defaulting to 30 s. Economically it is the
+  budget for a checkpoint-on-SIGTERM: long enough and the loss window collapses toward zero, too
+  short and every preemption costs the full `T_ckpt/2`. It is also the interval during which the
+  GPU is *not yet free* — the DELETE is a promise, capacity is real at container exit — and during
+  which the preemptor cannot preempt elsewhere, because Step 0's guard sees the terminating victim
+  on its nominated node. Set it just above your measured flush time, and measure it.
 
-- **Derive the cost-minimising checkpoint interval and state the property that lets you sanity-check
-  it in the field.** *Answer:* Overhead per unit wall-clock is `Ω(T) = C/T + λT/2 + λR`, where `C`
-  is the GPU-blocking cost of one checkpoint, `T` the interval, `λ` the preemption rate and `R` the
-  restart overhead. The `C/T` term is checkpointing; `λT/2` is rework, since an eviction landing
-  uniformly in the cycle destroys `T/2` on average; `λR` is independent of `T`. Setting
-  `dΩ/dT = −C/T² + λ/2 = 0` gives **`T* = √(2C/λ) = √(2·C·MTBP)`** — the Young/Daly result, with
-  preemption rate substituted for failure rate. Substituting back, both variable terms equal
-  `√(Cλ/2)`: **at the optimum you spend exactly as much time checkpointing as you lose to rework**,
-  which is the field diagnostic — if the two are far apart, your interval is wrong in the direction
-  of the larger term. Minimum overhead is `√(2Cλ) + λR`, so it grows only as the *square root* of
-  both `C` and `λ`. Worked at `λ = 4/day`, `R = 300 s`: synchronous `C = 49 s` gives `T* = 24.2 min`
-  and 8.12% overhead; async sharded `C = 0.6 s` gives `T* = 2.7 min` and 2.13%. The curve is
-  asymmetric — too-frequent is much worse than too-rare — so err long of `T*`.
+- **Derive the cost-minimising checkpoint interval and give the field diagnostic.** *Answer:*
+  Overhead per unit wall-clock is `Ω(T) = C/T + λT/2 + λR`, with `C` the GPU-blocking cost of one
+  checkpoint, `T` the interval, `λ` the preemption rate, `R` the restart overhead. `C/T` is
+  checkpointing; `λT/2` is rework, since an eviction landing uniformly in the cycle destroys `T/2`
+  on average; `λR` is independent of `T`. Setting `dΩ/dT = −C/T² + λ/2 = 0` gives
+  **`T* = √(2C/λ) = √(2·C·MTBP)`** — Young/Daly, with preemption rate substituted for failure rate.
+  Substituting back, both variable terms equal `√(Cλ/2)`: **at the optimum you spend exactly as
+  much time checkpointing as you lose to rework**, which is the diagnostic — if they are far apart
+  your interval is wrong, in the direction of the larger term. Minimum overhead is `√(2Cλ) + λR`,
+  growing only as the *square root* of `C` and `λ`. At `λ = 4/day`, `R = 300 s`: synchronous
+  `C = 49 s` → `T* = 24.2 min`, 8.12% overhead; async sharded `C = 0.6 s` → `T* = 2.7 min`, 2.13%.
+  The curve is asymmetric — too-frequent is much worse than too-rare — so err long of `T*`.
 
 - **How does async sharded checkpointing change the economics, and what is the *biggest* effect?**
-  *Answer:* It shrinks `C`, not the structure of the formula. Each rank saves only its own shard, in
-  parallel, so `C` scales with `state/world_size` instead of total state; and with `async_save` only
-  the device→host copy blocks the GPU while the durable network write overlaps the next training
-  steps on CPU threads. For a 7B model over 8 ranks that is roughly `C: 49 s → 0.6 s`, an 80×
-  reduction, which through `T* = √(2C/λ)` shortens the optimal interval 9× and through
-  `Ω(T*) = √(2Cλ) + λR` cuts total overhead from 8.12% to 2.13%. **But the bigger effect is the
-  inversion:** at a fixed 5% overhead budget, the tolerable preemption rate rises from ~1.71 to
-  ~10.86 evictions/day — about 6×. That is what determines how finely you can slice a backfill tier
-  and therefore how much of the idle reserved headroom you can actually harvest. Costs to name:
-  host RAM for the staged copy, and a SIGTERM handler that must wait for the in-flight async save
-  *and* take a final synchronous one inside the grace period.
+  *Answer:* It shrinks `C`, not the formula. Each rank saves only its own shard in parallel, so `C`
+  scales with `state/world_size` instead of total state; and with `async_save` only the
+  device→host copy blocks the GPU while the durable network write overlaps the next steps on CPU
+  threads. For a 7B model over 8 ranks that is roughly `C: 49 s → 0.6 s`, which through
+  `T* = √(2C/λ)` shortens the optimal interval 9× and through `Ω(T*) = √(2Cλ) + λR` cuts overhead
+  from 8.12% to 2.13%. **The bigger effect is the inversion:** at a fixed 5% overhead budget the
+  tolerable preemption rate rises from ~1.71 to ~10.86 evictions/day, about 6× — which determines
+  how finely you can slice a backfill tier and therefore how much idle reserved headroom you can
+  harvest. Costs to name: host RAM for the staged copy, and a SIGTERM handler that must wait for
+  the in-flight async save *and* take a final synchronous one inside the grace period.
 
-- **At roughly what sustained utilisation does a 1-year reserved commitment beat on-demand, and how
-  do you size the whole ladder?** *Answer:* A single reserved GPU beats on-demand once its sustained
-  utilisation exceeds `R/D` — with $2.35 committed against $3.90 on-demand (specialized-neocloud
-  snapshot) that is ≈ **60%**. The portfolio version is a newsvendor problem:
-  `E[cost(Q)] = Q·R + E[max(0, X−Q)]·D`, and `dE/dQ = R − D·P(X>Q) = 0` gives
-  **`P(X > Q*) = R/D`**, i.e. reserve to the `(1 − R/D)` quantile of *your own* demand
-  distribution — **not P50**, unless `R/D` happens to be 0.5. Worked on the 128-GPU fleet with
-  32 GPUs of firm prod demand and a research distribution from showback: `R/D = 0.6026` gives
-  `Q* = 56` research GPUs, 88 total reserved, annual cost $2.28M against a $3.28M all-on-demand
-  baseline — a **$1.00M (30.6%) saving** at a blended **$2.707/GPU-hr**. Two adjustments the pure
-  math misses: the on-demand rung is not guaranteed to *exist* in a shortage, so inflate `D` by the
-  business value of work that would not run, which pushes `Q*` up; and the optimum leaves ~49,056
-  idle reserved GPU-hours a year whose marginal cost is zero, which is free compute if you can
-  backfill it.
+- **At what sustained utilisation does a 1-year reserve beat on-demand, and how do you size the
+  ladder?** *Answer:* A single reserved GPU beats on-demand once its sustained utilisation exceeds
+  `R/D` — with $2.35 committed against $3.90 on-demand (specialized-neocloud snapshot), ≈ **60%**.
+  The portfolio version is a newsvendor problem: `E[cost(Q)] = Q·R + E[max(0, X−Q)]·D`, and
+  `dE/dQ = R − D·P(X>Q) = 0` gives **`P(X > Q*) = R/D`** — reserve to the `(1 − R/D)` quantile of
+  *your own* demand distribution, **not P50**, unless `R/D` happens to be 0.5. Worked on the
+  128-GPU fleet with 32 GPUs firm prod demand: `R/D = 0.6026` → `Q* = 56` research GPUs, 88 total
+  reserved, $2.28M/yr against a $3.28M all-on-demand baseline — a **$1.00M (30.6%) saving** at a
+  blended **$2.707/GPU-hr**. Two adjustments the pure math misses: the on-demand rung may not
+  *exist* in a shortage, so inflate `D` by the business value of work that would not run, pushing
+  `Q*` up; and the optimum leaves ~49,056 idle reserved GPU-hours a year at zero marginal cost —
+  free compute if you can backfill it.
 
-- **Why does Borg forbid production-tier tasks from preempting each other, and how do you get the
-  same property on Kubernetes?** *Answer:* To prevent preemption cascades. If same-tier preemption
-  is allowed, A evicts B, B must be re-placed and evicts C, C evicts D — one legitimate reclaim
-  becomes a chain reaction that destabilises the tier, and every link destroys work. Borg's fix is
-  structural rather than a tiebreak: same-tier tasks simply cannot preempt each other. On
-  Kubernetes you get the same property from three mechanisms: victims must be **strictly lower**
-  priority, so preemption within a single PriorityClass is impossible by construction;
-  `PodEligibleToPreemptOthers` refuses to let a pod preempt again while victims from its previous
-  preemption are still terminating, which kills the rapid cascade; and `preemptionPolicy: Never` on
-  a tier stops that tier initiating a chain at all. Design the ladder so that **every preemption
-  moves work strictly down a tier**, and the chain is bounded by the number of tiers.
+- **Why does Borg forbid same-tier production preemption, and how do you get that on Kubernetes?**
+  *Answer:* To prevent cascades: A evicts B, B must be re-placed and evicts C, C evicts D — one
+  legitimate reclaim becomes a chain reaction that destabilises the tier, and every link destroys
+  work. Borg's fix is structural, not a tiebreak. On Kubernetes you get the same property three
+  ways: victims must be **strictly lower** priority, so preemption within one PriorityClass is
+  impossible by construction; `PodEligibleToPreemptOthers` refuses to let a pod preempt again while
+  victims from its previous preemption are still terminating, killing the rapid cascade; and
+  `preemptionPolicy: Never` stops a tier initiating a chain at all. Design the ladder so **every
+  preemption moves work strictly down a tier**, and the chain is bounded by the tier count.
 
 ## Connections & what's next
 
-This lesson closes the loop the module opened in lesson 1. The default scheduler's atomicity gap
-(01–02) is fixed by gang admission; Kueue (03–04) turns admission into a queueable, quota-bearing,
-cohort-sharing system; alternatives (05) and topology (06) refine how and where work is placed;
-fragmentation (07) measures what is left over and prices it; and this lesson decides who may
-reclaim it, what the reclaim costs, and how much of the fleet you should have bought in the first
-place. Three threads tie back explicitly: the `T_ckpt/2` term first appeared in lesson 7's defrag
-payback and is optimised here; the deliberate-headroom stranding lesson 7 could not fix with
-placement is fixed here with a `nominalQuota: 0` backfill queue; and lesson 6's hot-swap eviction
-is one more instance of the same survivability contract.
-
-That "commit versus rent" output is exactly what feeds forward. **Module 11 (GPU cost economics)**
-consumes this module's capacity-economics work as input — the commitment ladder, the critical-ratio
-sizing, the break-even utilisation and the per-queue showback report become the raw data a
-FinOps-facing cost model builds on.
+This lesson closes the loop lesson 1 opened. The default scheduler's atomicity gap (01–02) is fixed
+by gang admission; Kueue (03–04) turns admission into a queueable, quota-bearing, cohort-sharing
+system; alternatives (05) and topology (06) refine how and where work is placed; fragmentation (07)
+measures what is left over and prices it; and this lesson decides who may reclaim it, what that
+costs, and how much of the fleet you should have bought. Three threads tie back explicitly: the
+`T_ckpt/2` term first appeared in lesson 7's defrag payback and is optimised here; the
+deliberate-headroom stranding lesson 7 could not fix with placement is fixed here with a
+`nominalQuota: 0` backfill queue; and lesson 6's hot swap is one more instance of the same
+survivability contract. The "commit versus rent" output feeds **Module 11 (GPU cost economics)**,
+which consumes the commitment ladder, the critical-ratio sizing, the break-even utilisation and the
+per-queue showback report as its raw data.
 
 There is no next lesson in this module — the [**checkpoint**](../checkpoint.md) is next. Use it to
 prove, unaided, that you can reproduce the deadlock and its fix, explain Kueue cold, compute

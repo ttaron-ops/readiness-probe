@@ -793,6 +793,90 @@ Two refinements worth stating in a design review:
 - **Set `lendingLimit: 0` on the prod tier, not `borrowingLimit: 0`.** Those sound similar and do opposite things. `lendingLimit: 0` means prod never gives its floor away, so it never has to wait for a preemption to reclaim. `borrowingLimit: 0` would mean prod cannot use the fleet's slack during a spike, which is the opposite of what you want.
 - **Put burst headroom in the Cohort object rather than in a team's floor.** Capacity owned by the cohort is consumed without anyone being over their nominal, so it generates no preemption at all — the cheapest capacity in the system, because reclaiming it costs zero stranded GPU-hours.
 
+### 13. Debugging a cohort: what to read, in what order
+
+Cohorts add three failure modes on top of L3's: *borrowing that should be happening and is not*, *preemption that should be happening and is not*, and *preemption that is happening too much*. Each has a distinct read.
+
+**"Why isn't my queue borrowing?"** In order:
+
+```bash
+# 1. Is it actually in the cohort? (The #1 cause: spec.cohort vs spec.cohortName.)
+$ kubectl get clusterqueues -o custom-columns=\
+NAME:.metadata.name,COHORT:.spec.cohortName,PENDING:.status.pendingWorkloads,\
+ADMITTED:.status.admittedWorkloads
+NAME            COHORT      PENDING   ADMITTED
+cq-besteffort               3         0            # ← empty COHORT: isolated floor
+cq-product      gpu-fleet   0         2
+
+# 2. Does it declare the [flavor, resource] pair it is trying to borrow?
+$ kubectl get clusterqueue cq-besteffort -o jsonpath='{.spec.resourceGroups}' | jq
+# no entry for a100/nvidia.com/gpu ⇒ it can never borrow that pair, at any limit.
+
+# 3. Is there anything to borrow? Sum the siblings' idle nominal, remembering
+#    that lendingLimit shrinks what "idle" means.
+$ kubectl get clusterqueues -o json | jq -r '.items[] |
+    "\(.metadata.name)  nominal=\(.spec.resourceGroups[0].flavors[0].resources[0].nominalQuota)
+     lendingLimit=\(.spec.resourceGroups[0].flavors[0].resources[0].lendingLimit // "unset")
+     used=\(.status.flavorsUsage[0].resources[0].total)"'
+
+# 4. Is its own borrowingLimit the binding constraint?
+$ kubectl get clusterqueue cq-besteffort \
+    -o jsonpath='{.spec.resourceGroups[0].flavors[0].resources[0].borrowingLimit}'
+```
+
+The Workload's `QuotaReserved` condition distinguishes the two outcomes that look identical from the outside: `WaitingForQuota` means the cohort genuinely has nothing spare right now, while `ExceedsMaxQuota` means the ask is larger than `nominalQuota + borrowingLimit` can *ever* be and no amount of waiting will help.
+
+**"Why isn't the owner reclaiming its floor?"** Three checks, in decreasing order of likelihood:
+
+```bash
+# 1. Preemption defaults to Never on all three fields. Is it configured at all?
+$ kubectl get clusterqueue cq-research -o jsonpath='{.spec.preemption}' | jq
+{"borrowWithinCohort":{"policy":"Never"},"reclaimWithinCohort":"Never","withinClusterQueue":"Never"}
+#  ⇒ this queue will never reclaim anything. This is the most common cause.
+
+# 2. Is the pending Workload actually within its own nominal quota? Reclamation is
+#    only licensed when it is (or when borrowWithinCohort is enabled).
+$ kubectl get clusterqueue cq-research \
+    -o jsonpath='{.status.flavorsUsage}{"\n"}{.spec.resourceGroups[0].flavors[0].resources[0].nominalQuota}'
+
+# 3. Is the intended victim's ClusterQueue actually borrowing? A sibling at or
+#    below its nominal quota is NEVER a candidate.
+$ kubectl get clusterqueues -o json | jq -r '.items[] |
+    "\(.metadata.name) borrowed=\(.status.flavorsUsage[0].resources[0].borrowed)"'
+cq-besteffort borrowed=0      # ← nothing to reclaim from here
+cq-product    borrowed=8      # ← this one is a candidate
+```
+
+**"Why is my job being preempted so often?"** Read the victim's `Preempted` condition reason, because the four values point at four different fixes:
+
+| `Preempted` reason | What happened | The lever |
+|---|---|---|
+| `InClusterQueue` | someone in **your own** queue outranked you | your team's `WorkloadPriorityClass` assignments; `withinClusterQueue` |
+| `InCohortReclamation` | an owner took its floor back | you were borrowing; raise your own `nominalQuota`, or accept it and checkpoint |
+| `InCohortFairSharing` | your queue's share was the highest in the cohort | you have been borrowing more than your weight entitles you to |
+| `InCohortReclaimWhileBorrowing` | a sibling preempted you *in order to borrow* | someone has `borrowWithinCohort` enabled and your priority is under their `maxPriorityThreshold` |
+
+And the fleet-level series to graph, so this is a dashboard rather than an archaeology exercise:
+
+```promql
+# VICTIM side — evictions per ClusterQueue, split by reason. This is the input to
+# the preemption-rate SLO in §11. `reason` separates "Preempted" from
+# "PodsReadyTimeout", "AdmissionCheck", "Deactivated", and friends.
+sum by (cluster_queue, reason) (rate(kueue_evicted_workloads_total[1h]))
+
+# PREEMPTOR side — note the label is `preempting_cluster_queue`, not
+# `cluster_queue`, and `reason` here carries the fine-grained preemption reason
+# (InClusterQueue / InCohortReclamation / InCohortFairSharing / ...).
+sum by (preempting_cluster_queue, reason) (rate(kueue_preempted_workloads_total[1h]))
+
+# How over-share each queue is, right now.
+kueue_cluster_queue_weighted_share
+```
+
+Graph both sides. The victim series tells tenants how often their borrowed capacity is called; the preemptor series tells you *which* queue is doing the calling and under which rule, which is what you need when a team complains that reclamation is too aggressive.
+
+**One trap in reading these.** `status.flavorsReservation` and `status.flavorsUsage` are not the same number (L3 §5): reservation counts Workloads that have quota reserved, usage counts those fully admitted. During a preemption cascade the two diverge while victims are terminating and the preemptor has reserved but not yet admitted. If you are debugging a live incident, read `flavorsReservation` for "what is committed" and `flavorsUsage` for "what is running."
+
 ## Perspectives
 
 **Developer/tenant.** From inside a borrowing team, admission just happens faster when a sibling is idle — and the job can be evicted later when the owner reclaims. The tenant obligation that follows is checkpoint tolerance, and §11 shows it is not a nicety: an uncheckpointed 8-GPU job preempted at hour five strands 42 GPU-hours, more than it produced. A tenant who does not know this treats a mid-run eviction as a platform bug rather than the system working as designed, which is a documentation failure on the platform's side as much as a discipline failure on theirs.
@@ -1001,17 +1085,25 @@ cq-research     0
 **Step 7 — the showback line that borrowing adds.** Report nominal and borrowed GPU-hours separately, because borrowed hours are a cross-team subsidy you want visible:
 
 ```promql
-# GPU-hours a queue consumed from its OWN nominal quota, last 24h
+# Total GPU-hours consumed per ClusterQueue over the last 24h.
 sum by (cluster_queue) (
   avg_over_time(kueue_cluster_queue_resource_usage{resource="nvidia.com/gpu"}[24h])
-  - avg_over_time(kueue_cluster_queue_resource_usage{resource="nvidia.com/gpu"}[24h])
 ) * 24
 
-# Simpler and honest: usage total, nominal quota, and current share, side by side
-kueue_cluster_queue_resource_usage{resource="nvidia.com/gpu"}
-kueue_cluster_queue_resource_nominal_quota{resource="nvidia.com/gpu"}
+# How much of that was ABOVE the queue's own floor, i.e. borrowed. Clamped at 0
+# because a queue under its nominal quota borrows nothing.
+sum by (cluster_queue) (
+  clamp_min(
+      avg_over_time(kueue_cluster_queue_resource_usage{resource="nvidia.com/gpu"}[24h])
+    - avg_over_time(kueue_cluster_queue_nominal_quota{resource="nvidia.com/gpu"}[24h]),
+    0)
+) * 24
+
+# And the share that drives fair-sharing decisions, for context on the same graph.
 kueue_cluster_queue_weighted_share
 ```
+
+The second query is an approximation — it compares 24-hour averages rather than integrating the instantaneous difference — so treat it as a reporting figure, not an audit. The exact per-instant value is `ClusterQueue.status.flavorsUsage[*].resources[*].borrowed`; if you need audit-grade numbers, export that field with a small exporter rather than deriving it.
 
 The `borrowed` figure itself lives in `ClusterQueue.status.flavorsUsage[*].resources[*].borrowed`; scrape or export it alongside `total` so the report can say "cq-product ran 300 GPU-hours, of which 90 were borrowed from cq-research." **That sentence is the deliverable's whole point** — it makes the subsidy explicit and gives the lender a reason to keep lending.
 
@@ -1135,7 +1227,7 @@ Next: **[05 — Alternatives: Volcano & KAI](05-alternatives-volcano-kai.md)**, 
 7. **`apis/config/v1beta2/configuration_types.go` and `apis/config/v1beta1/configuration_conversion.go`** — **[verified against source]**. The v1beta2 `FairSharing` struct (`preemptionStrategies` only), the v1beta1 struct (which *does* have `Enable`), and the conversion that drops the block when `enable: false` and fills the two-element default when `enable: true` with no strategies.
 8. **`apis/kueue/v1beta2/workload_types.go` and `workloadpriorityclass_types.go`** — **[verified against source]**. The `Evicted` reasons (`Preempted`, `PodsReadyTimeout`, `AdmissionCheck`, `ClusterQueueStopped`, `LocalQueueStopped`, `Deactivated`, `NodeFailures`, …), the `Preempted` reasons (`InClusterQueue`, `InCohortReclamation`, `InCohortFairSharing`, `InCohortReclaimWhileBorrowing`), `Requeued`, `accumulatedPastExecutionTimeSeconds`, and `WorkloadPriorityClass` with the caveat that changing its `value` does not re-prioritise existing Workloads.
 9. **`pkg/scheduler/scheduler.go`** — **[verified against source]**. `makeIterator` swapping `makeFairSharingIterator` for `makeClassicalIterator` when fair sharing is enabled — the §9 admission-side effect.
-10. **`pkg/metrics/metrics.go`** — **[verified against source]**. `kueue_cluster_queue_weighted_share{cluster_queue, cohort}` with its help text, plus `kueue_cluster_queue_resource_usage`, `_nominal_quota`, `_borrowing_limit`, and `_lending_limit`.
+10. **`pkg/metrics/metrics.go`** — **[verified against source]**. `kueue_cluster_queue_weighted_share{cluster_queue, cohort}` with its help text, plus `kueue_cluster_queue_resource_usage`, `kueue_cluster_queue_nominal_quota`, `kueue_cluster_queue_borrowing_limit`, and `kueue_cluster_queue_lending_limit`.
 11. **KEP-1714, "Fair Sharing"** (`keps/1714-fair-sharing/README.md`) — **[verified against source]**. The share value function and its explicit citation of DRF; the S1 (reclaim) versus S2 (rebalance) scenarios; the LCA / AlmostLCA formulation for hierarchical cohorts; the S2-a and S2-b rules; the candidate ranking criteria C1 (biggest offenders first), C2 (least important workload), C3 (smallest workload); and the `FairSharingPrioritizeNonBorrowing` per-flavor, per-level nominal-first ordering.
 12. **Kueue concept docs, in-repo** (`site/content/en/docs/concepts/{cohort,cluster_queue,preemption,fair_sharing}.md`) — **[verified against source]**; the published site at https://kueue.sigs.k8s.io/docs/concepts/preemption/ is **[not reachable]**. Source for the classic-preemption candidate and target heuristics, the "must declare nominalQuota even if 0 to borrow" rule, the borrowing/lending worked examples, `lendingLimit` stable at v0.17, Fair Sharing stable at v0.7, and the **no-loop proof** reproduced in §8 including its stated open limitation for the hierarchical case.
 13. **`CHANGELOG/CHANGELOG-0.11.md` and `CHANGELOG-0.19.md`** — **[verified against source]**. v0.11: "[FSxHC] Make Fair Sharing compatible with Hierarchical Cohorts during preemption / during scheduling." v0.19.1: the `flavorFungibility.preference: PreemptionOverBorrowing` fix describing quota "sourceable at a shallower borrowing level in the cohort tree."

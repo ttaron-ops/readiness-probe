@@ -36,3 +36,5 @@ scratch/
 # lessons are verified against source instead). Not part of the course.
 /deepspeed/
 /torchtitan/
+/ironic/
+/nhc/
