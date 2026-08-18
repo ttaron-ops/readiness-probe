@@ -8,7 +8,7 @@ est_time: "7h"
 prev: "02-inter-node-fabric.md"
 next: "04-ib-vs-roce-lossless.md"
 artifacts: []
-sources: 11
+sources: 10
 ---
 # 09.3 · RDMA fundamentals: kernel bypass, zero-copy, queue pairs
 

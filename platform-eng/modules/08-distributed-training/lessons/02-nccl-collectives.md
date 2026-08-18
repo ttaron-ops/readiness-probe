@@ -248,12 +248,14 @@ Wait — that exceeds any H100 link. The mistake is applying the all-reduce corr
   WHERE EACH ONE WINS  (NCCL's own compiled-in cost constants,
                         src/tuning/cost_model.cc, values in µs)
   ───────────────────────────────────────────────────────────────────────────
-                        base latency        per-hop latency, NET, Simple
-      Ring              6.6 µs              14.0 µs
-      Tree              6.8 µs              14.0 µs
-                        per-hop latency, NVLINK, Simple
-      Ring              3.4 µs
-      Tree              4.0 µs
+                 base latency, Simple   per-hop latency, NET, Simple
+      Ring              8.4 µs                    14.0 µs
+      Tree              8.4 µs                    14.0 µs
+                 base latency, LL       per-hop latency, NVLINK, Simple
+      Ring              6.6 µs                     3.4 µs
+      Tree              6.8 µs                     4.0 µs
+      (baseLatencies[algo][proto] and hwLatencies[hw][algo][proto],
+       proto order LL / LL128 / Simple)
 
       modelled latency, multi-node all-reduce:
         ring : baseLat + (nSteps − nInterSteps)·intraLat + nInterSteps·interLat
