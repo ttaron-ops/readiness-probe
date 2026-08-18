@@ -202,15 +202,15 @@ Work it end to end on a concrete, checkable configuration:
 ```
    B     KV bytes/step   total/step   steps/s   tokens/s   $/1M tokens
   ─────────────────────────────────────────────────────────────────────
-    1        0.67 GB       70.67 GB     61.6        62       $26.80
-    8        5.37 GB       75.37 GB     57.8       462       $ 3.60
-   16       10.74 GB       80.74 GB     53.9       863       $ 1.92
+    1        0.67 GB       70.67 GB     61.6        62       $26.96
+    8        5.37 GB       75.37 GB     57.8       462       $ 3.59
+   16       10.74 GB       80.74 GB     53.9       863       $ 1.93
    32       21.47 GB       91.47 GB     47.6      1,523      $ 1.09
    64       42.95 GB      112.95 GB     38.6      2,468      $ 0.673
-  128       85.90 GB      155.90 GB     27.9      3,576      $ 0.464
+  128       85.90 GB      155.90 GB     27.9      3,576      $ 0.465
   ─────────────────────────────────────────────────────────────────────
   ⇒ 40× cheaper per token at B=64 than at B=1, from ONE parameter.
-    And the returns bend: 1→8 is 7.4×, 8→64 is 5.4×, 64→128 is 1.45×,
+    And the returns bend: 1→8 is 7.5×, 8→64 is 5.3×, 64→128 is 1.45×,
     because KV traffic grows LINEARLY in B while the weight read is
     fixed. Once KV bytes dominate, batching stops paying.
     Meanwhile TPOT rises 16.2 ms → 35.8 ms across that range, so the
@@ -259,7 +259,7 @@ Prefill processes the whole prompt in parallel, so it is limited by arithmetic r
   assume MFU = 0.45 for prefill:
 
     P_eff       = 2 × 1.979e15 × 0.45          = 1.781e15 FLOP/s
-    tokens/s    = 1.781e15 / (2 × 70e9)        = 12,721 /s
+    tokens/s    = 1.781e15 / (2 × 70e9)        = 12,722 /s
     $/1M prompt tokens = (2 × $2.99)/(12,721 × 3,600) × 1e6
                        = $0.131 / 1M
 
@@ -440,9 +440,9 @@ Commitment coverage is the dial that sets `r_b`, and lesson 06 is where that dia
 
     s = 0.55, t_run = 14 h, G = 8, E[t_fail] = 4.2 h
       = 112 + (0.45/0.55) × 4.2 × 8
-      = 112 + 27.5 = 139.5 GPU-h  →  $417.11 per successful run
+      = 112 + 27.5 = 139.5 GPU-h  →  $417.08 per successful run
 
-    versus the naive $608.87 — a 32 % overstatement, because the naive
+    versus the naive $608.87 — a 46 % overstatement over the honest figure, because the naive
     form assumes every failure burned a full run.
 
   ⇒ AND THE LEVER FALLS OUT: cutting E[t_fail] (fail fast — shape checks,
@@ -618,12 +618,12 @@ One serving namespace, one billing day, every number traceable to a source or a 
     KV/step    = 48 × 3,200 × 163,840 B          = 25.17 GB
     bytes/step = 95.17 GB
     steps/s    = (0.65 × 6.70e12) / 9.517e10     = 45.8 /s
-    TPOT       = 21.8 ms                         (SLO is 30 ms ✓)
-    tokens/s   = 48 × 45.8                       = 2,198 /s per replica
-    fleet      = 4 × 2,198                       = 8,792 tokens/s
-    per day    = 8,792 × 86,400                  = 759.6e6 output tokens
+    TPOT       = 21.9 ms                         (SLO is 30 ms ✓)
+    tokens/s   = 48 × 45.8                       = 2,197 /s per replica
+    fleet      = 4 × 2,197                       = 8,786 tokens/s
+    per day    = 8,786 × 86,400                  = 759.1e6 output tokens
 
-  ⇒ PREDICTION: ~760 M output tokens/day at full load.
+  ⇒ PREDICTION: ~759 M output tokens/day at full load.
 ```
 
 ### Step 2 — measure, and reconcile the gap
@@ -637,12 +637,12 @@ One serving namespace, one billing day, every number traceable to a source or a 
     ns_model:preemptions:1d                 = 1,840
     prompt : output ratio                   = 2.20 : 1
 
-  RECONCILE: 412.0 / 759.6 = 54.2 % of the roofline prediction.
-  Where did the other 45.8 % go?
+  RECONCILE: 412.0 / 759.1 = 54.3 % of the roofline prediction.
+  Where did the other 45.7 % go?
     · mean batch 26.1, not the assumed 48 → §3's table says the weight
       read is amortised over half as many sequences. Recomputing at
       B = 26: KV/step 13.63 GB, bytes/step 83.63 GB, steps/s 52.1,
-      tokens/s = 1,355 per replica → 468e6/day. That alone explains
+      tokens/s = 1,354 per replica → 468e6/day. That alone explains
       most of the shortfall — it is a TRAFFIC/BATCHING finding, not a
       hardware one.
     · 1,840 preemptions of long generations = recomputed decode work
@@ -688,11 +688,11 @@ One serving namespace, one billing day, every number traceable to a source or a 
 
   FULLY LOADED $/1M OUTPUT TOKENS
     = $1.067 × 1.3416                           = $1.432 / 1M
-    the tax                                     = $0.365 / 1M (34 %)
+    the tax                                     = $0.364 / 1M (34 %)
 
   WHAT THE TAX IS MADE OF (per §6 and lesson 04):
-    gap A — unallocatable + fragmented + cordoned   $0.245 / 1M
-    non-GPU overhead                                $0.120 / 1M
+    gap A — unallocatable + fragmented + cordoned   $0.246 / 1M
+    non-GPU overhead                                $0.118 / 1M
   ⇒ Two-thirds of the loading is fragmentation and unallocatable
     capacity — i.e. lesson 04's number, arriving here as a per-token
     surcharge. THAT is how you make a scheduler config change look
@@ -711,15 +711,19 @@ One serving namespace, one billing day, every number traceable to a source or a 
    lever                        mechanism (factor tree leaf)   loaded $/1M
    ────────────────────────────────────────────────────────────────────
    as measured                  B = 26.1, L = 1.342               $1.432
-   raise mean batch 26 → 40     amortise W_bytes over more seqs   $1.005
+   raise mean batch 26 → 40     amortise W_bytes over more seqs   $1.012
      (route traffic to fewer replicas; consolidate the trough)
-   + fix fragmentation,         L 1.342 → 1.150                   $0.861
+   + fix fragmentation,         L 1.342 → 1.150                   $0.868
      P/A 1.231 → 1.055 (L04)
-   + int4 weights (W 70→35 GB)  halves the fixed read per step     $0.560
+   + int4 weights (W 70→35 GB)  halves the fixed read per step     $0.534
      — REQUIRES a quality evaluation; do not assume it is free
-   + commitment 70 % → 90 %     r_b $2.29 → $2.03                 $0.497
+   + commitment 70 % → 90 %     r_b $2.29 → $2.03                 $0.474
      (L06)
    ────────────────────────────────────────────────────────────────────
+   Each row is the §3 roofline recomputed with that leaf changed, then
+   scaled by the measured/predicted ratio 412/468 = 0.880 so the first
+   row equals the measured baseline. Re-run it with your own inputs.
+
    AND THE ONE THAT DOES NOTHING FOR UNIT COST:
    buy 8 more H100s             H_attr doubles, U doubles          $1.432
      ⇒ capacity is not efficiency. Adding hardware leaves the
@@ -793,10 +797,10 @@ Feeds the module deliverable at [gpu-cost synthesis](../practice/gpu-cost-synthe
   **Answer:** Each decode step reads every weight from HBM once — shared across the whole batch — plus the KV cache of every active sequence. So `bytes_per_step = W_bytes + B × L_ctx × kv_bytes_per_token`, where `W_bytes = N_params × bytes_per_param` and `kv_bytes_per_token = 2 × n_kv_heads × d_head × n_layers × bytes_per_element`. Then `steps/s = MBU × BW_peak / bytes_per_step` and `tokens/s = B × steps/s`, with `1/steps/s` being TPOT. Worked on 70B in FP8 (70 GB of weights, 80 layers, 8 KV heads, head dim 128 → 163,840 B of KV per context token) on 2×H100 SXM (6.70 TB/s peak) at MBU 0.65, batch 64 and 4,096-token context: 42.95 GB of KV plus 70 GB of weights is 112.95 GB per step, giving 38.6 steps/s, TPOT 25.9 ms and 2,468 tokens/s; at `r = $2.99` that is `$5.98 / 8.885e6 tokens/h × 1e6 = $0.673` per million output tokens. The terms do different jobs: `W_bytes` is a fixed per-step cost that batching amortises, KV traffic grows linearly in `B × L_ctx` and eventually caps the benefit, `MBU` is the measurable efficiency factor, and `BW_peak` is the hardware generation.
 
 - **Why does batch size change unit cost by more than an order of magnitude, and what stops you raising it?**
-  **Answer:** Because the weight read — the dominant term — is per *step*, not per sequence, so every extra concurrent sequence rides along for the cost of its own KV traffic. On the worked configuration, unit cost falls from $26.80 per million tokens at `B = 1` to $0.673 at `B = 64` — about 40× — with sharply diminishing returns after KV bytes start to dominate ($0.464 at `B = 128`, only 1.45× better than 64). Two things stop you: **latency**, since TPOT rises from 16.2 ms to 35.8 ms across that range and the batch ceiling is set by the SLO rather than by economics; and **KV capacity**, since `B × L_ctx × kv_bytes_per_token` must fit in HBM alongside the weights (`vllm:kv_cache_usage_perc` is the metric that tells you which limit you hit). This is also why lesson 03 insists that a quiet serving replica is a throughput problem, not an idle-reclaim problem: at `B = 1` the hardware is cheap per hour and catastrophic per token.
+  **Answer:** Because the weight read — the dominant term — is per *step*, not per sequence, so every extra concurrent sequence rides along for the cost of its own KV traffic. On the worked configuration, unit cost falls from $26.96 per million tokens at `B = 1` to $0.673 at `B = 64` — about 40× — with sharply diminishing returns after KV bytes start to dominate ($0.465 at `B = 128`, only 1.45× better than 64). Two things stop you: **latency**, since TPOT rises from 16.2 ms to 35.8 ms across that range and the batch ceiling is set by the SLO rather than by economics; and **KV capacity**, since `B × L_ctx × kv_bytes_per_token` must fit in HBM alongside the weights (`vllm:kv_cache_usage_perc` is the metric that tells you which limit you hit). This is also why lesson 03 insists that a quiet serving replica is a throughput problem, not an idle-reclaim problem: at `B = 1` the hardware is cheap per hour and catastrophic per token.
 
 - **Why are input tokens cheaper than output tokens, and roughly by how much?**
-  **Answer:** They run on different bottlenecks. Prefill processes the whole prompt in one parallel pass and is compute-bound: `tokens/s = MFU × P_peak / (2N)`, using the standard 2 FLOPs per parameter per token. Decode produces one token per sequence per pass and is memory-bandwidth-bound, requiring a full read of the weights per step. On the worked rig — 2×H100 SXM, 70B in FP8, dense FP8 peak about 1,979 TFLOP/s per GPU (the datasheet's 3,958 TFLOPS is stated *with* 2:4 sparsity), MFU 0.45 — prefill runs at about 12,721 tokens/s versus decode's 2,468 at batch 64, so roughly **5×** cheaper per token: $0.131 versus $0.673 per million. That is the same order as published price sheets, where Anthropic's list prices are $3/$15 for Claude Sonnet 5 and $5/$25 for Claude Opus 5 — a 5× input:output ratio. The ratio is hardware, not pricing convention. Practical consequence: if you price on output tokens only, publish the prompt:output ratio too, or a drift in prompt length will read as a cost regression.
+  **Answer:** They run on different bottlenecks. Prefill processes the whole prompt in one parallel pass and is compute-bound: `tokens/s = MFU × P_peak / (2N)`, using the standard 2 FLOPs per parameter per token. Decode produces one token per sequence per pass and is memory-bandwidth-bound, requiring a full read of the weights per step. On the worked rig — 2×H100 SXM, 70B in FP8, dense FP8 peak about 1,979 TFLOP/s per GPU (the datasheet's 3,958 TFLOPS is stated *with* 2:4 sparsity), MFU 0.45 — prefill runs at about 12,722 tokens/s versus decode's 2,468 at batch 64, so roughly **5×** cheaper per token: $0.131 versus $0.673 per million. That is the same order as published price sheets, where Anthropic's list prices are $3/$15 for Claude Sonnet 5 and $5/$25 for Claude Opus 5 — a 5× input:output ratio. The ratio is hardware, not pricing convention. Practical consequence: if you price on output tokens only, publish the prompt:output ratio too, or a drift in prompt length will read as a cost regression.
 
 - **Give the correct loading multiplier and explain what the common version double counts.**
   **Answer:** `L = (P / A) × (1 + f)`, where `P` is paid GPU-hours, `A` is allocated GPU-hours and `f` is non-GPU overhead as a fraction of GPU spend. `P/A` recovers gap A — capacity nobody could hold, which includes fragmentation, cordoned devices and MIG stranding — and `(1+f)` recovers control plane, storage and networking. The common `L = 1/utilisation` (i.e. `A/Uz`) double counts, because under this module's charge-allocated policy the tenant's *own* idle hours are already inside `A` and already billed; loading them again charges the same waste twice. On the module's fleet, `P/A = 1.2308` gives `L = 1.342` with `f = 0.09`, whereas `A/Uz = 2.381` — a 78% overstatement that turns a healthy service into a paper loss. A third number, `P/Uz = 2.931`, is a legitimate *diagnostic* ("cost per hour of real compute") but belongs on no invoice. Optimise on direct, price on fully loaded, and label every number.
@@ -805,7 +809,7 @@ Feeds the module deliverable at [gpu-cost synthesis](../practice/gpu-cost-synthe
   **Answer:** For accept/reject decisions on incremental work. The blended rate `r_b = Σ share_i × rate_i` over the commitment mix is what capacity costs on average and is the right basis for pricing, gross margin and any published unit cost. The marginal rate is the rate of the capacity that would serve one more unit: near zero when committed headroom is sitting idle and would otherwise be wasted, and the on-demand or spot rate once you are above the committed baseline. Use marginal to decide whether to take an overnight batch job or a burst of customer traffic; use blended to set the price. Reversing them causes the two classic errors — pricing as though sunk capacity is free forever (until renewal), and declining revenue-positive work that would otherwise be pure waste.
 
 - **A research fleet reports `$/run` of $334.88 at a 55% success rate. What is the honest cost per usable result?**
-  **Answer:** Not `$334.88 / 0.55 = $608.87` — that assumes every failure burned a full run, which is false. Use the time-to-failure form: GPU-hours per successful run `= t_run × G + ((1−s)/s) × E[t_fail] × G`. With `t_run = 14 h`, `G = 8` GPUs, `s = 0.55` and a measured mean time-to-failure of 4.2 h, that is `112 + (0.818 × 4.2 × 8) = 139.5` GPU-h, or **$417.11** per successful run at $2.99 — a 32% smaller figure than the naive one, and the $82 gap over `$/run` is the real reliability tax. The lever falls out of the formula: cutting `E[t_fail]` (shape checks, a 60-second smoke run, OOM prediction from batch geometry) is worth as much as raising `s` and is usually much cheaper to build. Report both the number and `E[t_fail]`, because a fleet with a low success rate and fast failures is in far better shape than one with the same rate and failures at hour 13.
+  **Answer:** Not `$334.88 / 0.55 = $608.87` — that assumes every failure burned a full run, which is false. Use the time-to-failure form: GPU-hours per successful run `= t_run × G + ((1−s)/s) × E[t_fail] × G`. With `t_run = 14 h`, `G = 8` GPUs, `s = 0.55` and a measured mean time-to-failure of 4.2 h, that is `112 + (0.818 × 4.2 × 8) = 139.5` GPU-h, or **$417.08** per successful run at $2.99 — 31% below the naive figure, and the $82.20 gap over `$/run` is the real reliability tax. The lever falls out of the formula: cutting `E[t_fail]` (shape checks, a 60-second smoke run, OOM prediction from batch geometry) is worth as much as raising `s` and is usually much cheaper to build. Report both the number and `E[t_fail]`, because a fleet with a low success rate and fast failures is in far better shape than one with the same rate and failures at hour 13.
 
 ## Connections & what's next
 

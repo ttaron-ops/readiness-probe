@@ -172,8 +172,7 @@ globalDefault: false
 preemptionPolicy: PreemptLowerPriority   # prod MAY evict lower tiers
 description: >
   Production inference and on-call-critical serving. Protected floor. May preempt
-  research and best-effort. Never preempted. Set terminationGracePeriodSeconds to
-  cover connection draining.
+  lower tiers; never preempted itself.
 ---
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -183,9 +182,8 @@ value: 500000
 globalDefault: true                  # pods with no class land here
 preemptionPolicy: Never              # <-- queue priority WITHOUT eviction power
 description: >
-  Interactive training and experiments. Gets a nominal quota floor and may borrow.
-  Scheduled ahead of best-effort, but never evicts anything: it waits for capacity
-  instead of triggering a cascade. Reclaimable by prod.
+  Interactive training and experiments. Scheduled ahead of best-effort but never
+  evicts anything: it waits rather than triggering a cascade. Reclaimable by prod.
 ---
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
@@ -196,17 +194,14 @@ globalDefault: false
 preemptionPolicy: Never
 description: >
   Sweeps, backfill, evaluation harnesses. Runs only on capacity nobody else wants,
-  including idle reserved headroom. Freely evictable. MUST checkpoint — see the
-  survivability contract; workloads without a resume path are rejected from this tier.
+  including idle reserved headroom. Freely evictable. MUST checkpoint: workloads
+  without a documented resume path are rejected from this tier.
 ```
 
-Two mechanical notes:
-
-- **A pod's `spec.priority` is immutable after admission.** You cannot promote a running job by
-  editing it; you resubmit. This matters for incident response — "just raise the priority" is not
-  an available move on running work.
-- **Deleting a PriorityClass does not change already-admitted pods**, because the integer was
-  copied into the pod spec at admission. The class is a lookup table, not a live reference.
+Two mechanical notes. **A pod's `spec.priority` is immutable after admission** — you cannot
+promote a running job by editing it, you resubmit, which matters during incident response. And
+**deleting a PriorityClass does not change already-admitted pods**, because the integer was copied
+into the pod spec at admission time; the class is a lookup table, not a live reference.
 
 ### 3. Two priority systems, one cluster
 
@@ -319,43 +314,38 @@ counter-intuitive shape: it removes everything, then puts back as much as it can
 ```
 
 Why remove-all-then-reprieve rather than "add victims until it fits"? Because feasibility is not
-monotone in a single resource — `Filter` runs the *whole* plugin chain, including topology spread
-and inter-pod affinity, whose verdicts can change non-monotonically as pods are added back. The
-remove-all step establishes feasibility once; the reprieve pass then finds a minimal victim set
-under the real predicate rather than under a resource-counting approximation.
+monotone in a single resource: `Filter` runs the *whole* plugin chain, including topology spread
+and inter-pod affinity, whose verdicts can change non-monotonically as pods come back. The
+remove-all step establishes feasibility once; the reprieve pass then minimises the victim set under
+the real predicate rather than a resource-counting approximation.
 
 **Step 4 — choose among the candidate nodes.** `pickOneNodeForPreemption` applies five score
-functions **in order**, each acting as a tiebreak for the previous:
+functions **in order**, each a tiebreak for the previous:
 
-1. **Fewest PDB violations.** Prefer the node where preemption breaks the fewest disruption
-   budgets.
-2. **Lowest highest-priority victim.** Prefer the node whose *most important* victim is least
+1. **Fewest PDB violations.**
+2. **Lowest highest-priority victim** — prefer the node whose *most important* victim is least
    important.
-3. **Smallest sum of victim priorities.** (Implementation detail worth knowing: it adds
-   `MaxInt32 + 1` to every priority before summing, so that a node with a few negative-priority
-   victims is not preferred over a node with fewer victims at the same negative priority.)
-4. **Fewest victims.** Disturb the smallest number of pods.
-5. **Latest earliest-start-time among victims.** Prefer the node whose victims started most
-   recently — i.e. **destroy the youngest work**, because it has the least accumulated progress to
-   lose.
+3. **Smallest sum of victim priorities.** (It adds `MaxInt32 + 1` to every priority before summing,
+   so a node with a few negative-priority victims is not preferred over one with fewer victims at
+   the same negative priority.)
+4. **Fewest victims.**
+5. **Latest earliest-start-time among victims** — i.e. **destroy the youngest work**, which has the
+   least accumulated progress to lose.
 6. If still tied, the first node in the list.
 
 Criterion 5 is the one to name in an interview, because it is the scheduler doing exactly the
 cost reasoning §10 formalises: all else equal, evict the job that has run the least.
 
-**Step 5 — execute.** For each victim, in `Executor.PreemptPod`:
+**Step 5 — execute.** In `Executor.PreemptPod`: a victim waiting at `Permit` (a gang member,
+lesson 2) is rejected **in scheduler memory** with no API call and goes back to the backoff queue;
+a victim in `PreBind` has its binding cancelled in memory; otherwise the victim's status is patched
+with a `DisruptionTarget` condition, `Reason: PreemptionByScheduler`, message
+`"<schedulerName>: preempting to accommodate a higher priority <type>"`, and the pod is **deleted**.
 
-- If the victim is a pod waiting at `Permit` (a gang member, lesson 2), it is rejected **in
-  scheduler memory** — no API call, it simply goes back to the backoff queue.
-- If it is in `PreBind`, the binding is cancelled in memory.
-- Otherwise: patch the victim's status with a `DisruptionTarget` condition,
-  `Reason: PreemptionByScheduler`, message
-  `"<schedulerName>: preempting to accommodate a higher priority <type>"`, then **delete the pod**.
-
-**Step 6 — the preemptor waits.** The preemptor gets `status.nominatedNodeName` set to the chosen
-node and is requeued. It does *not* skip the queue on the next attempt; it re-runs a normal
-scheduling cycle, which by then should succeed because the victims are gone. Meanwhile, Step 0's
-guard prevents it from preempting *again* on that node while the victims are still terminating.
+**Step 6 — the preemptor waits.** It gets `status.nominatedNodeName` set to the chosen node and is
+requeued. It does *not* skip the queue next time; it re-runs a normal scheduling cycle, which by
+then should succeed. Meanwhile Step 0's guard stops it preempting *again* on that node while the
+victims are still terminating.
 
 ### 5. `MoreImportantVictim`: the ordering, including the group-aware part
 
@@ -701,30 +691,19 @@ failures — with **preemption rate substituted for failure rate**.
   ⇒  T* = √(2C/λ) = √(2·C·MTBP)                    ← the Young/Daly result
 ```
 
-**Two properties worth carrying.** First, substitute `T*` back:
-
-```
-  C/T*     = C/√(2C/λ) = √(Cλ/2)
-  λT*/2    = λ√(2C/λ)/2 = √(Cλ/2)
-  ─────────────────────────────────
-  they are EQUAL at the optimum.
-```
-
-**At the optimal interval you spend exactly as much time checkpointing as you lose to rework.**
-That is a diagnostic you can apply in the field without any arithmetic: if your checkpoint
-overhead and your rework overhead are wildly different, your interval is wrong, and it is wrong in
-the direction of the larger term.
-
-Second, `Ω(T*) = 2√(Cλ/2) + λR = √(2Cλ) + λR`. The minimum overhead grows as the **square root** of
-both the checkpoint cost and the preemption rate — so halving `C` reduces minimum overhead by
-about 29%, and cutting `C` by 80× (which §12 does) reduces it by ~89%.
+**Two properties worth carrying.** Substituting `T*` back gives `C/T* = λT*/2 = √(Cλ/2)` — the two
+variable terms are **equal at the optimum**. So: *at the optimal interval you spend exactly as much
+time checkpointing as you lose to rework.* That is a field diagnostic requiring no arithmetic — if
+the two overheads are far apart, your interval is wrong, in the direction of the larger term. And
+`Ω(T*) = √(2Cλ) + λR`: minimum overhead grows as the **square root** of both the checkpoint cost and
+the preemption rate, so cutting `C` by 80× (which §12 does) reduces it by ~89%.
 
 **Worked, with the §10 fleet.** Preemption rate 4 per day → `λ = 4/86400 = 4.63×10⁻⁵ s⁻¹`,
 `MTBP = 6 h`. Restart `R = 300 s`.
 
 *Synchronous full checkpoint.* A 7B-parameter model in mixed precision with Adam carries roughly
-12–16 bytes per parameter of durable state (fp32 master weights + two fp32 optimizer moments, plus
-the bf16 copy) — call it ~98 GB. Written to network storage at an aggregate 2 GB/s, `C ≈ 49 s`:
+12–16 bytes/parameter of durable state (fp32 master weights + two fp32 moments + the bf16 copy) —
+call it ~98 GB. Written to network storage at an aggregate 2 GB/s, `C ≈ 49 s`:
 
 ```
   T* = √(2 × 49 / 4.63e-5) = √(2,116,800) = 1,455 s = 24.2 minutes
@@ -798,16 +777,15 @@ PyTorch's `torch.distributed.checkpoint` (DCP) — production-mature since PyTor
 `save`, `async_save` and `load` as documented public APIs — changes two things:
 
 **Sharded, parallel saves.** Each rank writes **only its own shard** of the model and optimizer
-state, in parallel with every other rank, into a directory of per-rank files with a metadata
-index. The classic bottleneck was the opposite: gather the full state onto rank 0 and serialise it
-from one process, which makes `C` scale with total state size and *not* improve with world size.
-With sharding, `C` scales with `state_size / world_size` and improves as the job grows.
+state, in parallel, into per-rank files with a metadata index. The classic bottleneck was the
+opposite — gather the full state onto rank 0 and serialise it from one process — which makes `C`
+scale with total state size and never improve with world size. With sharding, `C` scales with
+`state_size / world_size` and *improves* as the job grows.
 
-**Async save.** The GPU-blocking portion shrinks to the **device→host memory copy**. The durable
-write to storage then happens on background CPU threads, overlapped with the next training steps.
-This is where the hardware asymmetry does the work: the D2H copy runs at PCIe/NVLink-to-host
-bandwidth (tens of GB/s), while the slow part — the network write to object storage — never
-touches the GPU's critical path at all.
+**Async save.** The GPU-blocking portion shrinks to the **device→host memory copy**; the durable
+write happens on background CPU threads, overlapped with the next training steps. The hardware
+asymmetry is doing the work: the D2H copy runs at PCIe/NVLink-to-host bandwidth (tens of GB/s),
+while the slow network write to object storage never touches the GPU's critical path.
 
 Numerically, for the §11 example: 98 GB of state, 8 ranks, ~12.25 GB per rank, D2H at an effective
 ~20 GB/s gives **`C ≈ 0.6 s`** of GPU-blocking time versus **`C ≈ 49 s`** for the synchronous
@@ -893,8 +871,8 @@ exactly when demand exceeds `Q`:
 ```
 
 **That is the whole result.** The cheaper the commitment relative to on-demand, the higher the
-quantile you should reserve to. And note where P50 comes from: it is correct only when
-`R/D = 0.5`, i.e. when reserved is exactly half the on-demand price. It usually is not.
+quantile you reserve to. Note where P50 comes from: it is correct only when `R/D = 0.5` — reserved
+at exactly half the on-demand price. It usually is not.
 
 **Worked on the module's 128-GPU fleet.** Demand: production inference needs a firm **32 GPUs**;
 three research teams' combined hourly demand, taken from a month of showback samples, is:
@@ -920,13 +898,12 @@ Rates (specialized-neocloud snapshot, §15): `R = $2.35`, `D = $3.90`.
   Q*_total = 32 (prod, firm) + 56 (research) = 88 GPUs reserved
 ```
 
-Note the answer: **56 is the P50 of research demand, but that is a coincidence of this
-distribution** — the *rule* that produced it is `P(X>Q) ≤ 0.6026`, which is the P39.7 threshold
-crossing. Change the rates and the answer moves. With a 3-year commitment at `R/D = 0.35` the rule
-becomes `P(X>Q) ≤ 0.35`, giving `Q* = 72` — reserve more, because the commitment is cheaper
-relative to burst.
+**56 is the P50 of this particular distribution, but that is a coincidence** — the *rule* is
+`P(X>Q) ≤ 0.6026`, the P39.7 threshold crossing. Change the rates and the answer moves: a 3-year
+commitment at `R/D = 0.35` gives `Q* = 72`, because the cheaper commitment justifies reserving
+further up the demand curve.
 
-Verify by brute force over the whole grid, which also gives you the numbers for the write-up:
+Verify by brute force over the grid, which also gives you the write-up numbers:
 
 ```
   reserve  32 GPUs total  reserved $  658,752 + on-demand $2,186,496 = $2,845,248
@@ -946,11 +923,10 @@ Verify by brute force over the whole grid, which also gives you the numbers for 
 The numerical minimum lands exactly where the critical-ratio rule predicted. That agreement is the
 point: **you do not have to search, you can compute it.**
 
-**The break-even sanity check** everyone asks for, and how it relates: a single reserved GPU beats
-buying that GPU-hour on demand once its **sustained utilisation** exceeds `R/D` — here
-`2.35/3.90 ≈ 60%`. The newsvendor result is the *portfolio* version of the same inequality: reserve
-up to the point where the marginal reserved GPU is utilised exactly 60% of the time, which is
-precisely `P(X > Q*) = R/D`.
+**The break-even everyone asks for, and how it relates:** a single reserved GPU beats on-demand
+once its **sustained utilisation** exceeds `R/D` — here ≈ **60%**. The newsvendor result is the
+*portfolio* version of that same inequality: reserve up to the point where the marginal reserved
+GPU is utilised exactly 60% of the time, which is precisely `P(X > Q*) = R/D`.
 
 **Now the third rung, and the link back to lesson 7.** At the optimum, the reserved block is idle
 whenever demand is below 88 GPUs:
@@ -960,13 +936,11 @@ whenever demand is below 88 GPUs:
                                = 49,056 GPU-hours/year
 ```
 
-**Those 49,056 GPU-hours are already paid for.** Their marginal cost is zero. Backfilling them with
-best-effort work is not a saving on the ladder — it is `49,056` GPU-hours of compute you get for
-free, worth `49,056 × $2.35 = $115,282` at the reserved rate, or `$191,318` valued against what
-that work would otherwise have cost on demand. This is lesson 7 §12's deliberate-headroom
-stranding, recovered.
-
-And now §11's arithmetic decides how much of it you actually keep:
+**Those 49,056 GPU-hours are already paid for; their marginal cost is zero.** Backfilling them with
+best-effort work is not a saving on the ladder — it is free compute, worth
+`49,056 × $2.35 = $115,282` at the reserved rate, or `$191,318` valued against what that work would
+otherwise have cost on demand. This is lesson 7 §12's deliberate-headroom stranding, recovered.
+§11's arithmetic then decides how much of it you keep:
 
 ```
   harvested capacity          = 49,056 GPU-hours/year (already paid)
@@ -976,11 +950,11 @@ And now §11's arithmetic decides how much of it you actually keep:
   difference                  =  2,938 GPU-hours/year  ≈ $6,905 at $2.35
 ```
 
-Modest on this one tier — and say so honestly rather than inflating it. The *bigger* effect is the
-one from §11's inversion: async checkpointing raises the tolerable preemption rate from ~1.7 to
-~10.9 evictions per day, which is what lets you slice the harvested capacity finely enough to
-actually fill 49,056 scattered GPU-hours instead of only the long contiguous gaps. **The overhead
-saving is small; the schedulability gain is what pays.**
+Modest on this one tier — say so honestly rather than inflating it. The *bigger* effect is §11's
+inversion: async checkpointing raises the tolerable preemption rate from ~1.7 to ~10.9 evictions
+per day, which is what lets you slice the harvested capacity finely enough to fill 49,056
+*scattered* GPU-hours rather than only the long contiguous gaps. **The overhead saving is small;
+the schedulability gain is what pays.**
 
 The full ladder, then:
 
@@ -1027,11 +1001,11 @@ opposite directions at the same time.
 *Snapshot as of **August 2026**. These figures move fast — re-pull a live tracker before quoting
 one, and always name the segment when you do.
 
-The spread between segments is **4–6×**, which is larger than most of the optimisations in this
-module. An unqualified number therefore carries almost no information. Every rate in this lesson
-— `$2.35` reserved, `$3.90` on-demand, `$0.85` spot — sits in the **specialized-neocloud** band,
-and the worked ladder would produce a materially different `Q*` in the hyperscaler-retail band
-because `R/D` differs there.
+The spread between segments is **4–6×**, larger than most of the optimisations in this module, so
+an unqualified number carries almost no information. Every rate in this lesson — `$2.35` reserved,
+`$3.90` on-demand, `$0.85` spot — sits in the **specialized-neocloud** band, and the worked ladder
+would produce a materially different `Q*` in the hyperscaler-retail band because `R/D` differs
+there.
 
 **The price-inversion thesis.** Through 2024–2026, on-demand and committed pricing in the
 **neocloud rental segment specifically** have at times moved in opposite directions: on-demand fell
@@ -1042,10 +1016,9 @@ effectively sold out at several providers.
 
 The durable lesson is not any number — they are all snapshots — but the **structure**: committed and
 on-demand pricing can diverge, and **the spread between them is the market's price on scarcity**.
-Your ladder is a bet on where that spread goes, and §14 says exactly how to size the bet: against
-your own measured demand distribution and the current `R/D`, not against a headline from a
-newsletter. Re-run the critical-ratio calculation each time you renew, because `R/D` moving is
-precisely what changes `Q*`.
+Your ladder is a bet on where that spread goes, and §14 says how to size it: against your own
+measured demand distribution and the current `R/D`. Re-run the critical-ratio calculation at every
+renewal, because `R/D` moving is exactly what changes `Q*`.
 
 One asymmetry to fold into the decision that pure cost math misses: **the on-demand rung is not
 guaranteed to exist.** §13(a) said the capacity can simply be unavailable. The newsvendor model
@@ -1095,47 +1068,39 @@ the input to a seven-figure decision.
 ## Real-world use cases
 
 - **Alibaba — "Heterogeneity at Hyperscale" (OSDI '26)** —
-  https://www.usenix.org/conference/osdi26/presentation/li-suyi. What it shows, and it is the
-  strongest single data point for this lesson's thesis: on a six-month trace of up to **155,410
-  GPUs across 37,707 servers**, idle GPUs frequently became unallocatable — partly through the
-  structural mechanisms lesson 7 covered, and partly because **users reserve ample headroom for
-  production safety**. Their deployed answer was **SpotGPU**, a *preemption-cost-aware* scheduling
-  framework that safely harvests idle resources, which raised the GPU allocation ratio from
-  **68% to 93%**. Note the adjective: *preemption-cost-aware*. A hyperscaler solving this problem
-  built the cost model in §10 into the scheduler, because harvesting without pricing the eviction
-  is how you lose money faster. *(Search-verified this session; usenix.org is blocked by this
-  environment's egress proxy.)*
+  https://www.usenix.org/conference/osdi26/presentation/li-suyi. The strongest single data point
+  for this lesson: on a six-month trace of up to **155,410 GPUs across 37,707 servers**, idle GPUs
+  frequently became unallocatable — partly through lesson 7's structural mechanisms, partly because
+  **users reserve ample headroom for production safety**. The deployed answer was **SpotGPU**, a
+  *preemption-cost-aware* harvesting framework, which raised the GPU allocation ratio from
+  **68% to 93%**. Note the adjective: a hyperscaler solving this built the §10 cost model into the
+  scheduler, because harvesting without pricing the eviction loses money faster.
+  *(Search-verified; usenix.org blocked by this environment's egress proxy.)*
 
 - **Google — "Large-scale cluster management at Google with Borg" (Verma et al., EuroSys 2015)** —
-  https://research.google.com/pubs/archive/43438.pdf. What it shows: the priority-band model this
-  lesson's tiers descend from — monitoring, then production, then batch, then best-effort/"gratis"
-  — predating Kubernetes by roughly a decade, and one deliberately non-obvious rule:
-  **production-tier tasks do not preempt each other**, structurally, even at equal priority. The
-  reason is preemption cascades (§8). Borg also reports the operational payoff of the model: mixing
-  production and non-production work on the same machines, with the low tier absorbing what the
-  high tier is not using — which is exactly the backfill argument in §14. *(Search-verified;
-  research.google.com is blocked by the egress proxy this session.)*
+  https://research.google.com/pubs/archive/43438.pdf. The priority-band model this lesson's tiers
+  descend from — monitoring, production, batch, best-effort/"gratis" — predating Kubernetes by a
+  decade, plus the deliberately non-obvious rule that **production-tier tasks do not preempt each
+  other**, structurally, even at equal priority, to avoid cascades (§8). Borg also reports the
+  payoff: mixing production and non-production work on the same machines, the low tier absorbing
+  what the high tier is not using — §14's backfill argument. *(Search-verified;
+  research.google.com blocked by the egress proxy.)*
 
-- **`kubernetes/kubernetes` preemption implementation, v1.37 development head.** What it shows,
-  read from source rather than from docs: the remove-all-then-reprieve victim minimisation in
-  `SelectVictimsOnNode`; the five ordered node tiebreaks in `pickOneNodeForPreemption` (fewest PDB
-  violations → lowest highest-priority victim → smallest priority sum → fewest victims → latest
-  start time); the group-aware `MoreImportantVictim` ordering (priority → CompositePodGroup >
-  PodGroup > Pod → runtime → group size → start time); the `DisruptionTarget` /
-  `PreemptionByScheduler` condition; the bare `metav1.DeleteOptions{}` that leaves the victim's own
-  `terminationGracePeriodSeconds` in force; and `PodEligibleToPreemptOthers`' anti-cascade guard.
-  **Cloned and read directly this session** — the rendered kubernetes.io documentation was
-  unreachable from this environment.
+- **`kubernetes/kubernetes` preemption implementation, v1.37 development head.** Read from source
+  rather than docs: the remove-all-then-reprieve minimisation in `SelectVictimsOnNode`; the five
+  ordered node tiebreaks in `pickOneNodeForPreemption`; the group-aware `MoreImportantVictim`
+  ordering; the `DisruptionTarget` / `PreemptionByScheduler` condition; the bare
+  `metav1.DeleteOptions{}` that leaves the victim's own `terminationGracePeriodSeconds` in force;
+  and `PodEligibleToPreemptOthers`' anti-cascade guard. **Cloned and read directly this session** —
+  kubernetes.io was unreachable from this environment.
 
 - **PyTorch — Distributed Checkpoint (DCP), and its production deployments** —
-  https://docs.pytorch.org/docs/stable/distributed.checkpoint.html,
-  https://pytorch.org/blog/distributed-checkpoint-efficient-checkpointing-in-large-scale-jobs/, and
-  https://pytorch.org/blog/performant-distributed-checkpointing/. What they show: the `save` /
-  `async_save` / `load` API surface, per-rank sharded parallel saves, save-plan caching, and a
-  named production deployment (IBM) running sharded async DCP at scale. This is the concrete
-  engineering mechanism that turns "checkpoint more often" from a request into an affordable
-  default, and therefore the mechanism that makes the §11 optimum move by 9×. *(Search-verified;
-  pytorch.org fetches were blocked by the egress proxy this session.)*
+  https://docs.pytorch.org/docs/stable/distributed.checkpoint.html plus the PyTorch blog posts on
+  efficient and performant distributed checkpointing. The `save`/`async_save`/`load` API, per-rank
+  sharded parallel saves, save-plan caching, and a named production deployment (IBM) running it at
+  scale — the mechanism that turns "checkpoint more often" from a request into an affordable
+  default, and therefore what makes the §11 optimum move by 9×. *(Search-verified; pytorch.org
+  fetches blocked by the egress proxy.)*
 
 - **OpenAI — "Scaling Kubernetes to 7,500 Nodes"** —
   https://openai.com/index/scaling-kubernetes-to-7500-nodes/. What it shows, reused here from a
@@ -1146,11 +1111,10 @@ the input to a seven-figure decision.
   *(Search-verified; fetch blocked by egress this session.)*
 
 - **SemiAnalysis — "The Great GPU Shortage: Rental Capacity"** —
-  https://newsletter.semianalysis.com/p/the-great-gpu-shortage-rental-capacity. What it shows: the
-  structure of the neocloud rental market and the scarcity dynamics behind the committed-versus-
-  on-demand divergence in §15. Read it for the *structure* of the argument — that the spread
-  between committed and on-demand is the market's price on scarcity — not for the specific numbers,
-  which move week to week. *(Search-verified; fetch blocked by egress this session.)*
+  https://newsletter.semianalysis.com/p/the-great-gpu-shortage-rental-capacity. The structure of
+  the neocloud rental market and the scarcity dynamics behind §15's committed-versus-on-demand
+  divergence. Read it for the argument's *structure* — the spread is the market's price on scarcity
+  — not the numbers, which move weekly. *(Search-verified; fetch blocked by egress.)*
 
 ## Worked example
 
@@ -1566,13 +1530,12 @@ pages that could not be reached, the mechanism and default-value claims were ver
 upstream *source trees* cloned during this session; where a canonical URL is given for
 convenience, its reachability is stated honestly.
 
-1. **`kubernetes/kubernetes` — `pkg/apis/scheduling/types.go` and `pkg/apis/scheduling/v1/helpers.go`**
-   — https://github.com/kubernetes/kubernetes. The PriorityClass value structure in §2:
-   `DefaultPriorityWhenNoDefaultClassExists = 0`, `HighestUserDefinablePriority = 1,000,000,000`,
-   `SystemCriticalPriority = 2 × HighestUserDefinablePriority`, and the two auto-created system
-   classes — `system-cluster-critical` at **2,000,000,000** and `system-node-critical` at
-   **2,000,001,000** — plus the `PreemptionPolicy` union (`PreemptLowerPriority` | `Never`) and the
-   `globalDefault` "smallest value wins" note. **Cloned and read directly this session.**
+1. **`kubernetes/kubernetes` — `pkg/apis/scheduling/types.go`, `pkg/apis/scheduling/v1/helpers.go`**
+   — https://github.com/kubernetes/kubernetes. §2's value structure:
+   `HighestUserDefinablePriority = 1,000,000,000`, `SystemCriticalPriority = 2×` that, the two
+   auto-created classes (`system-cluster-critical` **2,000,000,000**, `system-node-critical`
+   **2,000,001,000**), the `PreemptionPolicy` union, and the `globalDefault` "smallest wins" note.
+   **Cloned and read directly this session.**
 
 2. **`kubernetes/kubernetes` — `pkg/scheduler/framework/plugins/defaultpreemption/default_preemption.go`.**
    `SelectVictimsOnNode`'s remove-all-then-reprieve structure, the strictly-lower-priority
@@ -1580,35 +1543,31 @@ convenience, its reachability is stated honestly.
    `PodEligibleToPreemptOthers`' two rejection reasons (`preemptionPolicy: Never`; a terminating
    preemption victim on the pod's nominated node). **Cloned and read directly this session.**
 
-3. **`kubernetes/kubernetes` — `pkg/scheduler/framework/preemption/preemption.go` and `util.go`.**
-   `pickOneNodeForPreemption`'s five ordered score functions (fewest PDB violations → lowest
-   highest-priority victim → smallest priority sum, offset by `MaxInt32+1` → fewest victims →
-   latest earliest-start-time), and `MoreImportantVictim`'s five-rule ordering with its
-   `CompositePodGroup(3) > PodGroup(2) > Pod(1)` type ranking and the code's own stated rationale
-   ("preserve group integrity", "avoid the high cost of rescheduling massive jobs"). **Cloned and
-   read directly this session.**
+3. **`kubernetes/kubernetes` — `pkg/scheduler/framework/preemption/{preemption.go,util.go}`.**
+   `pickOneNodeForPreemption`'s five ordered score functions, and `MoreImportantVictim`'s five-rule
+   ordering with its `CompositePodGroup(3) > PodGroup(2) > Pod(1)` type ranking and the code's own
+   rationale ("preserve group integrity", "avoid the high cost of rescheduling massive jobs").
+   **Cloned and read directly this session.**
 
-4. **`kubernetes/kubernetes` — `pkg/scheduler/framework/preemption/executor.go` and
-   `pkg/scheduler/util/utils.go`.** The execution path: the in-memory fast paths for waiting and
-   pre-binding victims, the `DisruptionTarget` condition with `Reason: PodReasonPreemptionByScheduler`
-   and its message format, and `util.DeletePod`'s bare `metav1.DeleteOptions{}` — the source of §6's
-   claim that the victim keeps its own `terminationGracePeriodSeconds`. **Cloned and read directly
-   this session.**
+4. **`kubernetes/kubernetes` — `pkg/scheduler/framework/preemption/executor.go`,
+   `pkg/scheduler/util/utils.go`.** The execution path: in-memory fast paths for waiting and
+   pre-binding victims, the `DisruptionTarget` / `PodReasonPreemptionByScheduler` condition and its
+   message format, and `util.DeletePod`'s bare `metav1.DeleteOptions{}` — the source of §6's claim
+   that the victim keeps its own `terminationGracePeriodSeconds`. **Cloned and read directly this
+   session.**
 
 5. **`kubernetes/kubernetes` — `pkg/scheduler/apis/config/v1/defaults.go`.**
    `SetDefaults_DefaultPreemptionArgs`: `minCandidateNodesPercentage = 10`,
    `minCandidateNodesAbsolute = 100` — the sampling that makes preemption approximate on large
    fleets. **Cloned and read directly this session.**
 
-6. **`kubernetes-sigs/kueue` — `apis/kueue/v1beta2/clusterqueue_types.go` and
-   `workloadpriorityclass_types.go`** — https://github.com/kubernetes-sigs/kueue. The
-   `ClusterQueuePreemption` struct used in the Worked example: `reclaimWithinCohort`
-   (`Never` default | `LowerPriority` | `Any`), `withinClusterQueue` (`Never` default |
-   `LowerPriority` | `LowerOrNewerEqualPriority`), and `borrowWithinCohort` with its
-   `policy`/`maxPriorityThreshold` and the constraint that it works with Classic Preemption only,
-   not Fair Sharing. Plus `WorkloadPriorityClass`'s `value`/`description` and the note that
-   changing the value does not affect already-created Workloads. **Cloned and read directly this
-   session.**
+6. **`kubernetes-sigs/kueue` — `apis/kueue/v1beta2/{clusterqueue_types.go,workloadpriorityclass_types.go}`**
+   — https://github.com/kubernetes-sigs/kueue. The `ClusterQueuePreemption` struct used in the
+   Worked example — `reclaimWithinCohort` (`Never`|`LowerPriority`|`Any`), `withinClusterQueue`
+   (`Never`|`LowerPriority`|`LowerOrNewerEqualPriority`), `borrowWithinCohort` with its
+   `policy`/`maxPriorityThreshold` and its Classic-Preemption-only constraint — plus
+   `WorkloadPriorityClass` and the note that changing its value does not affect already-created
+   Workloads. **Cloned and read directly this session.**
 
 7. **`kubernetes-sigs/kueue` — `site/content/en/docs/concepts/preemption.md`.** Kueue's candidate
    ordering (borrowing queues first → lowest priority → most recently admitted), the four target-
@@ -1644,15 +1603,14 @@ convenience, its reachability is stated honestly.
 11. **PyTorch — `torch.distributed.checkpoint`** —
     https://docs.pytorch.org/docs/stable/distributed.checkpoint.html, plus
     https://pytorch.org/blog/distributed-checkpoint-efficient-checkpointing-in-large-scale-jobs/
-    and https://pytorch.org/blog/performant-distributed-checkpointing/. The `save`/`async_save`/`load`
-    API, per-rank sharded parallel saves, save-plan caching, and a named production deployment (IBM)
-    running it at scale — the mechanism behind §12's `C: 49 s → 0.6 s`. *(Search-verified; fetches
-    blocked by egress this session.)*
+    and https://pytorch.org/blog/performant-distributed-checkpointing/. The
+    `save`/`async_save`/`load` API, sharded parallel saves, save-plan caching, and a named
+    production deployment (IBM) — the mechanism behind §12's `C: 49 s → 0.6 s`.
+    *(Search-verified; fetches blocked by egress.)*
 
 12. **Market references — SemiAnalysis, "The Great GPU Shortage: Rental Capacity"**
     (https://newsletter.semianalysis.com/p/the-great-gpu-shortage-rental-capacity) **and a live
     cross-provider tracker such as getdeploying.com's H100 page**
-    (https://getdeploying.com/gpus/nvidia-h100). The first for the *structure* of the neocloud
-    rental market and the committed-versus-on-demand divergence in §15; the second to pull a fresh,
-    segment-labelled snapshot the day you build your ladder. Read the first for structure, never for
-    numbers. *(Both search-verified; fetches blocked by egress this session.)*
+    (https://getdeploying.com/gpus/nvidia-h100). The first for §15's market structure; the second to
+    pull a fresh, segment-labelled snapshot the day you build your ladder. Read the first for
+    structure, never for numbers. *(Both search-verified; fetches blocked by egress.)*
