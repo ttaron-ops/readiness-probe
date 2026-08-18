@@ -250,12 +250,15 @@ metric everyone trusts is structurally unable to see it.
   this lesson teaches — confirming the module's framing that "Datadog's taxonomy *is*
   this syllabus."
 - **acecloud.ai — "GPU Utilization In Production: Are Your GPUs Efficient?"** —
-  https://acecloud.ai/blog/gpu-utilization-production/. Describes a 24-GPU H100 inference
-  fleet reading `GPU_UTIL` 95–100% while actually memory-bandwidth-bound at tiny batch
-  size; after fixing batching, tensor-active climbed to roughly 0.55 and throughput
-  nearly tripled on the *same* hardware. **What it shows:** a concrete numeric
-  before/after of the exact util-lie → fix → metric-moves pattern this lesson wants you
-  to reproduce on your own cluster.
+  https://acecloud.ai/blog/gpu-utilization-production/ (URL confirmed live via search;
+  direct fetch blocked by this sandbox's egress proxy — the specific before/after figures
+  originally cited here could not be independently corroborated on re-verification, so
+  they've been removed rather than risk an invented quote). Describes the general
+  diagnostic pattern this lesson teaches: a sawtooth GPU-activity trace from slow
+  dataloaders/host transfers, and high `DRAM_ACTIVE` with low tensor activity as the
+  signal that data movement, not compute, is the bottleneck. **What it shows:** an
+  independent practitioner source describing the same DRAM-vs-tensor diagnostic this
+  lesson's PROF-field table teaches, in a production-fleet-efficiency context.
 - **Superorbital — "GPU Underutilization in Kubernetes"** —
   https://superorbital.io/blog/gpu-kubernetes-underutilization/. Walks the same
   GPU_UTIL-vs-PROF-field gap in a Kubernetes/DCGM context, with matching field IDs and
@@ -419,7 +422,7 @@ GPU_UTIL/SM_ACTIVE divergence you built here into a per-namespace dollar figure.
 
 **Real-world engineering blogs**
 - Datadog — GPU Monitoring Reference Architecture — https://www.datadoghq.com/architecture/gpu-monitoring/ — what it shows: a paid vendor's DCGM product taxonomy mirrors this lesson's field split exactly.
-- acecloud.ai — "GPU Utilization In Production: Are Your GPUs Efficient?" — https://acecloud.ai/blog/gpu-utilization-production/ — what it shows: a concrete before/after batching fix with real GPU_UTIL/tensor-active numbers on an H100 fleet.
+- acecloud.ai — "GPU Utilization In Production: Are Your GPUs Efficient?" — https://acecloud.ai/blog/gpu-utilization-production/ — what it shows: the sawtooth-utilization and DRAM-vs-tensor-activity diagnostic pattern this lesson's PROF-field table teaches, from an independent practitioner source.
 - Superorbital — "GPU Underutilization in Kubernetes" — https://superorbital.io/blog/gpu-kubernetes-underutilization/ — what it shows: the same field-ID gap argued end-to-end in a Kubernetes/DCGM context.
 - Grafana Labs — "NVIDIA DCGM Exporter Dashboard" — https://grafana.com/grafana/dashboards/12239-nvidia-dcgm-exporter-dashboard/ — what it shows: the widely-installed community dashboard that ships with the same GPU_UTIL-centric blind spot.
 

@@ -125,7 +125,7 @@ What only Nsight Compute sees:
 - **Warp-stall reasons** — the scheduler samples each SM's active warp PC and stall state, so you get *why* warps aren't issuing: `Long Scoreboard` (waiting on global/HBM loads → memory latency), `MIO Throttle`, `Barrier`, `Not Selected`, `Wait`. This is the deepest "why," and nothing below this rung can produce it.
 - **Occupancy limiters** — whether registers, shared memory, or block size is capping occupancy, which tells you the exact knob to turn.
 
-The magnitude is real, not theoretical: NVIDIA's own "Using Nsight Compute to Inspect your Kernels" walkthrough documents a case where profiling and optimizing a single kernel produced an **87.5% reduction in memory transactions** and a **68% reduction in kernel execution duration** — that's the scale of win the 10–100× profiling overhead is buying you, on the *one* kernel it's worth paying for.
+The magnitude is real, not theoretical: NVIDIA's own "Using Nsight Compute to Inspect your Kernels" walkthrough documents a worked case where profiling a single kernel's memory-transaction and warp-stall counters directly identified the fix that cut both memory traffic and kernel execution time substantially — that's the scale of win the 10–100× profiling overhead is buying you, on the *one* kernel it's worth paying for. (This lesson previously cited specific percentage figures for that case; they could not be independently re-confirmed on QA re-verification and have been removed rather than risk an invented number — read the walkthrough directly for the exact before/after counters.)
 
 If the fix at this level is "rewrite the kernel," for most platform work the real fix is upstream: switch to a fused/flash-attention kernel, change the precision, or reshape so a library GEMM hits the tensor cores. You rarely hand-write PTX — you use Nsight Compute to *prove which library change* will pay off.
 
@@ -153,7 +153,7 @@ That list is the answer to "name a bottleneck metrics can't see" — pick any on
 ## Real-world use cases
 
 - **PyTorch (Meta) — "Performance Debugging of Production PyTorch Models at Meta"** — https://pytorch.org/blog/performance-debugging-of-production-pytorch-models-at-meta/. A production PyTorch training job showed a repeating "GPU-idle, GPU-active, GPU-idle" pattern with the GPU idle more than half the training time; Meta's internal MAIProf (built on Kineto/`libcupti`, the same layer under public `torch.profiler`) found it by inspecting CPU/GPU timelines side by side. **What it shows:** the exact rung-1 methodology this lesson teaches, applied at hyperscale production, and it's the direct real-world analog of this lesson's own worked example.
-- **NVIDIA Developer Blog — "Using Nsight Compute to Inspect your Kernels"** — https://developer.nvidia.com/blog/using-nsight-compute-to-inspect-your-kernels/. A worked case study where profiling a single kernel with Nsight Compute drove an 87.5% reduction in memory transactions and a 68% reduction in kernel execution duration. **What it shows:** a concrete, numeric rung-3 result — proof that the 10–100× profiling overhead is buying a real, large fix, not a marginal one.
+- **NVIDIA Developer Blog — "Using Nsight Compute to Inspect your Kernels"** — https://developer.nvidia.com/blog/using-nsight-compute-to-inspect-your-kernels/ (URL confirmed live via search; direct fetch blocked by this sandbox's egress proxy). A worked case study profiling a single kernel with Nsight Compute, using its memory-transaction and warp-stall counters to find and validate a concrete fix. **What it shows:** a real rung-3 walkthrough — proof the 10–100× profiling overhead is buying an identifiable, real fix, not a marginal one; read it directly for the exact before/after counter values.
 
 *(Both URLs are the canonical pages confirmed via search; this session's sandbox blocks direct fetch to `pytorch.org` and `developer.nvidia.com` — treat as [SEARCH-VERIFIED], not independently re-fetched here.)*
 
@@ -221,7 +221,7 @@ This lesson is the action layer on top of every metric lesson before it: L1/L2 g
 
 **Real-world engineering blogs**
 - PyTorch (Meta) — "Performance Debugging of Production PyTorch Models at Meta" — the GPU-idle/GPU-active production case study this lesson's "Why this matters" is built on. https://pytorch.org/blog/performance-debugging-of-production-pytorch-models-at-meta/
-- NVIDIA Developer Blog — "Using Nsight Compute to Inspect your Kernels" — a concrete rung-3 fix with real before/after numbers (87.5% / 68% reductions). https://developer.nvidia.com/blog/using-nsight-compute-to-inspect-your-kernels/
+- NVIDIA Developer Blog — "Using Nsight Compute to Inspect your Kernels" — a concrete rung-3 walkthrough with real before/after profiling counters. https://developer.nvidia.com/blog/using-nsight-compute-to-inspect-your-kernels/
 
 **Deeper dives**
 - Spheron — "GPU Profiling for AI Workloads: Nsight Compute, Nsight Systems, and PyTorch Profiler" (2026) — the fullest practitioner map of the three-tool ladder and the "why teams under-profile shared GPUs" friction this lesson's pitfalls section draws on. https://www.spheron.network/blog/gpu-profiling-ai-workloads-nsight-compute-pytorch-profiler-guide/
