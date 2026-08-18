@@ -38,3 +38,6 @@ scratch/
 /torchtitan/
 /ironic/
 /nhc/
+
+# Stray package downloads from agent research sessions
+*.whl
