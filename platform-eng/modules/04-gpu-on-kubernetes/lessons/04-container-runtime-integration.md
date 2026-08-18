@@ -143,7 +143,7 @@ Regardless of path, a healthy `compute,utility` GPU container contains:
 
 - **[CDI specification (cncf-tags/container-device-interface)](https://github.com/cncf-tags/container-device-interface)** — the primary source for everything in this lesson's runtime matrix and spec format; read the `containerEdits` schema directly rather than trusting a summary.
 - **[NVIDIA/gpu-operator#1220](https://github.com/NVIDIA/gpu-operator/issues/1220)** — a real practitioner incident ("gpu-operator breaks when upgrading EKS to K8s v1.30") with the log line `failed to get sandbox runtime: no runtime for 'nvidia' is configured` — a runtime-wiring failure directly in this lesson's territory, not a hypothetical. Environment: K8s v1.30, GPU Operator v24.6.2, driver 535.183.01, Ubuntu 22.04, previously working on 1.29.
-- **Modal, "How we achieved truly serverless GPUs"** — describes CUDA-side checkpoint/restore techniques for fast cold starts, adjacent to this lesson's container/device boundary theme (what has to be re-established when a GPU container resumes). *(Found via search, not independently fetched this session — treat as high-confidence but unconfirmed.)*
+- **Modal, ["How we achieved truly serverless GPUs"](https://modal.com/blog/truly-serverless-gpus)** — describes CUDA-side checkpoint/restore techniques for fast cold starts, adjacent to this lesson's container/device boundary theme (what has to be re-established when a GPU container resumes). *(Confirmed real via search this session, not independently fetched — treat as high-confidence but unconfirmed.)*
 - **Honest gap:** no company engineering blog narrating a CDI migration in production with concrete before/after numbers turned up in research for this lesson. Rather than inventing one, lean on the CDI spec repository itself and the real gpu-operator issue above as the strongest evidence available.
 
 ## Worked example
@@ -236,7 +236,7 @@ Next: **[04.5 · Driver lifecycle & fleet upgrades](05-driver-lifecycle-upgrades
 
 **Real-world engineering blogs**
 - [NVIDIA/gpu-operator#1220](https://github.com/NVIDIA/gpu-operator/issues/1220) — a real practitioner incident with the exact runtime-wiring failure log line (`no runtime for 'nvidia' is configured`) this lesson's mechanism explains.
-- Modal, "How we achieved truly serverless GPUs" — CUDA-side checkpoint/restore adjacent to the container/device boundary theme. *(Found via search, not independently fetched this session — spot-check before citing.)*
+- Modal, ["How we achieved truly serverless GPUs"](https://modal.com/blog/truly-serverless-gpus) — CUDA-side checkpoint/restore adjacent to the container/device boundary theme. *(Confirmed real via search, not independently fetched this session — spot-check before citing.)*
 
 **Deeper dives**
 - [NVIDIA GPU Operator (repo)](https://github.com/NVIDIA/gpu-operator) — read the `ClusterPolicy` toolkit configuration and release notes for the version history behind the 25.10+ CDI-default change described above.

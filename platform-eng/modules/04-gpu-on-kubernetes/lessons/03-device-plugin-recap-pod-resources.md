@@ -136,8 +136,8 @@ Because the socket lives on the node's filesystem and the kubelet does not expos
 ## Real-world use cases
 
 - **[NVIDIA dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter)** — the reference implementation of this exact join: DCGM fields keyed by GPU UUID, enriched with pod/namespace/container labels resolved through the pod-resources `List` RPC. Read the source, not just the README, to see the join in real Go.
-- **NVIDIA Developer Blog, "Monitoring GPUs in Kubernetes with DCGM"** — a vendor write-up of this exact monitoring pattern in production dashboards. *(This URL was found via search but could not be fetched this session to verify current content — treat as high-confidence but unconfirmed, and spot-check before citing verbatim.)*
-- **NVIDIA Developer Blog, "Get Real-Time Visibility into GPU Usage Across Kubernetes Clusters"** — another vendor write-up describing a production monitoring stack built on this API. *(Same caveat: found via search, not independently fetched this session.)*
+- **NVIDIA Developer Blog, ["Monitoring GPUs in Kubernetes with DCGM"](https://developer.nvidia.com/blog/monitoring-gpus-in-kubernetes-with-dcgm/)** — a vendor write-up of this exact monitoring pattern in production dashboards. *(Confirmed real via search this session; not independently fetched — spot-check before citing verbatim.)*
+- **NVIDIA Developer Blog, ["Get Real-Time Visibility into GPU Usage Across Kubernetes Clusters"](https://developer.nvidia.com/blog/get-real-time-visibility-into-gpu-usage-across-kubernetes-clusters/)** — another vendor write-up describing a production monitoring stack built on this API. *(Same caveat: confirmed real via search, not independently fetched this session.)*
 - **Honest gap:** no non-NVIDIA company engineering blog specifically about consuming the pod-resources API directly turned up in research for this lesson. Rather than inventing one, lean on the two primary sources above — the kubelet proto itself and the dcgm-exporter source — as the strongest evidence available.
 
 ## Worked example
@@ -308,8 +308,8 @@ Next: **[04.4 · Container runtime integration (CDI)](04-container-runtime-integ
 - [NVIDIA k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin) (confirmed v0.17.1) — the recap contract: what registers and advertises the device UUIDs this lesson's API reports on.
 
 **Real-world engineering blogs**
-- NVIDIA Developer Blog, "Monitoring GPUs in Kubernetes with DCGM" — production dashboard pattern built on this API. *(Found via search, not independently fetched this session — spot-check before citing.)*
-- NVIDIA Developer Blog, "Get Real-Time Visibility into GPU Usage Across Kubernetes Clusters" — a second vendor write-up of the same production pattern. *(Same caveat.)*
+- NVIDIA Developer Blog, ["Monitoring GPUs in Kubernetes with DCGM"](https://developer.nvidia.com/blog/monitoring-gpus-in-kubernetes-with-dcgm/) — production dashboard pattern built on this API. *(Confirmed real via search, not independently fetched this session — spot-check before citing.)*
+- NVIDIA Developer Blog, ["Get Real-Time Visibility into GPU Usage Across Kubernetes Clusters"](https://developer.nvidia.com/blog/get-real-time-visibility-into-gpu-usage-across-kubernetes-clusters/) — a second vendor write-up of the same production pattern. *(Same caveat.)*
 
 **Deeper dives**
 - [NVIDIA dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter) — read the source (not just the README) for the exact `List`-based UUID→pod join your capstone re-derives.

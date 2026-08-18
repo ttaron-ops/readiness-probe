@@ -8,7 +8,7 @@ est_time: "7h"
 prev: "07-time-slicing-attribution.md"
 next: "09-dra-driver-and-quotas.md"
 artifacts: []
-sources: 7
+sources: 5
 ---
 
 # 04.8 · MPS and choosing a sharing mode
@@ -78,7 +78,7 @@ $ kubectl describe node <node> | grep nvidia.com/gpu:
   nvidia.com/gpu:  4        # 4 concurrent MPS clients over 1 physical GPU
 ```
 
-Like time-slicing, allocation is still uniform — MPS **does not** give each client a distinct UUID (only MIG does). So the attribution trap from lesson 07 applies identically: **you still cannot bill from allocation counts; you fall back to DCGM per-pod utilization.** MPS changes throughput and isolation, not the attribution story.
+Like time-slicing, allocation is still uniform — MPS **does not** give each client a distinct UUID (only MIG does). So the attribution hole from lesson 07 applies identically: **you still cannot bill from allocation counts; you fall back to DCGM per-pod utilization.** MPS changes throughput and isolation, not the attribution story.
 
 **Important, directly confirmed against the plugin's own source** ([NVIDIA/k8s-device-plugin](https://github.com/NVIDIA/k8s-device-plugin), v0.17.1 README): MPS sharing has been marked **"experimental"** since device-plugin **v0.15.0**, and is **explicitly documented as not supported on devices with MIG enabled**. Both facts matter operationally: (1) "experimental" from the vendor that owns the component is not a formality — treat MPS as a mode you adopt with eyes open on a fleet where a regression is tolerable, not as a default; (2) the MIG-incompatibility is absolute at the device level — you pick MIG *or* MPS for a given physical GPU, never both simultaneously, so a fleet using MIG for isolated tenants and MPS for a shared pool needs that split enforced at the node-pool level, not the GPU level.
 
@@ -200,4 +200,4 @@ Next: **[04.9 · DRA driver (real install) + multi-tenancy quotas](09-dra-driver
 
 **Deeper dives**
 - NVIDIA GPU Operator docs, ["GPU Sharing"](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-sharing.html) — the `sharing.mps` ConfigMap and ClusterPolicy wiring reference behind the config shown in this lesson. *(Not independently fetched this session — proxy-blocked; spot-check field names against your installed Operator version.)*
-- Lesson [07 — Time-slicing and the attribution trap](07-time-slicing-attribution.md) — read first if you haven't: the DCGM-fallback attribution mechanism this lesson reuses without re-deriving is fully worked there, including the dcgm-exporter#642 evidence for why you must verify per-pod resolution empirically.
+- Lesson [07 — Time-slicing and the attribution hole](07-time-slicing-attribution.md) — read first if you haven't: the DCGM-fallback attribution mechanism this lesson reuses without re-deriving is fully worked there, including the dcgm-exporter#642 evidence for why you must verify per-pod resolution empirically.

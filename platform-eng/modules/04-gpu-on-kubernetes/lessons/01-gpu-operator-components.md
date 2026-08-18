@@ -8,7 +8,7 @@ est_time: "10h"
 prev: null
 next: "02-crash-loop-diagnosis.md"
 artifacts: []
-sources: 9
+sources: 5
 ---
 
 # 04.1 · GPU Operator components and the init-container dependency chain

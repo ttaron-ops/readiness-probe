@@ -66,7 +66,9 @@ Total ≈ **109 hrs ≈ 9 weeks**. Spine = L1–L2 + L10.
 - **scaleops'** MIG-vs-MPS-vs-time-slicing comparison for the cold interview answers.
 
 > ⚠️ **Version-sensitive — re-verify at study time:** DRA GA in k8s 1.34, gate locks in
-> 1.35, **1.34.0/.1 are buggy — use 1.33.x or ≥1.34.2**. The DRA driver is **not** folded
+> 1.35, **1.34.0/.1 are buggy — use 1.33.x or ≥1.34.4** (the two kubelet/scheduler DRA fixes
+> landed in 1.34.4, released 2026-02-10 — not 1.34.2 as earlier notes here said; verify
+> against `CHANGELOG-1.34.md` before quoting it live). The DRA driver is **not** folded
 > into the GPU Operator — there was never a public GPU Operator "25.8" release; that number
 > belonged to the DRA driver's own old CalVer tag scheme. The driver still installs as a
 > **separate companion Helm chart**; its repo/chart moved to
@@ -86,5 +88,11 @@ Total ≈ **109 hrs ≈ 9 weeks**. Spine = L1–L2 + L10.
 
 1. Lessons in order; every hands-on break/fix becomes a failure-mode-log entry.
 2. Batch GPU rental: a cheap sub-$1/hr GPU for most; one A100/H100 session for MIG (L6).
+   You don't need a GPU for everything — the shared
+   [**fake GPU fleet lab**](practice/fake-gpu-fleet/) simulates a 50–200-node heterogeneous
+   fleet with `kwok` and a synthetic DCGM exporter, at zero cost. It covers this module's
+   allocation accounting, quota, the pod-resources join (mock the socket), and DRA/
+   ResourceClaim scheduling (L9); only the CDI/driver/MIG lessons (L1, L4–L6) need real
+   silicon, and only for one afternoon.
 3. Answer the [checkpoint](checkpoint.md) from memory; flip `status` and update Notion
    when the attribution exporter runs and the failure-mode log is written.

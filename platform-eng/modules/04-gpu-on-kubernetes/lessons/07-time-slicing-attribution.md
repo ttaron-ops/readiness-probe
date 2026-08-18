@@ -1,17 +1,17 @@
 ---
 lesson: "04.7"
-title: "Time-slicing and the attribution trap"
+title: "Time-slicing and the attribution hole"
 module: "04"
-concept: "Time-slicing and the attribution trap"
+concept: "Time-slicing and the attribution hole"
 status: not-started
 est_time: "10h"
 prev: "06-mig-operations.md"
 next: "08-mps-choosing-sharing.md"
 artifacts: []
-sources: 9
+sources: 7
 ---
 
-# 04.7 · Time-slicing and the attribution trap
+# 04.7 · Time-slicing and the attribution hole
 
 > **Concept.** Time-slicing multiplies one GPU into N schedulable replicas that share it by taking turns — with no memory isolation, no fault isolation, and no per-pod allocation signal — so cost cannot be attributed from allocation counts and must fall back to DCGM per-pod utilisation.
 >
@@ -118,7 +118,7 @@ Time-slicing gives every client the **full framebuffer** and the full SM array o
 
 This is why time-slicing is for **cooperative, trusted, bursty** workloads (dev notebooks, low-QPS inference of your own services) and never for hostile multi-tenancy.
 
-### 3 — Property two: no per-pod allocation signal (the attribution trap)
+### 3 — Property two: no per-pod allocation signal (the attribution hole)
 
 Here is the mechanism that breaks cost attribution. Query the kubelet **pod-resources API** — the same gRPC service you built a Go client against in lesson 03, and the authoritative record of which device IDs each pod was handed — for two pods scheduled onto the sliced GPU:
 
@@ -146,7 +146,7 @@ The allocation signal is dead. Do not try to resurrect it with heuristics — th
 
 ### 4 — Proof this is a live, current problem: dcgm-exporter#642
 
-This is not a corner case a lesson author invented to make a point. On **August 10, 2026** — checked directly against NVIDIA's own reference telemetry exporter — this exact failure mode is an open, unresolved GitHub issue: **[NVIDIA/dcgm-exporter#642](https://github.com/NVIDIA/dcgm-exporter/issues/642)**, titled *"Why are DCGM_FI_DEV_GPU_UTIL values not isolated per vGPU/Pod?"*
+This is not a corner case a lesson author invented to make a point. Filed March 9, 2026 and closed April 6, 2026 — checked directly against NVIDIA's own reference telemetry exporter — this exact failure mode is a confirmed GitHub issue: **[NVIDIA/dcgm-exporter#642](https://github.com/NVIDIA/dcgm-exporter/issues/642)**, titled *"Why are DCGM_FI_DEV_GPU_UTIL values not isolated per vGPU/Pod?"* A DCGM maintainer closed it as expected behavior, not a bug: `DCGM_FI_DEV_GPU_UTIL` is a **device-aggregate NVML value** — one number for the whole GPU regardless of how many processes are on it — and pointed to issue #594 for per-process-attribution improvements. That confirmation is actually the stronger version of this lesson's point: this isn't a fixable bug you can wait out, it's how the underlying NVML metric is defined.
 
 A practitioner running **Blackwell-generation hardware**, testing time-slicing with `KUBERNETES_VIRTUAL_GPUS=true`, reports — quoting the issue verbatim — that:
 
@@ -177,7 +177,7 @@ cost(pod) = gpu_hourly_cost
 
 For your Go cost operator this is the time-sliced hard case: watch pods with the `nvidia.com/gpu.sharing-strategy=time-slicing` node label, join pod-resources (who is on which physical UUID — this tells you the denominator, the set of pods contending for the same device) with DCGM profiling series (how much each used — this splits the numerator), and emit a *utilization-weighted* charge.
 
-> **Note on the profiling metrics — this is exactly what dcgm-exporter#642 warns you about.** `DCGM_FI_PROF_*` fields (SM active/occupancy, graphics-engine active, tensor active) come from the profiling module and on some driver/GPU combinations may still be collected device-wide rather than per-process, especially on newer architectures where support is still maturing. **Verify on your own SKU** that the field you're relying on actually carries a distinct value per pod under your sharing configuration before you trust it in a bill — the dcgm-exporter maintainers had not resolved issue #642 as of this writing, so "should work" is not "confirmed working" on every generation. If a metric only resolves per-GPU on your hardware, fall back to `DCGM_FI_DEV_GPU_UTIL` with best-effort PID association and **state the precision limit in the report**. Naming the limit explicitly, rather than presenting a falsely-precise number, is the senior move — and it's the same standard of honesty the issue's own reporter is holding NVIDIA to.
+> **Note on the profiling metrics — this is exactly what dcgm-exporter#642 warns you about.** `DCGM_FI_PROF_*` fields (SM active/occupancy, graphics-engine active, tensor active) come from the profiling module and on some driver/GPU combinations may still be collected device-wide rather than per-process, especially on newer architectures where support is still maturing. **Verify on your own SKU** that the field you're relying on actually carries a distinct value per pod under your sharing configuration before you trust it in a bill — a DCGM maintainer confirmed in issue #642 that `DCGM_FI_DEV_GPU_UTIL` specifically is a device-aggregate NVML value by design, not a bug that will be patched, so "should work" is not "confirmed working" on every generation for the `PROF_*` fields either. If a metric only resolves per-GPU on your hardware, fall back to `DCGM_FI_DEV_GPU_UTIL` with best-effort PID association and **state the precision limit in the report**. Naming the limit explicitly, rather than presenting a falsely-precise number, is the senior move — and it's the same standard of honesty the issue's own reporter was pushing NVIDIA toward.
 
 ## Perspectives
 
@@ -187,11 +187,11 @@ For your Go cost operator this is the time-sliced hard case: watch pods with the
 
 **FinOps/attribution view.** Allocation-based billing under time-slicing isn't merely imprecise — it's actively adversarial. It systematically rewards the tenant who requests the most replicas regardless of use, and punishes the tenant who is frugal, because cost is split by ticket count, not by work done. Any billing model that produces perverse incentives (encouraging tenants to over-request "slices" just to lower their per-slice share) is a bug in the FinOps design, not a quirk to route around after the fact.
 
-**Telemetry/observability-engineer view.** dcgm-exporter#642 matters beyond this one lesson because it's evidence that even NVIDIA's own reference GPU-metrics exporter — the tool most GPU-fleet operators build their cost and health dashboards on top of — has an acknowledged, open gap on exactly the sharing mode this lesson covers. If you are building or evaluating a GPU observability stack, the practical takeaway is: don't assume "NVIDIA ships it, so it must resolve correctly" for shared-GPU telemetry. Verify field-by-field on your generation of hardware.
+**Telemetry/observability-engineer view.** dcgm-exporter#642 matters beyond this one lesson because it's evidence that even NVIDIA's own reference GPU-metrics exporter — the tool most GPU-fleet operators build their cost and health dashboards on top of — has a confirmed, by-design gap on exactly the sharing mode this lesson covers. If you are building or evaluating a GPU observability stack, the practical takeaway is: don't assume "NVIDIA ships it, so it must resolve correctly" for shared-GPU telemetry. Verify field-by-field on your generation of hardware.
 
 ## Real-world use cases
 
-- **["Why are DCGM_FI_DEV_GPU_UTIL values not isolated per vGPU/Pod?" — NVIDIA/dcgm-exporter#642](https://github.com/NVIDIA/dcgm-exporter/issues/642).** A practitioner on Blackwell-generation hardware, time-slicing enabled via `KUBERNETES_VIRTUAL_GPUS=true`, reports that "all telemetry values (Utilization, Power, Temp) are identical for all pods sharing the same GPU." **Primary-source, currently-open proof of this lesson's entire thesis** — not a synthesized example, a real engineer's real bug report against real hardware.
+- **["Why are DCGM_FI_DEV_GPU_UTIL values not isolated per vGPU/Pod?" — NVIDIA/dcgm-exporter#642](https://github.com/NVIDIA/dcgm-exporter/issues/642).** A practitioner on Blackwell-generation hardware, time-slicing enabled via `KUBERNETES_VIRTUAL_GPUS=true`, reports that "all telemetry values (Utilization, Power, Temp) are identical for all pods sharing the same GPU." A DCGM maintainer confirmed it's by design (device-aggregate NVML metric) before closing the issue. **Primary-source, maintainer-confirmed proof of this lesson's entire thesis** — not a synthesized example, a real engineer's real bug report against real hardware, resolved as expected behavior rather than a bug that will go away.
 - **[ScaleOps — "Kubernetes GPU Sharing"](https://scaleops.com/blog/kubernetes-gpu-sharing/).** A practitioner comparison of time-slicing, MPS, and MIG covering isolation and attribution trade-offs — useful as a second, independent voice reaching the same conclusions as this lesson. *(Not independently fetched this session — the research proxy blocked the domain; the URL and its subject were corroborated via search but content could not be directly re-verified. Spot-check before relying on specifics.)*
 - **["GPU cost attribution for Kubernetes is here" — CloudZero](https://www.cloudzero.com/blog/gpu-cost-attribution-kubernetes/).** A cost-observability vendor's post that states the same problem in FinOps language: DCGM reports at the physical-GPU level and, in their framing, "cannot attribute compute to individual virtual replicas" — a useful non-NVIDIA voice independently arriving at the identical conclusion this lesson does. *(Not independently fetched this session — proxy-blocked; treat specifics as unverified until you can load the page yourself.)*
 
@@ -238,7 +238,7 @@ Produce two artifacts for the [Per-pod GPU attribution](../practice/per-pod-attr
 1. **Believing `DCGM_FI_DEV_GPU_UTIL` gives you per-pod resolution under sharing.** It doesn't — it's explicitly documented as not MIG-compatible and not per-replica isolated, and dcgm-exporter#642 shows it reporting identical values across all co-resident pods on Blackwell hardware. Use `DCGM_FI_PROF_GR_ENGINE_ACTIVE` (or `DCGM_FI_PROF_SM_ACTIVE`) instead, and still verify per-pod resolution on your own generation.
 2. **Trying to fix allocation-based billing with a cleverer formula.** There is no arithmetic transform of "4 identical allocations" that recovers who actually used the GPU. The information was never captured; no downstream query can resurrect it. You need a different signal (DCGM utilization), not a different formula over the same signal.
 3. **Alerting only on Kubernetes `OOMKilled` for GPU memory pressure.** CUDA-level OOM from a time-sliced neighbor exits non-zero without ever setting that reason — your incident detection needs a second path (log-grep for `CUDA out of memory`, or exit-code + GPU-error correlation) that doesn't depend on the kubelet's cgroup-scoped OOM machinery.
-4. **Assuming a `DCGM_FI_PROF_*` field "should" be per-pod because the docs describe it as fine-grained.** dcgm-exporter#642 is proof that "should" and "is, on this hardware" diverge in practice, on current-generation GPUs, in an issue that was still open as of this writing. Always spot-check on your actual SKU/driver combination before shipping a bill based on it.
+4. **Assuming a `DCGM_FI_PROF_*` field "should" be per-pod because the docs describe it as fine-grained.** dcgm-exporter#642 is proof that "should" and "is, on this hardware" diverge in practice on current-generation GPUs — and that gap isn't scheduled to close (NVIDIA closed the issue confirming the legacy field is device-aggregate by design, not a bug). Always spot-check on your actual SKU/driver combination before shipping a bill based on it.
 5. **Treating time-slicing and MIG as interchangeable "GPU sharing" without naming which attribution regime you're in.** They produce the same `nvidia.com/gpu` resource name at the API surface but completely different attribution stories underneath — MIG gives distinct UUIDs and allocation-based billing works; time-slicing gives a shared UUID and allocation-based billing is meaningless. Conflating them in a design doc is a fast way to fail the "attribute cost to a time-sliced GPU" interview probe.
 
 ## Self-check
@@ -268,4 +268,4 @@ Next: **[04.8 · MPS and choosing a sharing mode](08-mps-choosing-sharing.md)** 
 
 **Deeper dives**
 - NVIDIA GPU Operator docs, ["Time-Slicing GPUs in Kubernetes"](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/gpu-sharing.html) — canonical config reference and ClusterPolicy wiring for the sharing config shown in this lesson. *(Not independently fetched — proxy-blocked this session; treat field names as needing a spot-check against your installed Operator version.)*
-- The GitHub issue thread on dcgm-exporter#642 itself is worth reading past the opening report — maintainer/community replies (if any accumulate) are the fastest way to learn whether the profiling-metric gap has since been resolved on your hardware generation.
+- The GitHub issue thread on dcgm-exporter#642 itself is worth reading past the opening report — a DCGM maintainer's reply (closing the issue as expected behavior, pointing at `DcgmCacheManager.cpp` and the NVML `nvmlDeviceGetUtilizationRates` API, and cross-referencing `dcgm-exporter#594` for per-process-attribution improvements) is the fastest way to understand exactly why `DCGM_FI_DEV_GPU_UTIL` is device-aggregate by design.

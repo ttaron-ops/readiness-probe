@@ -8,7 +8,7 @@ est_time: "10h"
 prev: "05-driver-lifecycle-upgrades.md"
 next: "07-time-slicing-attribution.md"
 artifacts: []
-sources: 8
+sources: 6
 ---
 
 # 04.6 · MIG Operations & Per-Slice Attribution
