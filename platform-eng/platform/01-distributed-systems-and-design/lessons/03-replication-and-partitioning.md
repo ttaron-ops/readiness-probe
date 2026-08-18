@@ -337,6 +337,69 @@ Every mitigation that splits a key across shards, and every query that must touc
 
 Three design consequences follow directly. **Do not fan out further than you must** — salt only the tenants that need it, and pick the smallest S that fixes the hot shard. **Hedged requests** (send a duplicate to a second replica after a delay near p95, take the first answer) convert a per-shard tail into a per-replica-pair tail and are the standard fix. **Partial results** — return what k−1 shards produced and mark the response incomplete — are often better product behaviour than making every user wait for the slowest shard.
 
+### Secondary indexes: the partitioning decision nobody plans for
+
+You partitioned by `tenant_id`. Someone now needs "all jobs in state `FAILED` across the fleet," or "the job holding GPU `node-042/3`." Neither predicate contains the partition key, and there are exactly two ways to answer them. Both are in production systems; they fail differently.
+
+```
+ ── LOCAL (document-partitioned) INDEX — each shard indexes only its own rows ──
+
+    shard 0            shard 1            shard 2            shard 3
+    ┌──────────┐       ┌──────────┐       ┌──────────┐       ┌──────────┐
+    │ rows     │       │ rows     │       │ rows     │       │ rows     │
+    │ idx:state│       │ idx:state│       │ idx:state│       │ idx:state│
+    └────┬─────┘       └────┬─────┘       └────┬─────┘       └────┬─────┘
+         └──────────────────┴───────┬──────────┴─────────────────┘
+                                    │  query FAILED must ask EVERY shard
+                                 SCATTER-GATHER
+
+    WRITE  : cheap and local. One row insert touches one shard, index included.
+             The index is always consistent with the data, because they commit
+             together on the same node.
+    READ   : fan-out to all P shards ⇒ the F(x)^P tail arithmetic from above.
+             With P = 1,024 and a per-shard p99 of 10 ms, this query's p99 is
+             not 10 ms — 0.99^1024 ≈ 0.00003, so essentially EVERY such query
+             exceeds the per-shard p99.
+    Used by: Elasticsearch (per-shard Lucene indexes), Cassandra secondary
+             indexes, MongoDB, most relational shards.
+
+ ── GLOBAL (term-partitioned) INDEX — the index itself is partitioned, by term ─
+
+    index shard A: terms  FAILED, DONE  →  [row ids, wherever they live]
+    index shard B: terms  RUNNING, …    →  [row ids …]
+          ▲                    ▲
+          │ a write of ONE row must update the index shard owning ITS term —
+          │ a DIFFERENT node from the one holding the row
+          │
+    WRITE  : now a distributed write. Two nodes must both apply, so you either
+             (a) make it a cross-shard transaction (slow, and you have
+                 reinvented lesson 02's problem), or
+             (b) make it ASYNCHRONOUS — the index lags the data, so a row can
+                 be FAILED for hundreds of milliseconds before any query
+                 finds it. This is the choice almost everyone makes.
+    READ   : one index shard, then fetch the rows. No fan-out on the index.
+    Used by: DynamoDB Global Secondary Indexes (explicitly eventually
+             consistent, and the documentation says so), Riak, and any
+             hand-rolled "index table" you have ever written.
+```
+
+The decision table, which is the thing to carry into a design review:
+
+| | Local (document-partitioned) | Global (term-partitioned) |
+|---|---|---|
+| Write cost | 1 node, atomic with the row | 2+ nodes; cross-shard txn or async lag |
+| Read cost | scatter-gather over all P shards | 1 index shard + row fetches |
+| Consistency | index always matches the rows | index lags; "not found" may mean "not yet" |
+| Fails when | P is large, or the query is frequent | writes are hot, or the reader cannot tolerate lag |
+| Rule of thumb | few shards, or rare queries | many shards, and queries you serve constantly |
+
+**The third option, and usually the right one for a control plane: do not build a secondary index at all.** Two alternatives beat both rows above for the queries a GPU platform actually needs:
+
+- **Denormalise into a second, differently-partitioned table.** "Jobs by state" becomes its own table partitioned by `(state, time_bucket)`, written alongside the primary row. You have chosen the async global index, but explicitly, with your own consistency story and your own repair job, rather than inheriting one from the database's defaults.
+- **Push the query to a system built for it.** Ship changes to a search or analytics store (this is exactly what change data capture is for, and lesson 07 covers it). Then the fan-out cost lands in a system whose whole design is fan-out, and your operational store keeps a single access pattern.
+
+The reason this matters here rather than in a database course: **a secondary-index decision silently re-introduces every problem in this lesson.** A global index is asynchronous replication with an RPO. A local index is a fan-out with the `F(x)^k` tail. And an index on a low-cardinality field — `state`, with five distinct values across 500 M rows — is a hot shard by construction, because "FAILED" is one term and terms are the partition key. Ask for the index's partition key by name, and the failure mode announces itself.
+
 ### Rebalancing without causing the outage you were preventing
 
 Rebalancing moves data while the system serves traffic, using the same disks, the same NICs and the same page cache. Uncontrolled, it is an act of self-harm: you add capacity to relieve pressure and the copy traffic browns out the system before the new capacity is usable.
