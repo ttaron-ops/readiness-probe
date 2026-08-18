@@ -135,18 +135,12 @@ with `system-` or whose value exceeds `HighestUserDefinablePriority`, unless it 
 the two auto-created classes. So the whole of `[−2³¹, 1e9]` is yours, and nothing you create can
 outrank a system component.
 
-Four fields, and three of them have non-obvious semantics:
-
-- **`value`** (required) — any valid int32, including negative. Negative values are legitimate and
-  useful for "run only on scraps".
-- **`globalDefault`** (optional, default false) — this class applies to pods that name no class.
-  Only one *should* be marked default; if several are, **the smallest value among them wins**. Do
-  not rely on that tiebreak — set exactly one.
-- **`description`** (optional) — free text. Use it; `kubectl describe priorityclass` is where an
-  on-call engineer will look at 3am to find out what a tier means.
-- **`preemptionPolicy`** (optional, defaults to `PreemptLowerPriority`) — either
-  `PreemptLowerPriority` or **`Never`**. This is the field people miss, and it is the key to the
-  tier design.
+Four fields, three with non-obvious semantics. **`value`** (required) is any int32, including
+negative — useful for "run only on scraps". **`globalDefault`** applies the class to pods naming no
+class; only one *should* be default, and if several are, **the smallest value wins** (do not rely
+on that — set exactly one). **`description`** is free text, and worth writing: `kubectl describe
+priorityclass` is where an on-call engineer looks at 3am. **`preemptionPolicy`** defaults to
+`PreemptLowerPriority` and is the field people miss — it is the key to the tier design.
 
 **`preemptionPolicy: Never` decouples two things that intuition welds together.** A pod with a
 high value and `Never` gets **queue priority** — it sorts ahead of lower-priority pods in the
@@ -286,19 +280,13 @@ counter-intuitive shape: it removes everything, then puts back as much as it can
               NO  → take v out again; v is a VICTIM
 
      ┌──────────────────────────────────────────────────────────────────────────┐
-     │  node has 8 GPUs.  preemptor needs 2.  eligible victims each hold 1 GPU:  │
-     │     v1 (prio 400, 1 GPU)  v2 (prio 200, 1 GPU)  v3 (prio 100, 1 GPU)     │
-     │     v4 (prio 100, 1 GPU)  v5 (prio  -5, 1 GPU)   … 3 GPUs held by prod   │
-     │                                                                          │
-     │  (b) remove all five → 5 free + 0 = fits ✓                               │
-     │  (c) order: v1, v2, v3, v4, v5      (descending importance)              │
-     │  (e) put v1 back → 4 free ≥ 2 ✓ REPRIEVED                                │
-     │      put v2 back → 3 free ≥ 2 ✓ REPRIEVED                                │
-     │      put v3 back → 2 free ≥ 2 ✓ REPRIEVED                                │
-     │      put v4 back → 1 free < 2 ✗ VICTIM                                   │
-     │      put v5 back → 1 free < 2 ✗ VICTIM   (v4 stayed out, so still 1)     │
-     │                                                                          │
-     │  VICTIMS = {v4, v5}  — the two LEAST important, and only two.            │
+     │  8-GPU node, 3 GPUs held by prod. Preemptor needs 2. Five eligible        │
+     │  victims, 1 GPU each:  v1(400) v2(200) v3(100) v4(100) v5(-5)             │
+     │  (b) remove all five → 5 free ✓ fits, so the node is viable               │
+     │  (e) v1 back → 4 free ≥ 2 ✓ REPRIEVED   v2 back → 3 ✓ REPRIEVED           │
+     │      v3 back → 2 ✓ REPRIEVED            v4 back → 1 < 2 ✗ VICTIM          │
+     │      v5 back → still 1 < 2 ✗ VICTIM                                       │
+     │  VICTIMS = {v4, v5} — the two LEAST important, and only two.              │
      └──────────────────────────────────────────────────────────────────────────┘
 
   f) return (victims, number of PDB violations among them)
@@ -382,16 +370,12 @@ spec:
                                            # final checkpoint before SIGKILL
 ```
 
-The tradeoff is symmetric and you must own both sides:
-
-- **Too short** → the trainer cannot finish a final checkpoint, so every preemption costs the full
-  `T_ckpt/2` instead of ~0. On a synchronous checkpointing job whose save takes 49 seconds, a
-  30-second grace period guarantees the final save fails.
-- **Too long** → the preemptor waits. The scheduler does not block on termination, but the *node's
-  resources are not actually free* until the victim's containers exit, so a 600-second grace period
-  on a hung victim is 10 minutes during which the high-priority pod cannot bind. Worse,
-  `PodEligibleToPreemptOthers` will refuse to let the preemptor preempt elsewhere while that
-  victim terminates.
+The tradeoff is symmetric and you own both sides. **Too short** and the trainer cannot finish a
+final checkpoint, so every preemption costs the full `T_ckpt/2` instead of ~0 — a 30-second grace
+period guarantees failure for a save that takes 49 seconds. **Too long** and the preemptor waits:
+the node's resources are not free until the victim's containers exit, so a 600-second grace period
+on a hung victim is 10 minutes during which the high-priority pod cannot bind — and
+`PodEligibleToPreemptOthers` will not let it preempt elsewhere in the meantime either.
 
 **The rule that falls out: set `terminationGracePeriodSeconds` to just over your measured
 checkpoint-flush time, and measure it rather than guessing.** With async sharded checkpointing
@@ -525,13 +509,12 @@ spec:
               borrowingLimit: 0         # prod never borrows; it is sized to its need
 ```
 
-The distinction that matters for the tier design: **`reclaimWithinCohort: Any` lets prod take back
-its own nominal quota from a borrower irrespective of the borrower's priority.** That is what makes
-the floor a floor. `LowerPriority` would leave prod blocked by a high-priority research Workload
-that happened to borrow prod's GPUs — which is precisely the failure the floor exists to prevent.
-And the guarantee that falls out, worth memorising: **capacity a queue is using *within* its own
-nominal quota is never reclaimable by another queue.** Only borrowed capacity — usage above
-nominal quota — is at risk from a cohort reclaim.
+The distinction that matters: **`reclaimWithinCohort: Any` lets prod take back its own nominal
+quota from a borrower irrespective of the borrower's priority** — that is what makes the floor a
+floor. `LowerPriority` would leave prod blocked by a high-priority research Workload that happened
+to borrow prod's GPUs, precisely the failure a floor exists to prevent. The guarantee that falls
+out, worth memorising: **capacity a queue uses *within* its own nominal quota is never reclaimable
+by another queue.** Only borrowed capacity is at risk from a cohort reclaim.
 
 Kueue's candidate ordering, for the classic (non-fair-sharing) algorithm, is a three-key sort:
 
@@ -547,9 +530,8 @@ reprieve pass. Both layers converge on the same principle: *find a set that work
 
 One structural difference with a direct cost consequence: **Kueue evicts a whole Workload, never
 part of one.** For a gang that is strictly correct — it avoids §10's amplification entirely — and
-it is one of the reasons Kueue is the right layer for this in a GPU fleet. Lesson 5 covers how
-Volcano's `gangpreempt`/`gangreclaim` bundles and KAI's preempt/reclaim split reach the same
-property from a different direction.
+it is a large part of why Kueue is the right layer for this on a GPU fleet. Lesson 5 covers how
+Volcano's `gangpreempt` bundles and KAI's preempt/reclaim split reach the same property differently.
 
 ### 10. What a preemption actually costs
 
@@ -702,26 +684,23 @@ call it ~98 GB. Written to network storage at an aggregate 2 GB/s, `C ≈ 49 s`:
 **The curve, so you can see how forgiving the optimum is:**
 
 ```
-  OVERHEAD Ω(T) vs CHECKPOINT INTERVAL     λ = 4/day, R = 300 s
-  ══════════════════════════════════════════════════════════════════════════════════════
-  scale: one # ≈ 1% overhead
+  OVERHEAD Ω(T) vs CHECKPOINT INTERVAL        λ = 4/day, R = 300 s
+  ══════════════════════════════════════════════════════════════════════════════
+     T        SYNCHRONOUS  C = 49 s          ASYNC SHARDED  C = 0.6 s
+   0.5 min    164.8%  ████████████████████     3.46%  ███
+   1   min     83.2%  ██████████████           2.53%  ██
+   2   min     42.5%  ████████                 2.17%  ██
+   3   min     29.0%  ██████                   2.14%  ██   ◀ T* = 2.7 min
+   5   min     18.4%  ████                     2.28%  ██
+  10   min     10.9%  ███                      2.88%  ██
+  15   min      8.9%  ██                       3.54%  ███
+  24.2 min      8.1%  ██  ◀ T* = 24.2 min      4.80%  ███
+  40   min      9.0%  ██                       6.97%  █████
+  60   min     11.1%  ███                      9.74%  ███████
+ 120   min     18.7%  ████                    18.06%  █████████████
 
-  SYNCHRONOUS  (C = 49 s)                       ASYNC SHARDED  (C = 0.6 s)
-   0.5 min │###############...(165%)             0.5 min │###  3.5%
-   1   min │###############...( 83%)             1   min │##   2.5%
-   2   min │###########################  42%     2   min │##   2.2%
-   3   min │#############################  29%   3   min │##   2.1%  ◀ T* = 2.7 min
-   5   min │##################  18%              5   min │##   2.3%
-  10   min │###########  10.9%                  10   min │###  2.9%
-  15   min │#########  8.9%                     15   min │####  3.5%
-  24.2 min │########  8.1%   ◀ T* = 24.2 min    24.2 min │#####  4.8%
-  40   min │#########  9.0%                     40   min │#######  7.0%
-  60   min │###########  11.1%                  60   min │##########  9.7%
- 120   min │###################  18.7%         120   min │##################  18.1%
-
-  Note the ASYMMETRY: the penalty for checkpointing too OFTEN is much steeper than
-  for too rarely (the C/T term blows up as T→0, the λT/2 term grows only linearly).
-  When uncertain, err LONG of T*, not short.
+  Note the ASYMMETRY: too OFTEN is far worse than too rarely — C/T blows up as
+  T→0 while λT/2 only grows linearly. When uncertain, err LONG of T*.
 ```
 
 **And the inversion that matters most for capacity planning.** Fix an overhead budget and ask how
@@ -767,19 +746,17 @@ optimal interval** and, through `Ω(T*) = √(2Cλ) + λR`, a **74% reduction in
 
 Two operational caveats to state, because an answer that only sells the upside is a weak one:
 
-- **Async save consumes host RAM** for the staged copy — roughly the size of the shard, per rank,
-  held until the background write completes. On a node with 8 ranks each staging 12 GB that is
-  ~96 GB of pinned host memory. Budget for it or the job OOMs on the host side.
+- **Async save consumes host RAM** for the staged copy — roughly one shard per rank, held until the
+  background write completes. Eight ranks staging 12 GB each is ~96 GB of pinned host memory.
+  Budget for it or the job OOMs on the host side.
 - **The final checkpoint on SIGTERM must complete inside `terminationGracePeriodSeconds`** (§6). An
-  async save that is still flushing when SIGKILL arrives is not durable. A correct SIGTERM handler
-  waits for the in-flight async save *and* takes a final synchronous one — which means your grace
-  period must cover a synchronous flush, not just the D2H copy.
+  async save still flushing when SIGKILL lands is not durable, so a correct handler waits for the
+  in-flight async save *and* takes a final synchronous one — meaning the grace period must cover a
+  synchronous flush, not just the D2H copy.
 
-**The platform-engineering point:** checkpoint frequency is a decision the *training code* owner
-makes, but its economic consequences are paid by the *platform*. A team checkpointing every 30
-minutes "because it's slow", unaware that async sharded saves exist, is unknowingly capping how
-much of the fleet's idle headroom you can harvest. Surfacing that with the §11 arithmetic and a
-concrete pointer is a higher-leverage platform intervention than any scheduler tuning.
+**The platform-engineering point:** checkpoint frequency is decided by the training code owner and
+paid for by the platform. Surfacing the §11 arithmetic with a concrete API pointer is a
+higher-leverage intervention than any amount of scheduler tuning.
 
 ### 13. Why you cannot autoscale a GPU cluster
 
@@ -877,18 +854,17 @@ further up the demand curve.
 Verify by brute force over the grid, which also gives you the write-up numbers:
 
 ```
-  reserve  32 GPUs total  reserved $  658,752 + on-demand $2,186,496 = $2,845,248
-  reserve  56 GPUs total  reserved $1,152,816 + on-demand $1,366,560 = $2,519,376
-  reserve  72 GPUs total  reserved $1,482,192 + on-demand $  874,598 = $2,356,790
-  reserve  88 GPUs total  reserved $1,811,568 + on-demand $  464,630 = $2,276,198  ◀ MINIMUM
-  reserve  96 GPUs total  reserved $1,976,256 + on-demand $  327,974 = $2,304,230
-  reserve 128 GPUs total  reserved $2,635,008 + on-demand $        0 = $2,635,008
+  reserved  reserved cost   + on-demand cost  = annual total
+     32       $  658,752        $2,186,496       $2,845,248
+     56       $1,152,816        $1,366,560       $2,519,376
+     72       $1,482,192        $  874,598       $2,356,790
+     88       $1,811,568        $  464,630       $2,276,198   ◀ MINIMUM
+     96       $1,976,256        $  327,974       $2,304,230
+    128       $2,635,008        $        0       $2,635,008
 
-  all-on-demand baseline (mean served demand 96.0 GPUs)          = $3,279,744/yr
-  optimum (88 reserved)                                          = $2,276,198/yr
-  ──────────────────────────────────────────────────────────────────────────────
-  saving                                       $1,003,546/yr     = 30.6%
-  blended rate                                 $2.707/GPU-hr     vs $3.90 all-on-demand
+  all-on-demand baseline (mean served demand 96.0 GPUs)  = $3,279,744/yr
+  optimum (88 reserved)                                  = $2,276,198/yr
+  saving  $1,003,546/yr = 30.6%   ·   blended $2.707/GPU-hr vs $3.90
 ```
 
 The numerical minimum lands exactly where the critical-ratio rule predicted. That agreement is the
@@ -949,19 +925,18 @@ The full ladder, then:
       └───────────────────────────      reclaim instantly via Kueue reclaimWithinCohort
         time →
 
-   RULES OF THE LADDER
-     · size the reserved rung by the critical ratio, NOT by P50
-     · reserved rung is preemption-protected up to each queue's NOMINAL quota
-     · on-demand rung is NOT guaranteed available in a shortage — plan for it to fail
-     · spot rung carries best-effort work ONLY, and only work that checkpoints
-     · every idle GPU-hour on the reserved rung is free compute if you can backfill it
+   RULES · size the reserved rung by the critical ratio, NOT by P50
+         · reserved is preemption-protected up to each queue's NOMINAL quota
+         · on-demand is NOT guaranteed available in a shortage — plan for it to fail
+         · spot carries best-effort work ONLY, and only work that checkpoints
+         · every idle reserved GPU-hour is free compute if you can backfill it
 ```
 
 ### 15. Market-segment discipline, and the price-inversion thesis
 
-**This is the single most important correction to the naive "$X/GPU-hr" interview answer.** GPU
-pricing is not one market. It is at least three, and they move independently — sometimes in
-opposite directions at the same time.
+**This is the single most important correction to the naive "$X/GPU-hr" answer.** GPU pricing is
+not one market but at least three, and they move independently — sometimes in opposite directions
+at once.
 
 | Segment | What it is | Rough 2026 snapshot* |
 |---|---|---|
@@ -979,25 +954,20 @@ would produce a materially different `Q*` in the hyperscaler-retail band because
 there.
 
 **The price-inversion thesis.** Through 2024–2026, on-demand and committed pricing in the
-**neocloud rental segment specifically** have at times moved in opposite directions: on-demand fell
-as new supply came online, while 1-year committed rates *rose* as buyers rushed to lock in
-guaranteed capacity ahead of the next scarcity wave. By early-to-mid 2026 trackers describe renewed
-tightness, with 1-year committed rental pricing pushing above $2/GPU-hr and on-demand capacity
-effectively sold out at several providers.
-
-The durable lesson is not any number — they are all snapshots — but the **structure**: committed and
+**neocloud rental segment specifically** have at times moved in *opposite* directions: on-demand
+fell as new supply landed, while 1-year committed rates rose as buyers locked in capacity ahead of
+the next scarcity wave. The durable lesson is not any number but the **structure**: committed and
 on-demand pricing can diverge, and **the spread between them is the market's price on scarcity**.
-Your ladder is a bet on where that spread goes, and §14 says how to size it: against your own
+Your ladder is a bet on where that spread goes, and §14 says how to size it — against your own
 measured demand distribution and the current `R/D`. Re-run the critical-ratio calculation at every
 renewal, because `R/D` moving is exactly what changes `Q*`.
 
-One asymmetry to fold into the decision that pure cost math misses: **the on-demand rung is not
-guaranteed to exist.** §13(a) said the capacity can simply be unavailable. The newsvendor model
-assumes you can always buy the shortfall at price `D`; when you cannot, the true cost of being
-short is not `D` per GPU-hour but the business value of the work that did not run. If that value is
-high — a training run on a deadline, a customer-facing service — inflate `D` in the model to reflect
-it, which pushes `Q*` up. **Reserving above the naive optimum is how you buy insurance against
-supply risk, and framing it that way is how you get it funded.**
+One asymmetry pure cost math misses: **the on-demand rung is not guaranteed to exist** (§13a). The
+newsvendor model assumes you can always buy the shortfall at price `D`; when you cannot, the cost of
+being short is not `D` but the business value of work that did not run. If that value is high —
+a deadline-bound training run, a customer-facing service — inflate `D` accordingly, which pushes
+`Q*` up. **Reserving above the naive optimum is how you buy insurance against supply risk, and
+framing it that way is how you get it funded.**
 
 ## Perspectives
 
@@ -1068,12 +1038,11 @@ report this module builds is not a reporting nicety, it is the input to a seven-
   fetches blocked by the egress proxy.)*
 
 - **OpenAI — "Scaling Kubernetes to 7,500 Nodes"** —
-  https://openai.com/index/scaling-kubernetes-to-7500-nodes/. What it shows, reused here from a
-  capacity-economics angle rather than the gang-scheduling angle of lessons 1–2: **team taints**
-  plus priority-weighted **"balloon" deployments** — low-priority placeholder pods that hold
-  capacity and are evicted the moment a real workload arrives. That is the soft-reclaim pattern
-  §14's backfill rung generalises, running in production at 7,500-node scale.
-  *(Search-verified; fetch blocked by egress this session.)*
+  https://openai.com/index/scaling-kubernetes-to-7500-nodes/. Reused here from a capacity-economics
+  angle rather than lessons 1–2's gang angle: **team taints** plus priority-weighted **"balloon"
+  deployments** — low-priority placeholder pods holding capacity, evicted the moment real work
+  arrives. That is §14's backfill rung, in production at 7,500-node scale. *(Search-verified; fetch
+  blocked by egress.)*
 
 - **SemiAnalysis — "The Great GPU Shortage: Rental Capacity"** —
   https://newsletter.semianalysis.com/p/the-great-gpu-shortage-rental-capacity. The structure of
@@ -1164,19 +1133,8 @@ Point 3's list is what people get wrong: resuming weights but not the optimizer 
 or data position is not a resume — it is a subtly corrupted restart that costs more than it saves.
 
 **Step 5 — size the checkpoint interval.** Measure `C` for a representative best-effort job, count
-evictions per day from the Kueue eviction events, then apply §11:
-
-```bash
-# preemption rate, from the last 7 days of Kueue evictions
-$ kubectl get events -A --field-selector reason=EvictedByPreemption \
-    -o json | jq '[.items[] | select(.lastTimestamp > (now-604800|todate))] | length'
-28
-
-# 28 evictions / 7 days / 20 concurrently-running best-effort jobs
-#   λ = 28 / (7 × 20) = 0.2 evictions per job per day = 2.31e-6 /s   … per job
-# but the FLEET-level rate an individual job sees is what matters; measure per job:
-#   here, 4 evictions/job/day → λ = 4.63e-5 /s, MTBP = 6 h
-```
+evictions per job per day from the Kueue eviction events
+(`kubectl get events -A --field-selector reason=EvictedByPreemption`), then apply §11:
 
 ```
   measured C (async sharded DCP, 7B model, 8 ranks)     = 0.6 s
@@ -1189,8 +1147,8 @@ $ kubectl get events -A --field-selector reason=EvictedByPreemption \
   (had the team stayed on synchronous saves: T* = 24.2 min, overhead 8.12%)
 ```
 
-Sanity-check with the equal-cost property: at 3 minutes the checkpointing and rework terms should
-be roughly equal. They are (0.33% and 0.42% at T = 180 s). If they were not, the interval is wrong.
+Sanity-check with the equal-cost property: at T = 180 s the checkpointing and rework terms should
+be roughly equal, and they are (0.33% and 0.42%). If they were not, the interval is wrong.
 
 **Step 6 — the ladder, priced.** From §14, with the demand distribution taken from the showback
 report:
@@ -1210,8 +1168,8 @@ report:
   idle reserved GPU-hours/yr (free compute if backfilled)= 49,056
 ```
 
-**Step 7 — the showback line that closes the loop.** The per-ClusterQueue report from the
-deliverable now carries a column that did not exist before:
+**Step 7 — the showback line that closes the loop.** The per-ClusterQueue report now carries a
+column that did not exist before:
 
 | Queue | Reserved quota | Actual usage | Borrowed | $ owed | Idle-quota cost |
 |---|---|---|---|---|---|
@@ -1222,11 +1180,11 @@ deliverable now carries a column that did not exist before:
 | `cq-best-effort` | 0 | 5.6 | 5.6 | $115,000 | — |
 
 *(Illustrative figures at the $2.35 reserved rate; the deliverable generates the real ones.)* Read
-the last two rows together and the whole module is visible in one table: `cq-research-c` is paying
-$98,900/yr for quota it does not use, and `cq-best-effort` — which owns nothing — recovered
-$115,000 of that by running in the gaps. **The idle-quota column is the signal that tells you
-whether next year's commitment should grow or shrink, and it is only meaningful because the
-backfill tier makes the idle capacity productive rather than merely visible.**
+the last two rows together and the whole module is visible at once: `cq-research-c` pays $98,900/yr
+for quota it does not use, and `cq-best-effort` — which owns nothing — recovered $115,000 of that
+by running in the gaps. **The idle-quota column tells you whether next year's commitment should
+grow or shrink, and it is only meaningful because the backfill tier makes idle capacity productive
+rather than merely visible.**
 
 ## Practice
 
@@ -1452,10 +1410,9 @@ for the whole module.
 **Primary sources — read directly from cloned repositories this session**
 
 Note on method: this environment's egress proxy blocks `kubernetes.io`, `usenix.org`,
-`pytorch.org`, `openai.com`, `research.google.com` and several other domains. Rather than cite
-pages that could not be reached, the mechanism and default-value claims were verified against
-upstream *source trees* cloned during this session; where a canonical URL is given for
-convenience, its reachability is stated honestly.
+`pytorch.org`, `openai.com`, `research.google.com` and other domains. Rather than cite pages that
+could not be reached, mechanism and default-value claims were verified against upstream *source
+trees* cloned this session; canonical URLs are given with their reachability stated honestly.
 
 1. **`kubernetes/kubernetes` — `pkg/apis/scheduling/types.go`, `pkg/apis/scheduling/v1/helpers.go`**
    — https://github.com/kubernetes/kubernetes. §2's value structure:
