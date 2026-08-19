@@ -8,314 +8,888 @@ est_time: "5 hrs"
 prev: "01-hiring-landscape.md"
 next: "03-portfolio-writeup.md"
 artifacts: ["capstone storyboard: chapter list + whole-platform architecture diagram + through-line thesis"]
-sources: 7
+sources: 9
 ---
 
 # Capstone synthesis: thread 11 artifacts into one platform
 
 ## Where this fits
-Lesson 01 mapped the terrain: a per-company loop map, an artifact-to-signal matrix naming which
-of your 11 artifacts is the killer proof for which employer, and a personal sequencing plan for
-which loops to run first. That lesson answered *where* to point your portfolio. It deliberately
-did not answer a harder question: what do you actually *say* when you're in the room and an
-interviewer asks "walk me through your background"? Eleven artifacts pointed at eleven different
-employers is still eleven disconnected answers. This lesson fills that gap — it takes the same 11
-artifacts and threads them into **one coherent platform narrative**, a single story you tell the
-same way whether you're at CoreWeave's system-design round or Nebius' domain deep-dive, that
-happens to have different chapters emphasized for different audiences. Everything from lesson 03
-(the written portfolio) through lesson 09 (the mock loop) assumes this narrative already exists;
-this is the lesson where you build it.
+
+Lesson 01 mapped the terrain: the screening-intent model, a procedure for decoding a live posting
+into a rubric, the artifact-to-signal matrix naming which of your eleven artifacts converts in
+which round, and a sequencing plan for which loops to run first. That lesson answered *where* to
+point your portfolio. It deliberately did not answer a harder question: what do you actually *say*
+when you are in the room and someone asks "walk me through your background"? Eleven artifacts
+pointed at eleven different rounds is still eleven disconnected answers, and lesson 01's own
+debrief argument says why that fails — six interviewers writing six different impressions reads as
+scattered, not broad. This lesson fills the gap. It takes the same eleven artifacts and threads
+them into **one coherent platform narrative**: a single story with a spine, told the same way in
+every loop, with different chapters emphasised for different audiences. Everything from lesson 03
+(the written portfolio) through lesson 09 (the mock loop) assumes this narrative already exists.
 
 ## Why this matters
+
 Eleven artifacts scattered across eleven modules read as eleven hobby projects. The same eleven
-artifacts, threaded onto a single spine, read as **one engineer who built a reference GPU
-platform** — and that is a staff-level signal no individual project can carry alone. Interviewers
-at CoreWeave and Nebius are explicitly hiring "area owners" who deliver "measurable improvements
-across services." A coherent platform narrative is the artifact that proves you think in *systems
-and services*, not tasks.
+artifacts threaded onto a single spine read as **one engineer who built a reference GPU platform**
+— and that is a signal no individual project can carry, because the signal is not in any project.
+It is in the joints between them.
 
-The difference between senior and staff in a portfolio review is almost never more projects. It is
-a through-line: a single thesis, tradeoffs you can name (including what you rejected), real
-numbers, and honesty about failure. A candidate who says "here are my six GPU projects" is senior.
-A candidate who says "I set out to make a multi-tenant GPU fleet observable, attributable,
-schedulable, and survivable, and here are the five chapters that prove each" is staff — because
-they've imposed an operating thesis on their own work and can defend the joints between chapters.
+The difference between a senior portfolio and a staff one is almost never *more projects*. It is a
+through-line: a single thesis, tradeoffs you can name including the ones you rejected, real
+numbers, and honesty about where the design is worse than the incumbent. A candidate who says
+"here are my six GPU projects" is describing work. A candidate who says "I set out to make a
+multi-tenant GPU fleet observable, attributable, schedulable and survivable, and here are the four
+chapters that prove each" has imposed an operating thesis on their own work and can defend the
+joints. The second is a different kind of claim about the person, not a better-formatted version of
+the first.
 
-That act — imposing structure on a pile of your own past work rather than doing more work — is not
-a packaging trick bolted onto real engineering. It is itself a rehearsal of a genuine staff
-competency: staff engineers are routinely the people who look across scattered, seemingly
-unrelated problems across an org and recognize the shared shape underneath them, then organize
-work (and teams, and roadmaps) around that shape instead of chasing each problem individually.
-Doing that to your own 11 artifacts before anyone asks you to is a low-stakes, fully-controlled
-place to practice exactly the move you'll need to make on the job.
+That act — imposing structure on a pile of past work rather than doing more work — is not
+packaging bolted onto real engineering. It *is* a rehearsal of a genuine staff competency. The
+recurring description of what senior staff engineers do is that they notice the same problem
+recurring in different disguises across an organisation, name the shared shape, and organise effort
+around the shape instead of chasing the instances. Doing that to your own eleven artifacts, where
+the stakes are zero and you control every input, is direct practice for the version you will have
+to do inside an organisation with messy inputs and other people's opinions.
 
-This lesson designs that narrative once, so every loop in lesson 01 draws from the same
-well-rehearsed story instead of improvising a fresh pitch per company.
+There is also a purely mechanical payoff. A rehearsed spine means you are never improvising. Every
+loop draws from the same well, and the same four transitions get smoother every time you say them.
+By the third loop the narrative costs you no working memory at all, which frees the whole of your
+attention for the interviewer's actual follow-ups — which is where the round is really won.
 
 ## What's new here (calibration)
-- **Skip** (you own it): portfolio-101, how to write a resume bullet, generic "tell a story"
-  advice, the brag-document mechanic itself.
-- **New**: the *organizing thesis* that turns 11 artifacts into one platform, and the value-chain
-  mapping where each artifact answers one specific fleet-operator question.
-- **New**: the concrete staff-vs-senior delta for *this* portfolio — which 3-5 chapters to
-  feature, which real numbers to lead with, which tradeoffs to name as rejected alternatives.
-- **New**: a lens for checking your own narrative — which staff *archetype* (Tech Lead, Architect,
-  Solver, Right Hand) your thesis is implicitly arguing you are, and whether your chapter
-  selection actually supports that claim.
-- **New**: the single highest-signal artifact to open with, and the storyboard you'll fill into
-  the capstone README.
+
+- **Skip** (you own it): portfolio-101, resume-bullet craft, generic "tell a story" advice, the
+  brag-document mechanic itself.
+- **New**: the **derivation** of the organising thesis — why these four verbs and not four others,
+  and the test each verb imposes on a candidate chapter.
+- **New**: the **stack view** — your narrative should be isomorphic to the system it describes, and
+  the whole-platform diagram is the proof that it is.
+- **New**: three **fully worked chapter arcs** (the util lie, the attribution controller, the
+  tooling teardown) written out in the form you will actually speak them, with the real numbers
+  from this course's own lessons rather than placeholder figures.
+- **New**: the **rejected-alternatives bank** — six tradeoffs with a defensible verdict, the
+  arithmetic behind each verdict, and the follow-up an interviewer will push.
+- **New**: the **joints** — the four transition sentences that make eleven chapters read as one
+  argument, and the branch points where an interviewer will interrupt.
+- **New**: the **staff-archetype check** as a selection filter on chapters, not a personality quiz.
 
 ## Core concepts
 
-### The organizing thesis
-**"Making a multi-tenant GPU fleet observable, attributable, schedulable, and survivable."** Those
-four verbs are the spine. Every chapter hangs off one of them. Say this sentence first in any
-portfolio review; it frames all eleven artifacts as one deliberate program of work.
+### 1. What the narrative is actually for
 
-This isn't invented pedagogy — it's how real GPU-cloud vendors sell the exact same idea as a
-product. CoreWeave's Mission Control, for instance, is explicitly positioned as a single
-"operating standard" that unifies observability, automated fleet/node lifecycle management,
-straggler/anomaly detection, and operational tooling into one coherent system rather than a pile
-of standalone dashboards — the same observable → attributable/actionable → survivable shape this
-lesson's thesis argues for, just sold as a product instead of told as a career narrative. If a
-real vendor organizes an entire product line this way, imposing the same structure on your own
-work is not artificial packaging — it's the correct way an experienced platform engineer actually
-thinks about a fleet.
+Three consumers, three different failure modes, one artifact that must serve all three.
 
-### The value chain — each artifact answers one fleet-operator question
+**The four-minute skim.** A reviewer opening your repo is not reading; they are scanning for three
+things — one sentence that says what kind of engineer you are, one number that proves you operated
+at real scale, and one diagram that shows you can hold a whole system in your head. If those three
+are not above the fold, the synthesis work falls on the reviewer, and reviewers do not do synthesis
+work. They remember whichever project loaded first.
 
-| Fleet-operator question | Chapter artifacts |
-|---|---|
-| Who's using my GPUs & what's it costing? | 01 gpu-cost-exporter, 02 gpu-cost-operator, 03 efficiency/cost report, 04 per-pod attribution, 11 FOCUS synthesis |
-| Are my dashboards telling the truth? | 05 "your GPU dashboard is lying" — util vs MFU/goodput (the sharpest angle) |
-| How do I share scarce GPUs fairly? | 06 Kueue showback |
-| What does a unit of work cost? | 07 cost-per-million-tokens, 10 capex-vs-cloud |
-| What happens when hardware fails? | 08 survive-a-failure lab, 04 failure-mode log |
-| What's the machine underneath? | 01b container anatomy, 02b topology teardown, 09 network read, 10 KTHW/etcd |
+**The spoken opener.** "Walk me through your background" arrives in every loop, usually in the
+first four minutes, when you are least warmed up. If the answer is chronological, you spend ninety
+seconds on module 01 and the interviewer's attention is gone before you reach the interesting part.
+The spine fixes the order so the strongest chapter is *first*, not third.
 
-Note the four verbs of the thesis map cleanly: observable (row 1-2), attributable (row 1, 3),
-schedulable (row 3-4), survivable (row 5) — with "the machine underneath" (row 6) as the substrate
-proving depth.
+**The debrief union.** Six interviewers each write a paragraph, and the paragraphs are compared for
+consistency (lesson 01 §2). A spine makes six people write approximately the same sentence about
+you, which is the strongest possible debrief shape. Without one, you get six different sentences
+and the summary line becomes "did a lot of interesting things."
 
-### What makes it read STAFF, not senior
-Do **not** present all eleven exhaustively — that reads as a list. Feature **3-5 standout
-chapters**, at least one at production/fleet scale, and for each cover the full arc: **problem →
-your ownership → architecture → stack → metrics → post-launch evolution.**
-- **Real numbers, not adjectives.** "The dashboard read 95% GPU utilization while MFU was 31%"
-  beats "improved observability." Numbers are the staff tell.
-- **Tradeoff narration — name what you rejected.** GPU sharing: MIG vs time-slice vs full
-  passthrough, and why you chose what you chose. Cost model: chargeback vs showback. Scheduling:
-  Kueue vs Volcano vs Slurm. Staff engineers are defined by the alternatives they can articulate
-  rejecting.
-- **Failure honesty.** The failure-mode log (04) and survive-a-failure lab (08) are not weaknesses
-  to hide — they are operational-maturity signals. Leading with "here's how the fleet breaks and
-  how I designed for it" is a staff move.
-- **A single through-line thesis** stated once and returned to. It's the connective tissue between
-  chapters.
+```
+   ONE NARRATIVE, THREE CONSUMERS — and what each one drops on the floor
+  ══════════════════════════════════════════════════════════════════════════════
 
-### Which staff archetype is your thesis arguing you are?
-Will Larson's staff-archetypes framework names four distinct shapes the "staff engineer" title
-covers: the **Tech Lead** (guides one team's approach and execution), the **Architect**
-(responsible for direction, quality, and approach across a critical area), the **Solver** (digs
-into a gnarly cross-cutting problem, resolves it, moves to the next), and the **Right Hand**
-(extends a leader's attention and judgment across a large, complex org). Your four-verb thesis is
-implicitly arguing you're mostly an **Architect** — you defined the direction and approach for an
-entire fleet-management domain, end to end — with a strong secondary claim to **Solver** in the
-chapters where you dug into one gnarly problem (the util-vs-MFU dashboard lie, a live failure
-scenario) and resolved it cleanly. That's a useful check on your chapter selection: if a candidate
-chapter doesn't support "defined the approach for a critical area" or "solved a hard, bounded
-problem," ask whether it belongs in your featured 3-5 at all, or whether it's better left as
-supporting depth.
+                        ┌───────────────────────────────┐
+                        │   THE CAPSTONE NARRATIVE      │
+                        │   thesis · chapters · numbers │
+                        └───────┬───────┬───────┬───────┘
+                                │       │       │
+              ┌─────────────────┘       │       └──────────────────┐
+              ▼                         ▼                          ▼
+     ┌────────────────┐        ┌────────────────┐        ┌──────────────────┐
+     │ 4-MIN SKIM     │        │ SPOKEN OPENER  │        │ DEBRIEF UNION    │
+     │ (repo README)  │        │ (30 s / 3 min) │        │ (6 paragraphs)   │
+     ├────────────────┤        ├────────────────┤        ├──────────────────┤
+     │ NEEDS:         │        │ NEEDS:         │        │ NEEDS:           │
+     │  · 1 sentence  │        │  · fixed order │        │  · one repeated  │
+     │  · 1 number    │        │  · hook first  │        │    sentence      │
+     │  · 1 diagram   │        │  · 4 joints    │        │  · consistency   │
+     ├────────────────┤        ├────────────────┤        ├──────────────────┤
+     │ DROPS:         │        │ DROPS:         │        │ DROPS:           │
+     │  everything    │        │  chronology,   │        │  peak            │
+     │  below the     │        │  build logs,   │        │  performance in  │
+     │  fold          │        │  tool lists    │        │  any one round   │
+     └────────────────┘        └────────────────┘        └──────────────────┘
+              │                         │                          │
+              └─────────────────────────┴──────────────────────────┘
+                                        ▼
+                    ALL THREE ARE SERVED BY THE SAME SPINE.
+                    If you have to write three different stories,
+                    you do not have a thesis — you have three pitches.
+```
 
-### The artifact to LEAD with
-**"Your GPU dashboard is lying" (05).** It is contrarian, memorable, and instantly proves
-GPU-fleet thinking — the util-vs-MFU/goodput gap is a distinction only someone who has actually
-operated accelerators makes. It hooks the interviewer in one sentence. Back it immediately with
-**gpu-cost-operator (02)** — "and I ship custom operators against a real fleet, not just
-dashboards" — which pairs the contrarian insight with production-shipping credibility. Insight +
-shipping = staff.
+### 2. Deriving the thesis, rather than asserting it
 
-### The whole-platform view
-The value chain isn't a list of projects; it's a stack. Exporter/operator emit signals →
-attribution and cost models consume them → showback/scheduling act on them → the survivability
-layer protects the whole thing → all of it sits on the machine substrate (topology, network,
-etcd). Your one architecture diagram should show that flow, not eleven disconnected boxes.
+The organising thesis is:
+
+> **"Making a multi-tenant GPU fleet observable, attributable, schedulable, and survivable."**
+
+Do not memorise it as a slogan. Derive it, because the derivation is what lets you defend it when
+someone asks "why those four?"
+
+Start from the operator's position. You have a fleet of depreciating accelerators, several tenants
+with conflicting demands, and a finance function that wants to know where the money went. There are
+exactly four questions you must be able to answer before you can run that fleet as a business, and
+each one is answerable only if the previous one is:
+
+1. **Can I see what the hardware is doing?** — *observable.* Without an honest measurement of work
+   done, everything downstream is built on a number that does not mean what it says. This is why
+   the util-lie chapter is first in the narrative: it is not the flashiest chapter, it is the
+   *load-bearing* one. Every other claim depends on the measurement being honest.
+2. **Can I say who did it?** — *attributable.* An honest device-level measurement with no tenant
+   map is a fact nobody can act on. Attribution is the join that turns a hardware fact into an
+   organisational one, and it is the join that neither the billing layer nor the telemetry layer
+   ships, because it sits at the seam between them.
+3. **Can I decide who gets it next?** — *schedulable.* Once you know who is using what, the
+   question becomes allocation policy: quota, fair share, gang scheduling, preemption, borrow and
+   reclaim. Scheduling without attribution is guesswork dressed as policy.
+4. **Does it survive contact with reality?** — *survivable.* All three of the above assume the
+   hardware works. At fleet scale it does not: Meta's measured mean-time-to-failure for 1,024-GPU
+   jobs is 7.9 hours (arXiv:2410.21680), with shorter figures at larger scales given as
+   projections. A platform that is observable, attributable and schedulable but falls over on a
+   dead node is a demo.
+
+**The four verbs are a dependency chain, not a list**, and that is why the order is fixed. Say the
+chain out loud once and the thesis stops sounding like a slogan: *"You cannot attribute what you
+cannot honestly measure, you cannot schedule fairly what you cannot attribute, and none of it
+matters if a dead GPU takes the whole job down."*
+
+**Each verb is also a test.** A candidate chapter earns a featured slot only if it clearly answers
+one of the four *and* moves a number. "Interesting" is not a criterion. Apply the test honestly and
+most portfolios lose three or four chapters, which is the point — the cut list is what makes the
+remaining chapters legible.
+
+### 3. The value chain, drawn as the stack it actually is
+
+The eleven artifacts are not a list of projects. They are layers, and the narrative should be
+isomorphic to the system. Here is the whole-platform view — this is the diagram lesson 03 renders
+as the front door of your capstone repo, and the thing you draw on a whiteboard when someone says
+"show me how it fits together."
+
+```
+   THE REFERENCE GPU PLATFORM — signal flow, and which artifact owns each edge
+  ══════════════════════════════════════════════════════════════════════════════
+
+   ┌───────────────────────────────────────────────────────────────────────┐
+   │ SURVIVABLE   health · XID · lemon-node detect · drain · checkpoint    │
+   │              ── artifacts 08 (survive-a-failure), 04 (failure log)    │
+   │                 05.5 (XID/health layer)                              │
+   └────────────▲──────────────────────────────────────────────────────────┘
+                │ protects everything below it; consumes health signals
+   ┌────────────┴──────────────────────────────────────────────────────────┐
+   │ SCHEDULABLE  quota · gang · borrow/reclaim · topology-aware placement │
+   │              ── artifacts 06 (Kueue showback), 02b (topology),        │
+   │                 09 (fabric read)                                      │
+   └────────────▲──────────────────────────────────────────────────────────┘
+                │ decides allocation using the attributed ledger
+   ┌────────────┴──────────────────────────────────────────────────────────┐
+   │ ATTRIBUTABLE  UUID → pod → namespace → share → dollars                │
+   │               ── artifacts 04 (per-pod attribution controller),       │
+   │                  02 (the operator + CRDs), 11 (FOCUS schema,          │
+   │                  tooling teardown), 07 (cost per 1M tokens),          │
+   │                  10 (capex vs cloud)                                  │
+   │                                                                       │
+   │   ┌──────────────────────────────────────────────────────────────┐    │
+   │   │  THE JOIN NOBODY SHIPS                                       │    │
+   │   │  allocation record (kubelet pod-resources)                   │    │
+   │   │            ╳  meets at the GPU UUID  ╳                       │    │
+   │   │  hardware measurement (DCGM / NVML)                          │    │
+   │   │  → Σ allocated_share + unallocated ≡ 1.000  (identity A)     │    │
+   │   └──────────────────────────────────────────────────────────────┘    │
+   └────────────▲──────────────────────────────────────────────────────────┘
+                │ consumes an HONEST ratio, not a duty cycle
+   ┌────────────┴──────────────────────────────────────────────────────────┐
+   │ OBSERVABLE   SM_ACTIVE / TENSOR_ACTIVE / DRAM_ACTIVE, not GPU_UTIL    │
+   │              ── artifacts 05 (the util-lie exhibit + query pack),     │
+   │                 01 (the exporter), 03 (hardware report)               │
+   └────────────▲──────────────────────────────────────────────────────────┘
+                │ reads counters off the silicon
+   ┌────────────┴──────────────────────────────────────────────────────────┐
+   │ THE MACHINE  namespaces/cgroups · NUMA · PCIe/NVLink · driver · etcd  │
+   │              ── artifacts 01b (container anatomy), 02b (topology),    │
+   │                 09 (network), 10 (bare metal / KTHW)                  │
+   │              ── the substrate. Proves depth; never the headline.      │
+   └───────────────────────────────────────────────────────────────────────┘
+
+   THE ONE-SENTENCE READ OF THIS DIAGRAM:
+     "Signals come off the silicon, get made honest, get attributed to a
+      tenant, drive an allocation decision, and the whole stack is wrapped
+      in a survivability layer — because the hardware fails on a schedule
+      you can compute."
+```
+
+Two properties of this diagram are worth defending out loud, because both are follow-up magnets.
+
+**Why "the machine" is a substrate layer and not a chapter.** Container anatomy, NUMA topology and
+fabric reads are how you *know* things, not what you *built*. They belong under the stack as
+evidence of depth, surfaced when an interviewer probes a mechanism ("how does the container even
+see the device?"), never as a headline. A portfolio that leads with "I read the Linux namespace
+API" is describing study, not a platform.
+
+**Why attribution is the middle layer and not the top.** It is tempting to put cost at the top
+because it is the business-facing outcome. Resist it. Cost is *derived* from attribution, and
+attribution is derived from honest measurement; putting cost on top hides the dependency that makes
+your argument work. The layering is the argument.
+
+### 4. Three worked chapter arcs
+
+Every featured chapter uses the same six-beat arc: **problem → ownership → design → rejected
+alternative → number → evolution.** Here are the three load-bearing chapters written out in full,
+in the register you would actually speak them. These are not templates to fill in later; they are
+the material, drawn from this course's own findings.
+
+#### Chapter A — "Your GPU dashboard is lying" (artifact 05)
+
+> **Problem.** Every GPU dashboard in existence leads with a utilisation number, and that number
+> does not mean what the whole industry assumes. `DCGM_FI_DEV_GPU_UTIL` is field 203, an unmodified
+> passthrough of NVML's `nvmlUtilization_t.gpu`, which the header defines as *the percentage of a
+> short driver-chosen sample window during which at least one kernel was resident on the GPU.* It
+> is a threshold at one. One kernel and ten thousand concurrent kernels evaluate the same
+> predicate. It has no arity and it has no notion of how many SMs exist.
+>
+> **Ownership.** I derived the failure rather than reading about it. For an 8B-parameter model in
+> BF16 on an H100 SXM5 at batch size 1: every weight must be read from HBM once per token, so 8e9
+> params × 2 bytes = 16 GB at 3.35 TB/s ≈ 4.78 ms of memory time, against 2 × 8e9 = 16 GFLOP at
+> 989 TFLOP/s ≈ 16.2 µs of compute time. The ratio is 0.0034. The workload sits about 295× to the
+> left of the H100's roofline ridge point. So the tensor pipes *must* be idle roughly 99.7% of the
+> time — and simultaneously a kernel is resident for essentially the whole NVML sample window,
+> because the inter-kernel gap is microseconds against a window of at least ~167 ms.
+>
+> **Design.** The honest metric is on a completely different collection path.
+> `DCGM_FI_PROF_SM_ACTIVE` (field 1002) is not a driver counter at all — it is the ratio of summed
+> active cycles to summed elapsed cycles across every SM, produced by differencing two hardware
+> performance-monitor snapshots. On a 132-SM H100, a kernel occupying 32 SMs continuously reads
+> 32/132 = 0.24, even though those 32 SMs are fully busy. I built the side-by-side panel, the
+> detector query, and the alerting policy that follows from it.
+>
+> **Rejected alternative.** `DCGM_FI_PROF_GR_ENGINE_ACTIVE` (1001) is the tempting fix, because it
+> carries the `PROF` prefix and looks like the honest family. It is not: its own definition is
+> *context bound and a pipe busy*, which is a presence duty cycle reimplemented on the hardware
+> path. On a batch-1 decode server it reads ~1.0 alongside `SM_ACTIVE ≈ 0.16`. I rejected it, and
+> the reason it matters is that 1001 ships **enabled** in dcgm-exporter's default counter CSV while
+> 1002 and 1003 ship **commented out** — so the default configuration gives you two presence
+> metrics and zero breadth metrics.
+>
+> **Number.** Same GPU, same second: `GPU_UTIL` 99–100, `SM_ACTIVE` 0.16, `SM_OCCUPANCY` 0.09,
+> `PIPE_TENSOR_ACTIVE` 0.011, `DRAM_ACTIVE` 0.71. Eighty-six percent of the compute die dark while
+> the dashboard reads solid green. Multiply `DRAM_ACTIVE` by peak: 0.71 × 3.35 TB/s ≈ 2.4 TB/s
+> achieved — HBM is the actual wall.
+>
+> **Evolution.** The fix moves the honest metrics and not the lie. Enabling continuous batching
+> took `SM_ACTIVE` from 0.16 to 0.55 and `PIPE_TENSOR_ACTIVE` from 0.011 to 0.19, for about 2.9×
+> serving throughput on the same eight cards — and `GPU_UTIL` read 99 before, during and after.
+> That is the strongest form of the argument: **the default metric is uninformative about the
+> problem and uninformative about the solution.**
+
+#### Chapter B — the per-pod attribution controller (artifact 04, with 02)
+
+> **Problem.** Finance asks what a team's training run cost last night, and every off-the-shelf
+> answer is wrong for a structural reason. Cloud billing stops at the node — an 8×H100 box is one
+> line item. `nvidia.com/gpu` counts allocations, not use. DCGM measures devices, and under any
+> software sharing mode there are fewer devices than tenants. The only honest per-pod number is a
+> join across all three, and nobody ships it in a form that matches an arbitrary mix of sharing
+> modes and an arbitrary rate card.
+>
+> **Ownership.** I built the join. Two independent loops, because the two sources fail differently:
+> an ownership loop that lists the kubelet's pod-resources API and resolves each device ID into a
+> join key, and a utilisation loop that reads DCGM and NVML. They meet at exactly one place — the
+> GPU UUID — and that single meeting point is the whole design.
+>
+> **Design.** The load-bearing type decision is one character: the owner map is
+> `map[string][]Owner`, not `map[string]Owner`. Under time-slicing the device plugin fabricates
+> annotated IDs of the form `GPU-<uuid>::<replica>`, so pod-resources hands you a *distinct string
+> per pod* — the ownership map survives sharing even though the metric does not. A
+> `map[string]Owner` silently keeps whichever holder was written last, which is exactly the bug
+> that charges one pod for the whole card and the others for nothing.
+>
+> **Rejected alternative.** I could have divided a shared device's utilisation by the number of
+> pods currently holding a replica. I divide by the configured `replicas` count instead. With
+> `replicas: 4` and three co-resident pods, each pod's share is 0.25 and the fourth replica's 0.25
+> is unallocated — because dividing by three would socialise idle capacity onto the tenants,
+> converting a platform problem (you over-provisioned the replica count) into a tenant cost they
+> cannot act on.
+>
+> **Number.** Two reconciliation identities, both continuously asserted in PromQL. Identity A:
+> per physical GPU, the sum of holders' allocated shares plus the unallocated remainder is exactly
+> 1.000 — a sum above 1 means double-counted holders, a sum below 1 means an unresolved device ID
+> or unbooked MIG stranding. Identity B: per measurement identity, the sum of per-pod utilised
+> shares approximates the device's own utilisation, and a ratio of exactly N means you forgot to
+> deduplicate a fanned-out series. And the honesty number: on a 64-GPU fleet with 24 GPUs
+> time-sliced, 46.8% of every utilisation-based chargeback dollar rests on an estimate — about
+> $63.8k/month at $4.00/GPU-hour — which is the business case for the per-PID probe, stated in
+> dollars instead of in engineering preference.
+>
+> **Evolution.** The exposure fraction is the metric that drives the roadmap. Getting per-PID
+> attribution working on those 24 shared GPUs drops it to near zero and relabels the same dollars
+> from `shared-estimate` to `per-pid`. That is a prioritisation argument a finance partner can
+> read.
+
+#### Chapter C — why I built it instead of adopting the incumbent (artifact 11)
+
+> **Problem.** The first question any engineering director asks is "doesn't a tool already do
+> this?" They have usually already installed one. An opinion loses that conversation; a location in
+> the source wins it.
+>
+> **Ownership.** I read OpenCost's GPU cost path end to end, at a named commit, and traced a
+> dollar from the node's price metric to the pod's `gpuCost` field. Three questions, applied to any
+> cost engine: what is the numerator, where does the price come from, and where does the
+> interesting telemetry actually land?
+>
+> **Design of the finding.** The numerator is a Kubernetes resource *request* count, emitted as
+> `container_gpu_allocation` from `costs.GPUReq[0].Value`, turned into hours by `applyGPUsAllocated`
+> as `GPUHours = value × hrs`, and multiplied in `applyNodesToPod`: `alloc.GPUCost = alloc.GPUHours
+> × node.CostPerGPUHr`, where the price is one scalar per *physical* GPU. DCGM utilisation *is*
+> queried — correctly `DCGM_FI_PROF_GR_ENGINE_ACTIVE`, not the util lie — and stored in
+> `GPUAllocation.GPUUsageAverage`, where in the allocation path it is read by exactly one thing: a
+> display ratio. It is never multiplied into cost.
+>
+> **Rejected alternative — and this is the fair part.** I did not conclude the tool is bad. It is
+> an allocated-ledger engine, and on a fleet of exclusively held whole GPUs it is *correct*. Five
+> of the six gaps I found are one correct design assumption meeting hardware that changed
+> underneath it. The sixth is physics.
+>
+> **Number.** Same H100, same $2.10/GPU-hour price, same one-hour window, four tenancy
+> configurations: **$2.10 exclusive (correct), $14.70 under 7-way MIG (7× high), $0.00 under
+> time-slicing with GPU Feature Discovery's `renameByDefault=true` (the shared resource key is
+> absent from both numerator paths), and $8.40 with `renameByDefault=false` (N× high).** The spread
+> is not noise — it is four different code paths, each traceable to a named line, and which one you
+> get is decided by a GPU-operator flag nobody in the cost conversation is usually aware of.
+>
+> **Evolution.** The story has moved, and saying so is the credential. As of 2026 OpenCost ships a
+> feature-gated `pkg/inferencecost` module that genuinely joins allocation cost to vLLM token
+> counters and emits `llm_cost_per_million_tokens` under two named cost bases. So the honest 2026
+> claim is not "nobody joins dollars, utilisation and app counters" — it is "one tool does, off by
+> default, for vLLM inference only, on top of a numerator that is still whole-GPU. The remaining
+> gap is the numerator and the sharing regimes, not the join."
+
+**Notice what the three chapters do together.** A is a measurement finding. B is an engineering
+response to it. C is the justification for having built B rather than installed something. That is
+a complete argument with no missing step, and it is why these three are the load-bearing chapters
+and the other eight are supporting.
+
+### 5. The rejected-alternatives bank
+
+Naming what you rejected is the single highest-density staff signal available in a portfolio
+review, because it is the one thing that cannot be faked by having read about a technology. Here is
+the bank, with the verdict, the reason, and the follow-up you will get.
+
+| Decision | Options | Verdict and the actual reason | The follow-up you will get |
+|---|---|---|---|
+| **Sharing model** | passthrough · MIG · time-slicing · MPS | Depends on tenancy, and say so. MIG gives hardware isolation and clean attribution — a MIG instance belongs to exactly one container — at the cost of static partitions that do not rebalance and stranded capacity (7×`1g.10gb` sums to 0.858 of the card on a memory basis; the missing 14.2% is real capacity that cannot be allocated). Time-slicing gives density and zero isolation. MPS gives a *bounded* error because the control daemon caps thread percentage. | *"Why not always MIG?"* → because it cannot rebalance under shifting traffic, and because the partition geometry is a decision someone has to revisit; on a fleet with many small, bursty tenants the stranding plus the reconfiguration cost dominates the isolation benefit. |
+| **Cost model** | chargeback · showback | Showback first. In a scarce-GPU multi-tenant setting, hard chargeback creates hoarding: teams hold capacity defensively because releasing it means losing it. Showback surfaces the same number without the incentive. Move to chargeback only once the attribution passes conservation and the disputes have a protocol. | *"So the numbers don't matter?"* → they matter more, not less; showback is what earns the right to bill later, because the first disputed invoice on an unvalidated number ends the programme. |
+| **Utilisation integration** | `avg_over_time × window` · `sum_over_time × Δ` | `sum_over_time`. `avg_over_time` averages only over samples that exist, so a pod that ran 9 hours of a 24-hour window gets its mean extrapolated across the whole window — an overstatement of exactly `window ÷ time-present`, which was 2.67× in my own worked case. And it errs in the direction that makes the fleet look *more* utilised, i.e. it understates the problem on exactly the bursty workloads where the problem is worst. | *"How do you know your integral is right?"* → a synthetic ground-truth run: saturate one GPU for exactly 600 s with a burn tool, expect 0.1667 GPU-hours, accept 0.150–0.184 (±2 scrape intervals). 0.30 means double counting, ~0.08 means Δ is 15 s not 30 s, ~4.0 means you reproduced the `avg_over_time` bug. |
+| **Build vs adopt** | extend OpenCost · build the controller | Build the correction layer, but be precise about why: the incumbent's cost expression has exactly two factors, an integer request count and a per-physical-device price, and a sub-device fraction is neither. It needs a third term. That is an input-model change, not a configuration. | *"Why not upstream a patch?"* → two of the six gaps genuinely are a few lines (add the shared resource key; repair an inverted guard) and are worth upstreaming. The fractional numerator needs a decision on the fractional basis — SM slice vs memory vs blended — that the standard deliberately does not prescribe. |
+| **Scheduling** | Kueue · Volcano · Slurm | Kueue, because the control plane was already operator-driven and Kueue's quota model (nominal quota, borrowing limit, cohort reclaim) is Kubernetes-native and composes with the CRDs already in the cluster. Volcano and Slurm are both defensible; the reason to reject them here is integration surface, not capability. | *"What would make you pick Slurm?"* → an HPC-native tenant population that already writes batch scripts, and topology-aware placement requirements that the Kubernetes scheduler framework makes awkward. |
+| **Reclaim policy** | on `GPU_UTIL` · on `SM_ACTIVE` · on `SM_ACTIVE` gated by `FB_USED` | Gated. Reclaiming on activity alone kills a warm, loaded serving replica: `SM_ACTIVE ≈ 0` with 58 GB of resident weights and KV-cache arena is a *paused* replica, not an idle GPU. One such reclaim and the whole reclaim system gets switched off politically. | *"What threshold?"* → below ~2 GB framebuffer the card is not holding a served model; that is a floor to tune per fleet, not a universal constant, and the honest answer names it as a fleet-specific tuning parameter. |
+
+**The discipline that makes this bank work:** for every verdict, you must be able to state the
+condition under which you would reverse it. A verdict with no reversal condition is a preference,
+and interviewers can hear the difference.
+
+### 6. Selecting chapters: the cut is the signal
+
+Feature **three to five** chapters. Everything else becomes a chapter index. The selection test is
+mechanical:
+
+```
+   CHAPTER SELECTION — run every artifact through this
+  ══════════════════════════════════════════════════════════════════════════════
+
+   artifact
+      │
+      ▼
+   ┌─────────────────────────────────────────┐
+   │ Q1 · Does it answer ONE of the four     │──── no ───▶ SUBSTRATE
+   │      verbs, cleanly and primarily?      │             (depth evidence,
+   └───────────────┬─────────────────────────┘              surfaced on probe)
+                  yes
+                   ▼
+   ┌─────────────────────────────────────────┐
+   │ Q2 · Can I state a NUMBER I measured?   │──── no ───▶ NOT READY
+   └───────────────┬─────────────────────────┘             (go measure, or
+                  yes                                       demote to index)
+                   ▼
+   ┌─────────────────────────────────────────┐
+   │ Q3 · Can I name what I REJECTED and     │──── no ───▶ INDEX
+   │      the condition that reverses it?    │             (a build, not a
+   └───────────────┬─────────────────────────┘              decision)
+                  yes
+                   ▼
+   ┌─────────────────────────────────────────┐
+   │ Q4 · Does it survive "how do you know   │──── no ───▶ INDEX
+   │      that?" asked three times?          │             (borrowed depth)
+   └───────────────┬─────────────────────────┘
+                  yes
+                   ▼
+              ★ FEATURED CHAPTER ★
+              (cap at five; if six pass, the sixth is
+               the one whose number is softest)
+```
+
+Running this course's eleven artifacts through the filter gives a stable answer: **05 (observable),
+04 (attributable), 11 (attributable — the justification), 06 (schedulable), 08 (survivable)** are
+featured; 01, 01b, 02b, 03, 07, 09, 10 become the index and the substrate. Artifact 02 (the
+operator) is a special case — it is not its own chapter, it is the *vehicle* for chapter B, and
+narrating it separately splits one strong story into two weak ones.
+
+**The cut list is itself a talking point.** "I built eleven things; five carry the argument and six
+are evidence I understand the substrate" is a sentence that demonstrates judgement about your own
+work. Volunteering the cut is stronger than being caught with an unfeatured project you cannot
+defend.
+
+### 7. The staff-archetype check
+
+Will Larson's staff-archetypes framework names four shapes the title covers: the **Tech Lead**
+(guides one team's approach and execution), the **Architect** (owns direction, quality and approach
+across a critical area), the **Solver** (digs into a gnarly cross-cutting problem, resolves it,
+moves on), and the **Right Hand** (extends a leader's attention across a large organisation).
+
+Your four-verb thesis is implicitly arguing **Architect**, with a strong secondary claim to
+**Solver**. Architect, because you defined the direction and approach for an entire fleet-management
+domain end to end rather than executing within someone else's. Solver, because two chapters — the
+util-lie investigation and the OpenCost teardown — are exactly the shape of digging into one
+gnarly, bounded problem and resolving it cleanly.
+
+**Use it as a filter, not a personality quiz.** If a candidate featured chapter supports neither
+"defined the approach for a critical area" nor "solved a hard bounded problem," it does not belong
+in the featured five. Run it: chapter 06 (Kueue showback) supports Architect. Chapter 08
+(survive-a-failure) supports Solver. Chapter A supports Solver strongly and Architect weakly.
+Chapters B and C support Architect strongly. The set is coherent, which is the outcome you want —
+a portfolio that argues two adjacent archetypes reads as one person; a portfolio that argues all
+four reads as unfocused.
+
+The follow-up this arms you for is real and common: *"so what kind of engineer are you?"* Answer in
+one sentence with the archetype and the evidence, not with adjectives.
+
+### 8. The joints — what makes eleven chapters one argument
+
+The chapters are not the hard part. The *transitions* are, because a transition is where an
+interviewer decides whether they are hearing one argument or a sequence of anecdotes. There are
+exactly four joints, each of which is one sentence, and each of which should be rehearsed until it
+is automatic.
+
+```
+   THE NARRATIVE SPINE — fixed order, four joints, and the branch points
+  ══════════════════════════════════════════════════════════════════════════════
+
+   [THESIS]  "observable → attributable → schedulable → survivable"
+       │
+       │  ◀── if interrupted here: "why those four?" → the dependency chain (§2)
+       ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ CH.A  THE LIE   GPU_UTIL 99 / SM_ACTIVE 0.16 / TENSOR 0.011          │
+   │                 86% of the die dark on a solid-green dashboard       │
+   └──────────────────────────┬───────────────────────────────────────────┘
+        JOINT 1 ▶ "Once the measurement is honest, the next question is
+                   whose work it was — and that's the join nobody ships."
+                          │
+       ◀── branch: "why is nobody shipping it?" → jump straight to CH.C, then
+           come back. The spine tolerates this reorder; a chronological story
+           does not.
+                          ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ CH.B  THE JOIN  UUID meets pod-resources; Σshare + unalloc ≡ 1.000   │
+   │                 46.8% of chargeback $ labelled as an estimate        │
+   └──────────────────────────┬───────────────────────────────────────────┘
+        JOINT 2 ▶ "The obvious objection is 'doesn't OpenCost do this?' —
+                   so I read the source before I wrote a line of mine."
+                          ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ CH.C  THE GAP   $2.10 / $14.70 / $0.00 / $8.40, same card, same tool │
+   └──────────────────────────┬───────────────────────────────────────────┘
+        JOINT 3 ▶ "With an attributed ledger you can finally make an
+                   allocation decision instead of a guess."
+                          ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ CH.D  THE POLICY  Kueue quota, borrow/reclaim, gang scheduling       │
+   └──────────────────────────┬───────────────────────────────────────────┘
+        JOINT 4 ▶ "And all of that assumes the hardware works, which at
+                   fleet scale it measurably does not."
+                          ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │ CH.E  THE FAILURE  MTTF 7.9 h at 1,024 GPUs (measured, arXiv:        │
+   │                    2410.21680); failure-mode log; checkpoint cost    │
+   └──────────────────────────┬───────────────────────────────────────────┘
+                              ▼
+   [CLOSE]  "Most of it ran on a 200-node SIMULATED fleet with the traces
+             published — and here's where my design is worse than the
+             incumbent's."   ◀── the honesty close. Do not skip it.
+```
+
+**Joint 2 is the most valuable sentence in the whole narrative**, because it converts the
+interviewer's strongest objection into your strongest chapter *before they raise it*. Volunteering
+an objection you have already answered is a different signal from answering it when cornered, and
+the difference is legible.
+
+**The honesty close is not modesty.** "Here is where my design is worse" is the sentence that makes
+the preceding six minutes believable. Concretely, you have three to offer: per-tenant attribution
+under time-slicing is an approximation with an explicit uncertainty flag and no amount of code
+fixes it, because the device exposes one counter and not one per CUDA context; the fleet numbers
+come from a simulation and the real-hardware validation was one rented afternoon; and the dollar
+figures are a dated snapshot on a stated basis, not a rate card you negotiated.
+
+### 9. Compression: the same spine at four lengths
+
+You will need this narrative at four durations, and they are not the same story truncated. They are
+four different selections from the same spine.
+
+| Length | Where it is used | What survives | What is cut |
+|---|---|---|---|
+| **One line** (10 s) | recruiter screen, LinkedIn headline, the first sentence of your README | the specialisation + the one artifact | everything else |
+| **30 seconds** | "tell me about yourself"; the opener in every loop | thesis + chapter A + one number + the honesty caveat | joints 2–4, all other chapters |
+| **3 minutes** | "walk me through a project you're proud of" | one chapter at full six-beat arc | the thesis becomes one clause, not a paragraph |
+| **6–8 minutes** | portfolio review; the narrated demo | thesis + A → B → C → D → E with all four joints | the substrate layer, unless probed |
+
+The one-liner, written out:
+
+> *"Platform engineer specialised into GPU fleet cost and observability — I built the per-pod GPU
+> attribution controller that the default tooling structurally can't."*
+
+The 30-second version:
+
+> *"I set out to make a multi-tenant GPU fleet observable, attributable, schedulable and
+> survivable — one reference platform, not scattered scripts. The chapter I lead with is
+> counterintuitive: your GPU dashboard is lying to you. On a batch-1 decode server the dashboard
+> read 99% utilisation while only 16% of the SMs were lit and the tensor pipes were at 1% —
+> because the field everyone trusts measures whether a kernel was resident, not whether the
+> silicon did work. I built the exporter and the Kubernetes controller that join the honest
+> counters to the kubelet's allocation record, per pod, with a conservation identity that proves
+> the shares sum to exactly one physical GPU. Then I read OpenCost's source and found the same card
+> bills $2.10, $14.70, $0.00 or $8.40 depending only on how it's shared. Most of it ran on a
+> 200-node simulated fleet with the traces published, and the time-slicing split is an explicit
+> approximation, not a measurement."*
+
+That is roughly 150 words: thesis, contrarian chapter, three real numbers, the justification for
+building, and two honesty caveats. **Rehearse it until the caveats come out as confidently as the
+numbers**, because a caveat delivered apologetically reads as a weakness and the same caveat
+delivered flatly reads as rigour.
 
 ## Perspectives
 
-**Candidate's view — why one thesis beats 11 disconnected projects.** From your side of the table,
-the temptation is to show range: eleven projects prove you touched eleven different corners of GPU
-infrastructure. But range without organization reads as scattered, not broad — an interviewer
-skimming eleven bullet points has no way to tell whether you understand how they relate or just
-happened to build a lot of things. A single thesis converts the same eleven artifacts from "a lot
-of projects" into "evidence of one deliberate, multi-year program" — the same facts, a
-fundamentally different read.
+**Candidate's view — range without organisation reads as scattered.** The instinct is to show
+eleven projects because eleven proves breadth. But an interviewer skimming eleven bullets has no
+way to tell whether you understand how they relate or merely built a lot of things, and the
+cheapest interpretation is the second. One thesis converts identical facts from "a lot of projects"
+into "one deliberate multi-year programme." Same evidence, different claim about the person.
 
-**Reviewer's view — what a hiring manager's four-minute skim actually optimizes for.** A resume
-and portfolio review is not a careful read; it's a fast scan for a small number of signals: one
-sentence that tells them what kind of engineer you are, one number that proves you operated at
-real scale, and one diagram that shows you can hold a whole system in your head at once. A
-reviewer skimming eleven separate READMEs has to do the synthesis work themselves — and most
-won't; they'll remember whichever project happened to load first. A reviewer handed a thesis
-sentence, a real number, and one architecture diagram does your synthesis work for them, which is
-exactly what gets you past the four-minute skim into an actual conversation.
+**Reviewer's view — the four-minute skim is a search, not a read.** They are looking for one
+sentence, one number, and one diagram. Anything that requires them to synthesise is dropped. This
+is also why the whole-platform diagram must be a *single system with one signal flow*, not eleven
+project diagrams pasted in sequence — a collage still reads as eleven projects, no matter how neat
+the collage is.
 
-**Systems-architecture view — the narrative should be isomorphic to the system.** Notice that this
-lesson's four-verb thesis — observable, attributable, schedulable, survivable — is not just a
-mnemonic device, it's a real layered-systems shape: signals flow up from raw telemetry, get
-consumed by attribution/cost logic, drive scheduling/allocation action, and sit underneath a
-survivability layer that protects the whole stack. That's the same "layers, not a junk drawer"
-principle you'd apply to any well-designed distributed system. Telling your story with the same
-structure the system actually has isn't a coincidence — a narrative shaped like the system it
-describes is easier to believe, and easier to defend under follow-up questions, than one that
-imposes an arbitrary chronological order onto the same facts.
+**Systems-architecture view — the narrative should be isomorphic to the system.** The four verbs
+are not a mnemonic; they are a real layered shape. Signals flow up from the silicon, get made
+honest, get attributed, drive allocation, and sit under a survivability layer. Telling the story
+with the same structure the system has is easier to believe and much easier to defend under
+follow-up, because every "why is that there?" question has a structural answer rather than a
+chronological one.
 
-**Staff-vs-senior signal view — imposing structure IS the competency, not a proxy for it.** It's
-tempting to treat capstone synthesis as marketing distinct from "real engineering," but the skill
-this lesson drills — scanning a body of scattered-looking work and recognizing (or building) the
-shared thesis underneath it — is close to verbatim what senior staff engineers describe doing on
-the job: watching for the same problem recurring in different disguises across teams, and only
-then organizing effort around the pattern instead of the individual instances. Practicing that
-discipline on your own eleven artifacts, where the stakes are low and you control all the
-evidence, is direct rehearsal for the harder version of the same skill you'll need once you're
-inside an organization with far messier, far less controllable inputs.
+**Staff-signal view — imposing structure is the competency, not a proxy for it.** The move this
+lesson drills — scan scattered work, find or build the shared thesis, organise around the shape
+instead of the instances — is close to verbatim what staff engineers describe doing on the job.
+Practising it on your own eleven artifacts, where you control every input, is direct rehearsal for
+the version with messy inputs and other people's opinions.
+
+**Vendor's view — the industry organises the same way.** GPU-cloud vendors sell exactly this shape
+as a product: a single operating layer that unifies observability, fleet and node lifecycle
+management, anomaly and straggler detection, and operational tooling, rather than a pile of
+standalone dashboards. If commercial products converge on observable → attributable/actionable →
+survivable, imposing that structure on your own work is not artificial packaging; it is the shape
+an experienced fleet operator already thinks in.
 
 ## Real-world use cases
-- **Lalit Maganti (Perfetto/Chromium engineer), "How I Find Problems to Solve as a Staff
-  Engineer"** — https://lalitm.com/post/find-problems-staff-engineer/ — what it shows: a real
-  staff engineer's first-person account of imposing an organizing thesis on scattered
-  observations and work over time, rather than treating each problem as an isolated task — the
-  direct real-world parallel to this lesson's four-verb-thesis move.
-- **CoreWeave Mission Control product page** —
-  https://www.coreweave.com/mission-control — what it shows: a real GPU-cloud vendor organizing
-  observability, automated fleet/node lifecycle, and anomaly detection into one narrative product
-  rather than separate tools — proof the "value chain, not a list of features" framing used in
-  this lesson isn't invented pedagogy.
-- **Sean Goedecke, "How I got promoted to staff engineer twice"** —
-  https://www.seangoedecke.com/staff-engineer-promotions/ — what it shows: a real engineer's
-  account of building a coherent promotion narrative out of scattered project work, and the
-  observation that being known and valued for a clear body of work matters more than raw technical
-  strength alone — directly analogous to building a portfolio narrative for external hiring.
-- **Will Larson, "Staff archetypes"** — https://staffeng.com/guides/staff-archetypes/ — what it
-  shows: the canonical Tech Lead / Architect / Solver / Right Hand framework used above to check
-  which archetype your thesis is implicitly arguing you are.
+
+- **NVIDIA `dcgm-exporter`'s default counter CSV and shipped Grafana dashboard.**
+  `DCGM_FI_DEV_GPU_UTIL` and `DCGM_FI_PROF_GR_ENGINE_ACTIVE` ship enabled; `SM_ACTIVE` and
+  `SM_OCCUPANCY` ship commented out, and the vendor's own eight-panel dashboard (grafana.com
+  #12239) has no SM-breadth panel at all. **What it shows:** chapter A's claim is not a
+  provocation — the misleading metric is the shipped default and the honest one is opt-in. This is
+  the exhibit that makes the whole "observable" layer of your thesis land in one sentence.
+
+- **OpenCost issue #3900** (filed 2026-07-05, closed 2026-07-09) — `costBasis=usage` and
+  `costBasis=allocation` returning figures within ~1% of each other for a vLLM server measured at
+  roughly 11% GPU utilisation; expected ≈$0.275 against actual ≈$2.50 on a 1-GPU, 1-hour, $2.50/hr
+  workload. **What it shows:** chapter C's central argument stated by the reporter and accepted by
+  the maintainers, then fixed in four days. Citing a project's own agreed issue is a different
+  register from criticising the project, and it is the register that survives a room containing
+  someone who contributes to it.
+
+- **OpenCost issue #3828** (filed 2026-06-02, open at last reading) — a HAMi user whose pod is
+  allocated a quarter of a card and billed for a whole one, whose stated workaround is to look up
+  the fraction externally and multiply `gpuCost` by it. **What it shows:** an unaffiliated stranger
+  independently specifying chapter B's correction layer as a feature request. That is the strongest
+  available evidence that the gap you built for is real and not self-generated.
+
+- **Meta, *Revisiting Reliability in Large-Scale Machine Learning Research Clusters*
+  (arXiv:2410.21680, HPCA 2025).** Eleven months on two large A100 research clusters; measured MTTF
+  of 7.9 hours for 1,024-GPU jobs, with 1.8 h at 16,384 GPUs and 0.23 h at 131,072 given as the
+  paper's projections. **What it shows:** the fourth verb is not rhetorical. It also shows why
+  citation precision matters — quoting the projections as measurements is the kind of slip a
+  careful interviewer catches, and it costs more credibility than the number was worth.
+
+- **Will Larson's staff-archetypes framework.** Tech Lead / Architect / Solver / Right Hand.
+  **What it shows:** the vocabulary a panel is often already using internally, and a filter you can
+  apply to your own chapter selection before someone else applies it to you.
 
 ## Worked example
-A 30-second staff-signal opener, rehearsed: *"I set out to make a multi-tenant GPU fleet
-observable, attributable, schedulable, and survivable — one reference platform, not scattered
-scripts. The chapter I'll open with is counterintuitive: your GPU dashboard is lying to you. On a
-real workload the dashboard read 95% utilization while model-FLOPs-utilization was 31% — the GPU
-was busy spinning, not computing. I built an exporter and a custom Kubernetes operator to surface
-goodput and MFU, not just util, then hung per-pod cost attribution off it — FOCUS-aligned so
-finance could actually read it. I chose showback over hard chargeback because in a scarce-GPU
-multi-tenant setting chargeback creates hoarding; I rejected Volcano and raw Slurm for Kueue
-because it's Kubernetes-native and I was already operating an operator-driven control plane. And I
-designed the whole thing assuming hardware fails — I keep a failure-mode log and ran a
-survive-a-failure training lab, because on a 250k-GPU fleet a node dies every few minutes."* That
-paragraph names the thesis, leads with the contrarian chapter, cites a real number, narrates two
-rejected alternatives, and closes on failure maturity — the full staff delta in one breath.
 
-If pressed on "so what kind of engineer are you, exactly," the archetype check gives you a crisp
-follow-up: *"Mostly I'd say Architect — I defined the approach for this whole fleet-management
-area end to end — with some Solver mixed in on the specific chapters, like the dashboard
-investigation, where I dug into one gnarly, bounded problem and resolved it."* That answer only
-works because the chapters you chose actually support it — which is exactly what the archetype
-check in Core concepts is for.
+**Scenario.** A portfolio review, forty-five minutes, one hiring manager and one senior engineer.
+They have your repo open. The opening line is "walk us through it."
+
+**Minute 0:00–0:30 — the thesis and the hook.** Deliver the 30-second version from §9 verbatim.
+Stop talking. Do not fill the silence.
+
+**Minute 0:30–1:00 — the senior engineer interrupts.** *"Hang on — 99% utilisation and 16% SM
+active? That sounds like your exporter was broken."* This is the single most likely interruption,
+and it is a gift, because the answer is a derivation rather than an assertion:
+
+> *"It's not an exporter bug, it's two independent collection paths. Field 203 is a straight
+> passthrough of `nvmlUtilization_t.gpu` — the driver integrates a one-bit predicate, 'is at least
+> one kernel resident', over a sample window of one second to a sixth of a second depending on the
+> product. `SM_ACTIVE` is field 1002 and comes from differencing two hardware performance-monitor
+> snapshots: summed active cycles over summed elapsed cycles across all 132 SMs. Neither can be
+> derived from the other. And you can predict the gap before measuring it — an 8B model in BF16 at
+> batch 1 moves 16 GB of weights per token at 3.35 TB/s, which is 4.78 ms, wrapped around 16 GFLOP
+> of arithmetic at 989 TFLOP/s, which is 16 microseconds. The tensor pipes have to be idle about
+> 99.7% of the time, and a kernel has to be resident essentially the whole window, because the
+> inter-kernel gap is microseconds against a window of at least 167 milliseconds."*
+
+**Minute 1:00–1:30 — the hiring manager pivots to money.** *"So what's it worth?"*
+
+> *"On a 500-GPU H100 fleet at $2.50 per GPU-hour — on-demand basis, mid-2026 snapshot, and quotes
+> in that window ranged from about $2 to $11, so treat it as a band — capacity costs about $10.9M a
+> year. In my own 24-GPU worked case, 57% of allocated GPU-hours were doing no SM work. A
+> ten-point fleet-wide utilisation move is about $1.1M a year. But I'd be careful with that number:
+> some of that gap is memory-bandwidth-bound inference that physics will not give back, which is
+> exactly why my dashboard decomposes the gap into six buckets with six different owners instead of
+> reporting one waste percentage."*
+
+That last clause is the staff move. You volunteered the limit of your own headline number before
+anyone tested it.
+
+**Minute 1:30–2:30 — joint 2, delivered on schedule.** *"The obvious objection is 'doesn't OpenCost
+do this?' so I read the source before writing a line of mine."* Then chapter C, compressed to the
+four-number table. Expect: *"Couldn't you just configure it?"* Answer: *"No — and that's the
+interesting part. The cost expression has exactly two factors, an integer request count and a price
+per physical device. A sub-device fraction is neither, so it needs a third term. That's an
+input-model change, not a setting. Two of the six gaps genuinely are a few lines and are worth
+upstreaming; the fractional numerator isn't one of them."*
+
+**Minute 2:30–4:00 — chapters D and E, then the honesty close.** Kueue quota and reclaim, the
+failure-mode log, then: *"Most of this ran on a 200-node simulated fleet with the traces published.
+I rented one real GPU for an afternoon to validate the simulation rather than to develop against
+it. And the per-tenant split under time-slicing is an approximation with an explicit uncertainty
+flag — the device exposes one counter, not one per CUDA context, so no amount of code recovers N
+per-tenant values from one device value."*
+
+**Minute 4:00 onward — you are now in their questions, which is where you want to be.** The whole
+purpose of the spine is to get here in four minutes with all three consumers served: they have the
+sentence, the numbers, and the diagram, and every subsequent question lands on a chapter you have
+already rehearsed at three lengths.
+
+**Self-scoring afterwards.** Did you land the thesis in one sentence? Did every chapter carry a
+number? Did you name at least two rejected alternatives with their reversal conditions? Did the
+honesty close come out flat rather than apologetic? Did joint 2 arrive before the objection? Five
+yeses is a pass; anything less is a specific thing to rehearse, not a vague feeling.
 
 ## Practice
+
 Build the storyboard in
-[GPU platform capstone](../practice/gpu-platform-capstone/README.md):
-1. Write the **through-line sentence** (start from the four-verb thesis; make it yours) at the top
-   of the capstone README.
-2. List your **chapters** in value-chain order, each tagged with the fleet-operator question it
-   answers and the artifact IDs behind it.
-3. Pick your **3-5 featured chapters** (≥1 production-scale) and for each write the
-   problem→ownership→architecture→stack→metrics→evolution arc, with at least one real number.
-4. For each featured chapter, write the **rejected alternative(s)** you'll name (MIG/time-slice/
-   passthrough, chargeback/showback, Kueue/Volcano/Slurm).
-5. Draw **one architecture diagram of the whole platform** showing signals flowing
-   exporter/operator → attribution/cost → showback/scheduling → survivability → machine
-   substrate.
-6. Write and rehearse your **30-second opener** leading with "dashboard is lying" (05) backed by
-   gpu-cost-operator (02).
-7. Name which **staff archetype** (Tech Lead / Architect / Solver / Right Hand) your thesis and
-   chapter selection argue you are, and check that every featured chapter actually supports that
-   claim — cut or reorder any that don't.
+[GPU platform capstone](../practice/gpu-platform-capstone/README.md).
+
+1. **Write the through-line sentence.** Start from the four verbs, make it yours, and write the
+   *dependency chain* underneath it in one sentence — you will be asked why those four.
+
+2. **Run all eleven artifacts through §6's selection filter.** Record the verdict per artifact
+   (featured / index / substrate / not-ready) and, for every "not ready," the specific measurement
+   that would fix it. Cap featured at five.
+
+3. **Write the six-beat arc for each featured chapter**, in speaking register, using §4's three as
+   the model. Every arc must contain a number you measured and a rejected alternative with its
+   reversal condition. Do not write these as bullet points — write them as prose you would say,
+   because the failure mode is a chapter that reads well and speaks badly.
+
+4. **Fill the rejected-alternatives bank.** Take §5's six rows, replace the verdicts with your own
+   where they differ, and add the reversal condition for each. Then have someone push the follow-up
+   column at you cold.
+
+5. **Draw the whole-platform diagram.** One system, one signal flow, five layers, artifacts named
+   on the layers they belong to. It must be a single diagram, not a collage. This is the front-door
+   image for lesson 03.
+
+6. **Write and rehearse all four compressions** (one line, 30 s, 3 min, 6–8 min). Record yourself
+   at 30 seconds and listen for one thing only: does the honesty caveat sound like rigour or like
+   an apology?
+
+7. **Rehearse the four joints in isolation.** Say each transition sentence ten times. These are the
+   sentences you will fumble under pressure, and they are the ones that make the argument cohere.
+
+8. **Run the archetype check.** Name the archetype your chapter selection argues for, then verify
+   every featured chapter supports it. Cut or reorder anything that does not.
+
+**Acceptance:** a thesis sentence with its dependency chain · a selection verdict for all eleven
+artifacts with a capped featured set · five six-beat arcs in speaking prose, each with a measured
+number and a reversal condition · one whole-platform diagram · four rehearsed compressions · four
+rehearsed joints · a named archetype whose evidence you can point at.
 
 ## Common pitfalls
-1. **Writing the thesis after picking your favorite projects, instead of letting the thesis pick
-   the chapters.** Reviewers can tell when a narrative is retrofitted onto pre-chosen favorites —
-   the joints don't quite line up, and follow-up questions expose that the "thesis" doesn't
-   actually constrain anything. Write the four-verb thesis first, then let it decide which
-   chapters earn a featured slot and which get cut.
-2. **Treating the four verbs as decorative section headers instead of a real test.** "Observable,
-   attributable, schedulable, survivable" isn't a formatting scheme — every artifact you feature
-   should have to earn its place by clearly answering one of the four, and an artifact that only
-   loosely fits should be cut or moved to supporting material, not kept because it's a favorite.
-3. **Opening with the least contrarian chapter out of instinct to "warm up."** Leading with a safe,
-   unsurprising chapter and saving the strongest material for later loses the hook that makes an
-   interviewer lean in. "Your GPU dashboard is lying" works precisely because it's the *first*
-   thing said, not the third.
-4. **Confusing "one architecture diagram" with "one diagram per artifact, stitched together."**
-   Eleven small diagrams taped into a sequence still reads as eleven projects. The whole-platform
-   diagram has to be drawn as a single system with one signal flow, not a collage of the
-   individual artifacts' own diagrams.
-5. **Naming a tradeoff without naming what you actually rejected.** "I used Kueue for scheduling"
-   is a fact; "I chose Kueue over Volcano and raw Slurm because it's Kubernetes-native and I was
-   already running an operator-driven control plane" is a staff signal. The rejected alternative is
-   the part that proves judgment, not just familiarity with one tool.
+
+1. **Writing the thesis after picking your favourite projects.** **Mechanism:** a retrofitted
+   thesis does not constrain anything, so the joints do not line up and follow-up questions expose
+   it — the tell is that no chapter was ever cut. **Symptom:** you cannot answer "what did you
+   leave out, and why?" **Fix:** write the four verbs first, then let §6's filter decide.
+
+2. **Treating the four verbs as section headers.** **Mechanism:** if every artifact "sort of fits"
+   a verb, the verbs are doing no work and the narrative is a list with nicer labels. **Symptom:**
+   an artifact is featured because it was hard, not because it answers a verb and moves a number.
+
+3. **Opening with the safe chapter to warm up.** **Mechanism:** attention is highest in the first
+   thirty seconds and declines; spending it on the exporter and saving the util lie for third
+   inverts the attention curve. **Symptom:** the interviewer's follow-ups are all about your
+   least interesting chapter, because that is the one they were listening hardest to.
+
+4. **A collage instead of a diagram.** **Mechanism:** eleven project diagrams in sequence encode
+   eleven systems, so the reader still has to do the synthesis. **Symptom:** you find yourself
+   saying "and then this connects to that" while pointing between boxes that share no edge.
+
+5. **Naming a tradeoff without naming the rejected option.** **Mechanism:** "I used Kueue" is a
+   fact about tooling; "I chose Kueue over Volcano and Slurm because the control plane was already
+   operator-driven, and I'd reverse it for an HPC-native tenant population" is a decision with a
+   boundary. Only the second is evidence of judgement. **Symptom:** every technology in your story
+   sounds like the only option you considered.
+
+6. **Delivering the honesty caveat apologetically.** **Mechanism:** the caveat's job is to make the
+   preceding claims credible; delivered as an apology it does the opposite and invites the
+   interviewer to probe for more weakness. **Symptom:** your voice drops on "it was simulated."
+   **Fix:** say the caveat *first* in the sentence — "on a 200-node simulated fleet, traces
+   published, I measured…" — so it reads as a specification rather than a confession.
+
+7. **Quoting a number without its basis and date.** **Mechanism:** GPU rates vary by more than 2×
+   depending on basis, and utilisation figures vary by workload; an unqualified figure is your most
+   attackable sentence. **Symptom:** "GPUs cost about $2.50 an hour" followed by "well, it
+   depends…" when pushed. **Fix:** basis and date inline, every time.
+
+8. **Letting the thesis drift between loops.** **Mechanism:** if you re-word the thesis per company
+   you lose the compounding benefit of rehearsal and the debrief union fragments again.
+   **Symptom:** the fourth loop feels no easier than the first. **Fix:** the thesis is fixed; only
+   the *chapter emphasis* changes per employer, per lesson 01's matrix.
 
 ## Self-check
-- What is the organizing thesis that turns 11 artifacts into one platform, and what are its four
-  verbs?
-  **Answer:** "Making a multi-tenant GPU fleet observable, attributable, schedulable, and
-  survivable" — observable, attributable, schedulable, survivable, each verb anchoring a chapter
-  cluster.
-- Which single artifact should you lead a portfolio review with and why, and what backs it?
-  **Answer:** "Your GPU dashboard is lying" (05) — the contrarian util-vs-MFU/goodput angle
-  instantly proves GPU-fleet thinking; back it with gpu-cost-operator (02) to pair the insight with
-  production-shipping credibility.
-- Name three tradeoff pairs you should narrate as rejected alternatives to read staff, not senior.
-  **Answer:** GPU sharing (MIG vs time-slice vs full passthrough), cost model (chargeback vs
-  showback), and scheduling (Kueue vs Volcano vs Slurm).
-- Which staff archetype does the four-verb thesis mainly argue you are, and what's the secondary
-  claim?
-  **Answer:** Mainly Architect — you defined the direction and approach across an entire critical
-  area (fleet management) — with a secondary claim to Solver in chapters where you resolved one
-  specific, gnarly, bounded problem (the dashboard investigation, a live failure scenario).
-- Why is "one thesis" a stronger signal to a reviewer than "eleven well-written project READMEs,"
-  even if the underlying work is identical?
-  **Answer:** A reviewer's skim is fast and optimizes for a single organizing sentence, one real
-  number, and one diagram; eleven separate READMEs force the reviewer to do the synthesis work
-  themselves (most won't), while one thesis does that synthesis for them and gets you past the
-  skim into an actual conversation.
+
+- **State the organising thesis and derive it, rather than reciting it.** *Answer:* "Making a
+  multi-tenant GPU fleet observable, attributable, schedulable and survivable." The derivation is a
+  dependency chain from the operator's position: you cannot attribute what you cannot honestly
+  measure, because a device counter with no tenant map is a fact nobody can act on; you cannot
+  schedule fairly what you cannot attribute, because allocation policy without a usage ledger is
+  guesswork; and none of it matters if hardware failure takes the job down, which at fleet scale it
+  measurably does — Meta reports a measured 7.9-hour MTTF for 1,024-GPU jobs (arXiv:2410.21680).
+  The four verbs are ordered, not enumerated, and the order is the argument.
+
+- **Why are chapters A, B and C the load-bearing three?** *Answer:* because together they form a
+  complete argument with no missing step. A is a measurement finding (the flagship metric reports
+  kernel residency, not work — 99% `GPU_UTIL` against 0.16 `SM_ACTIVE` and 0.011 tensor activity on
+  one GPU in one second). B is the engineering response (join the honest counters to the kubelet's
+  allocation record per pod, with a conservation identity that proves shares sum to exactly 1.000
+  per physical GPU). C is the justification for building B rather than installing something (the
+  incumbent's numerator is a whole-GPU request count, so the same card bills $2.10, $14.70, $0.00
+  or $8.40 depending only on the sharing mode and one GPU-operator flag). Remove any one and the
+  argument has a hole a single follow-up finds.
+
+- **Which chapter do you lead with, and what backs it immediately?** *Answer:* the util lie
+  (artifact 05), because it is contrarian, one sentence long, reproducible by the listener, and it
+  proves a distinction only someone who has operated accelerators makes. Back it immediately with
+  the attribution controller (04, shipped via the operator from 02) so the insight is paired with
+  shipping credibility: insight alone reads as a blogger, shipping alone reads as an implementer,
+  and the pair is what reads as a platform engineer.
+
+- **Give three rejected alternatives with their reversal conditions.** *Answer:* (i) *Reclaim on
+  `SM_ACTIVE` alone* — rejected because a paused-but-loaded serving replica reads `SM_ACTIVE ≈ 0`
+  with tens of gigabytes resident, so I gate on `DCGM_FI_DEV_FB_USED`; I would revisit the ~2 GB
+  floor per fleet since it depends on the smallest served model. (ii) *`avg_over_time × window` for
+  GPU-hours* — rejected because it extrapolates over samples that do not exist and overstates by
+  exactly `window ÷ time-present` (2.67× in my case), so I use `sum_over_time × Δ/3600`; I would
+  reconsider the Δ-independent form if I could not pin the rule-group interval. (iii) *MIG
+  everywhere* — rejected because static partitions do not rebalance and 7×`1g.10gb` strands about
+  14% of the framebuffer; I would choose MIG wherever hard isolation between tenants is a
+  requirement rather than a preference.
+
+- **Why must the narrative be isomorphic to the system?** *Answer:* because every "why is that
+  there?" question then has a structural answer instead of a chronological one. A story ordered by
+  when you built things forces the listener to hold an arbitrary sequence; a story ordered by the
+  system's own layering means each chapter's position *is* its justification — measurement under
+  attribution under scheduling, all wrapped in survivability, on a substrate. It also makes the
+  narrative reorderable under interruption: if someone jumps from chapter A to chapter C, the spine
+  still holds, because the chapters are related by dependency rather than by date.
+
+- **What does the honesty close contain, and why is it not modesty?** *Answer:* three specific
+  limits — the time-slicing per-tenant split is an approximation with an explicit uncertainty flag,
+  because the device exposes one counter rather than one per CUDA context and no code recovers N
+  values from one; the fleet results come from a 200-node simulation with published traces, with
+  one rented GPU-afternoon used to validate rather than develop; and every dollar figure is a dated
+  snapshot on a named basis. It is not modesty because each limit is stated *with its mechanism*,
+  which demonstrates that you know exactly where the boundary is. An interviewer's job is to find
+  the boundary; arriving with it already mapped converts their strongest probe into your evidence.
+
+- **How does the same spine serve a recruiter screen and a forty-five-minute portfolio review?**
+  *Answer:* by selection, not truncation. The one-liner keeps only the specialisation and the one
+  artifact; the 30-second version adds the thesis, chapter A, three numbers and the honesty caveat;
+  the 3-minute version drops the thesis to a clause and runs one chapter through the full six-beat
+  arc; the 6–8-minute version runs A → B → C → D → E with all four joints and keeps the substrate
+  in reserve for probes. Because all four are selections from one fixed spine, rehearsal compounds
+  across them instead of fragmenting into four separate pitches.
 
 ## Connections & what's next
-This lesson depends directly on lesson 01: the artifact-to-signal matrix built there tells you
-which chapters to emphasize when — the same core thesis stays constant, but which 3-5 chapters you
-feature can shift slightly toward whichever employer's killer-artifact mapping is most relevant
-for that loop. It also sets up the rest of the module: lesson 03 turns this storyboard into a
-written repo README and RFC-style design doc; lesson 04 builds the flagship blog post directly out
-of the "dashboard is lying" opening chapter; lesson 07 (narrate your artifacts) drills telling each
-chapter's problem→ownership→architecture→stack→metrics→evolution arc out loud in under three
-minutes; and lesson 08 (staff behavioral) reuses this same thesis as the backbone for STAR
-stories. Next: **lesson 03** takes the through-line thesis, the chapter list, and the
-whole-platform diagram this lesson produced and turns them into the actual repo README and design
-doc a hiring manager will read cold.
+
+This lesson consumes lesson 01's artifact-to-signal matrix and produces the spine everything
+downstream runs on. Lesson 03 turns the storyboard, the chapter list and the whole-platform diagram
+into a published repo README, an RFC-style design doc, and a brag-doc. Lesson 04 builds the
+flagship blog post directly out of chapter A. Lesson 05's design drills reuse the rejected
+alternatives bank as the tradeoff vocabulary you volunteer under a clock. Lesson 07 drills each
+chapter's six-beat arc at three compressions. Lesson 08 reuses the same thesis as the backbone for
+staff behavioural stories — the chapters become the Situations, and the rejected alternatives
+become the Actions worth narrating.
+
+Next: **lesson 03** takes the thesis, the chapters and the diagram and turns them into evidence a
+hiring manager reads cold, with nobody in the room to explain it.
 
 ## References & further reading
 
 **Primary sources**
-- CoreWeave Mission Control product page: https://www.coreweave.com/mission-control
-- Will Larson, "Staff archetypes" (Tech Lead / Architect / Solver / Right Hand framework): https://staffeng.com/guides/staff-archetypes/
 
-**Real-world engineering blogs**
-- Lalit Maganti, "How I Find Problems to Solve as a Staff Engineer": https://lalitm.com/post/find-problems-staff-engineer/
-- Sean Goedecke, "How I got promoted to staff engineer twice": https://www.seangoedecke.com/staff-engineer-promotions/
-- CoreWeave Kueue engineering blog (showback/scheduling chapter): https://www.coreweave.com/blog/kueue-a-kubernetes-native-system-for-ai-training-workloads
+- NVIDIA `dcgm-exporter`, `etc/default-counters.csv` — https://github.com/NVIDIA/dcgm-exporter/blob/main/etc/default-counters.csv — read for: which fields ship enabled and which ship commented out; the one-file proof behind chapter A.
+- NVIDIA `dcgm-exporter`, `grafana/dcgm-exporter-dashboard.json` — https://github.com/NVIDIA/dcgm-exporter/blob/main/grafana/dcgm-exporter-dashboard.json — read for: the vendor's eight-panel default dashboard with no SM-breadth panel (grafana.com #12239).
+- OpenCost issue #3900 — https://github.com/opencost/opencost/issues/3900 — read for: the maintainers' own statement of the request-vs-usage gap, with the $2.50-vs-$0.275 expected/actual. Filed 2026-07-05, closed 2026-07-09.
+- OpenCost issue #3828 — https://github.com/opencost/opencost/issues/3828 — read for: an unaffiliated user specifying chapter B's correction layer as a feature request.
+- Meta — *Revisiting Reliability in Large-Scale Machine Learning Research Clusters* (arXiv:2410.21680, HPCA 2025) — https://arxiv.org/abs/2410.21680 — read for: the measured 7.9-hour MTTF at 1,024 GPUs behind the fourth verb, and the fact that the larger-scale figures are projections.
+- Will Larson, "Staff archetypes" — https://staffeng.com/guides/staff-archetypes/ — read for: the Tech Lead / Architect / Solver / Right Hand framework used as a chapter-selection filter in §7.
+
+**Course-internal sources — where every number in this lesson comes from**
+
+- `platform-eng/modules/05-gpu-observability/lessons/01-lie-and-truth.md` — field 203's exact semantics, the two collection paths, the batch-1 derivation (16 GB / 3.35 TB/s vs 16 GFLOP / 989 TFLOP/s), and why `GR_ENGINE_ACTIVE` is not the honest metric.
+- `platform-eng/modules/05-gpu-observability/lessons/08-capstone-allocated-vs-utilised.md` — the `sum_over_time` integration, the six-bucket decomposition, the 57.3% idle share, and the synthetic ground-truth validation.
+- `platform-eng/modules/04-gpu-on-kubernetes/lessons/10-capstone-per-pod-attribution.md` — the two-loop architecture, `map[string][]Owner`, the share model, identities A and B, and the 46.8% exposure fraction.
+- `platform-eng/modules/11-gpu-cost-economics/lessons/09-existing-tooling-limits.md` — the OpenCost source trace and the $2.10 / $14.70 / $0.00 / $8.40 four-regime table.
 
 **Deeper dives**
-- Julia Evans, brag documents: https://jvns.ca/blog/brag-documents
-- fonzi.ai, "How to Build an Engineering Portfolio That Gets You Hired": https://fonzi.ai/blog/portfolio-for-engineer
+
+- Julia Evans, "Brag documents" — https://jvns.ca/blog/brag-documents — read for: the mechanic behind the one-page quantified brag-doc that lesson 03 produces; the relevant discipline is one metric per line.
+
+**Not relied upon**
+
+- Vendor product pages and marketing material describing unified fleet-management platforms were
+  consulted for the "vendors organise the same way" observation in Perspectives. They are marketing
+  artifacts, not technical documentation, so the point is stated as a general industry pattern
+  rather than as a claim about any named product's internals.
 
 [🎓 12 — Capstone & interview preparation](../README.md)
