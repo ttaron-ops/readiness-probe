@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 01b.1: what a process actually is (task_struct, TGID vs TID) and the task state machine (__state as a bitmask), with live terminal captures.">
+<meta name="color-scheme" content="light dark">
+<title>Task Struct and Task States · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="backlink" href="../modules/01b-linux-internals/lessons/01-processes-and-scheduling.html">Back to lesson 01b.1 — Processes and Scheduling</a>
+
+<header class="mast">
+  <p class="kicker">Module 01b · Linux internals · Lesson 1, concepts 1–2</p>
+  <h1>What a process is,<br>and how the kernel<br>moves it around</h1>
+  <p class="standfirst">Two ideas hold up the entire module. Every command, every state letter, and every container abstraction that follows is a consequence of these.</p>
+  <div class="mast-meta">
+    <span><b>Replaces</b> “a process is a running program”</span>
+    <span><b>Replaces</b> “a state is an enum value”</span>
+    <span><b>Verified on</b> Linux 6.18</span>
+  </div>
+</header>
+
+<div class="col">
+<p>Everything below was run live, not quoted. The terminal captures are real output from a running Linux 6.18 system, including a safe reproduction of the mechanic behind <code>kill -9</code> appearing to do nothing.</p>
+</div>
+
+<!-- ═══════════════ PART ONE ═══════════════ -->
+<section>
+  <div class="sec-label"><span>Part one</span><span>the object</span></div>
+  <h2>What a process actually is</h2>
+
+  <div class="col">
+  <p>Start by deleting the sentence you already have, because it is the thing standing between you and everything else.</p>
+  </div>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">Delete this</div>
+      <p>A process is a running program. The kernel keeps a list of programs it is running, and each one has a PID.</p>
+    </div>
+    <div class="add">
+      <div class="tag">Install this</div>
+      <p>The kernel schedules <b>threads</b>. Each one is a <code>struct task_struct</code>. A “process” is just a group of them that share an ID and an address space.</p>
+    </div>
+  </div>
+
+  <div class="col">
+  <p>There is no <code>struct program</code> in the kernel. There is no <code>struct process</code> either. There is exactly one relevant object — <code>struct task_struct</code> — and the kernel creates <strong>one per thread</strong>.</p>
+  <p>When the scheduler runs, it does not look at a list of programs. It looks at a run queue of <code>task_struct</code>s and picks one. That is the only granularity it has.</p>
+  </div>
+
+  <h3>So where does “process” come from?</h3>
+
+  <div class="col">
+  <p>It is an emergent grouping, not an object. A set of <code>task_struct</code>s counts as one process when they share three things: a <strong>thread-group ID</strong>, an <strong>address space</strong>, and a <strong>signal state</strong>.</p>
+  <p>Every <code>task_struct</code> carries two ID fields, and this is the single most useful thing to memorise in part one:</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Field</th><th>Userspace calls it</th><th>What it identifies</th><th class="m">Read it with</th></tr>
+    <tr>
+      <td class="m">pid</td><td><b>TID</b> — thread ID</td>
+      <td>This one specific thread. Unique kernel-wide.</td>
+      <td class="m">gettid()</td>
+    </tr>
+    <tr>
+      <td class="m">tgid</td><td><b>PID</b> — “the process ID”</td>
+      <td>The whole thread group. Equals <code>pid</code> for the group leader.</td>
+      <td class="m">getpid()</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="col">
+  <p>Read that table twice. The kernel field named <code>pid</code> is <em>not</em> what you call a PID. The kernel field named <code>tgid</code> is. That off-by-one-name is responsible for an enormous amount of confusion, and once you see it, <code>ps</code> output stops being ambiguous forever.</p>
+  <p>Here is a four-thread Python process proving it:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>python3 threads.py &amp; ps -Lo pid,tid,nlwp,stat,comm -p $!</span><span class="who">live</span></div>
+<pre>  main   : getpid()=<b>2195</b>   gettid()=<b>2195</b>
+  thread 0: getpid()=<b>2195</b>   gettid()=<span class="hl">2197</span>
+  thread 1: getpid()=<b>2195</b>   gettid()=<span class="hl">2198</span>
+  thread 2: getpid()=<b>2195</b>   gettid()=<span class="hl">2199</span>
+
+  PID   TID NLWP STAT COMMAND
+ <b>2195</b>  <b>2195</b>    4 Sl   python3      <span class="dim">← group leader: pid == tgid</span>
+ <b>2195</b>  <span class="hl">2197</span>    4 Sl   python3      <span class="dim">← same TGID, own task_struct</span>
+ <b>2195</b>  <span class="hl">2198</span>    4 Sl   python3
+ <b>2195</b>  <span class="hl">2199</span>    4 Sl   python3</pre>
+    <figcaption>Four <code>task_struct</code>s. One number in the PID column. <code>getpid()</code> returns the same value in all four threads — it returns <code>tgid</code>, not the thread's own identity.</figcaption>
+  </figure>
+
+  <h3>Shared or private: the fields that define the grouping</h3>
+
+  <div class="col">
+  <p>What makes those four tasks “one process” is that <code>clone()</code> was told to share certain pointers. Change which pointers are shared, and you change what kind of thing you created — a thread, a process, or a container.</p>
+  </div>
+
+  <div class="split">
+    <div class="sh">
+      <h5>Shared across a thread group</h5>
+      <ul>
+        <li><b>mm</b> — address space, one page table</li>
+        <li><b>files</b> — the fd table</li>
+        <li><b>fs</b> — cwd and root</li>
+        <li><b>signal</b> — process-wide signal state</li>
+        <li><b>tgid</b> — the group identity itself</li>
+      </ul>
+    </div>
+    <div class="pv">
+      <h5>Private to each task_struct</h5>
+      <ul>
+        <li><b>pid</b> — its own TID</li>
+        <li><b>__state</b> — its own state <span style="color:var(--amber)">→ part two</span></li>
+        <li><b>se</b> — scheduler keys, own run queue slot</li>
+        <li><b>stack</b> — its own kernel stack</li>
+        <li><b>pending</b> — per-thread signal queue</li>
+      </ul>
+    </div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>for t in /proc/2195/task/*; do grep '\[heap\]' $t/maps; done</span><span class="who">live</span></div>
+<pre>  tid 2195 heap: <span class="hl">31f40000-32013000</span> rw-p 00000000 00:00 0  [heap]
+  tid 2197 heap: <span class="hl">31f40000-32013000</span> rw-p 00000000 00:00 0  [heap]
+  tid 2198 heap: <span class="hl">31f40000-32013000</span> rw-p 00000000 00:00 0  [heap]
+  tid 2199 heap: <span class="hl">31f40000-32013000</span> rw-p 00000000 00:00 0  [heap]</pre>
+    <figcaption>Identical heap addresses across all four tasks — one <code>mm_struct</code>, shared. This is what “same process” physically means.</figcaption>
+  </figure>
+
+  <h3>/proc is a rendering of task_struct</h3>
+
+  <div class="col">
+  <p><code>/proc</code> is not a database the kernel maintains alongside its real state. It is a live view <em>onto</em> <code>task_struct</code>, generated when you read it. That reframe matters because it tells you where to look for anything:</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Path</th><th>Shows you</th></tr>
+    <tr><td class="m">/proc/&lt;tgid&gt;/</td><td>The group leader's <code>task_struct</code>, plus process-wide aggregates</td></tr>
+    <tr><td class="m">/proc/&lt;tgid&gt;/task/</td><td>One directory per <code>task_struct</code> in the group — the real thread list</td></tr>
+    <tr><td class="m">/proc/&lt;tgid&gt;/status</td><td><code>Tgid</code>, <code>Pid</code>, <code>Threads</code>, signal masks, memory counters</td></tr>
+    <tr><td class="m">/proc/&lt;tgid&gt;/wchan</td><td>The kernel function this task is asleep in <span style="color:var(--amber)">→ part two</span></td></tr>
+    <tr><td class="m">/proc/&lt;tgid&gt;/ns/</td><td>The <code>nsproxy</code> pointers — namespace membership <span style="color:var(--ink-3)">→ lesson 02</span></td></tr>
+    <tr><td class="m">/proc/&lt;tgid&gt;/cgroup</td><td>The <code>css_set</code> — cgroup membership <span style="color:var(--ink-3)">→ lesson 03</span></td></tr>
+  </table>
+  </div>
+
+  <h3>Why this framing is the whole module</h3>
+
+  <div class="col">
+  <p>Two fields on <code>task_struct</code> are the entire container abstraction:</p>
+  <ul class="plain">
+    <li><code>nsproxy</code> — a pointer table to this task's namespaces (PID, mount, net, IPC, UTS, user).</li>
+    <li><code>cgroups</code> — which cgroup node this task is attached to, per controller.</li>
+  </ul>
+  <p>A container is not a new kind of object. It is ordinary <code>task_struct</code>s whose <code>nsproxy</code> and <code>cgroups</code> pointers happen to point somewhere private.</p>
+  </div>
+
+  <div class="note">
+    <span class="h">The plural matters</span>
+    <p>A container is a <strong>set</strong> of <code>task_struct</code>s, not one. Usually a whole process tree — an init-ish PID 1, its children, and all of their threads.</p>
+    <p>Nobody enumerates that set. It falls out of <code>clone()</code>: a child that doesn't ask for new namespaces inherits its parent's <code>nsproxy</code> and <code>css_set</code> pointers by reference count. The runtime does the private-pointer setup <em>once</em>, on the first task, and every descendant is a member for free.</p>
+  </div>
+
+  <div class="col">
+  <p>Keep the three groupings distinct, because they nest and people collapse them:</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Grouping</th><th>Defined by</th><th>Typical size</th></tr>
+    <tr><td><b>Thread group</b> (a “process”)</td><td>shared <code>tgid</code> + <code>mm</code></td><td class="m">1–100 tasks</td></tr>
+    <tr><td><b>Container</b></td><td>shared <code>nsproxy</code> + <code>cgroups</code></td><td class="m">many processes</td></tr>
+    <tr><td><b>Run queue</b> (what the scheduler sees)</td><td>one CPU's runnable tasks</td><td class="m">individual tasks</td></tr>
+  </table>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Where you will use this</span>
+    <p>When you set <code>resources.limits.cpu: 2</code> on a Kubernetes pod, you are not telling the scheduler to run two threads. You are writing a bandwidth quota onto a <em>cgroup node</em> that throttles a <em>set</em> of independently scheduled tasks collectively. An 8-thread container under a 2-CPU limit gets throttled hard, and the reason is exactly this mismatch of granularity: <strong>limits are per-set, scheduling is per-task.</strong></p>
+  </div>
+</section>
+
+<!-- ═══════════════ PART TWO ═══════════════ -->
+<section>
+  <div class="sec-label"><span>Part two</span><span>the state machine</span></div>
+  <h2>How the kernel moves it around</h2>
+
+  <div class="col">
+  <p>Same move as before: delete a sentence first.</p>
+  </div>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">Delete this</div>
+      <p>A task's state is one value from a list — running, sleeping, stopped. Checking it means comparing for equality.</p>
+    </div>
+    <div class="add">
+      <div class="tag">Install this</div>
+      <p><code>__state</code> is a <b>bitmask</b> — a row of independent switches packed into one integer. Checking it means masking: <code>state &amp; X</code>.</p>
+    </div>
+  </div>
+
+  <div class="col">
+  <p>The tell is in the constants. They are all powers of two, which is deliberately wasteful for an enum and exactly right for a bitmask — each name gets a private bit column, so names can be OR'd together without colliding.</p>
+  </div>
+
+  <h4>The base states — one bit each, roughly exclusive</h4>
+  <div class="bitfield">
+    <div class="bitrow"><span class="name">TASK_RUNNING</span><span class="hex">0x0000</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i></span>
+      <span class="note">no bits at all — running or queued</span></div>
+    <div class="bitrow"><span class="name">TASK_INTERRUPTIBLE</span><span class="hex">0x0001</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i></span>
+      <span class="note">sleeping, any signal wakes it</span></div>
+    <div class="bitrow"><span class="name">TASK_UNINTERRUPTIBLE</span><span class="hex">0x0002</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i><i>0</i></span>
+      <span class="note">sleeping, signals not delivered</span></div>
+    <div class="bitrow"><span class="name">__TASK_STOPPED</span><span class="hex">0x0004</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i><i>0</i><i>0</i></span>
+      <span class="note">SIGSTOP / SIGTSTP</span></div>
+    <div class="bitrow"><span class="name">__TASK_TRACED</span><span class="hex">0x0008</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i><i>0</i><i>0</i><i>0</i></span>
+      <span class="note">stopped by a debugger</span></div>
+    <div class="bitrow"><span class="name">EXIT_ZOMBIE</span><span class="hex">0x0020</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i></span>
+      <span class="note">exited, parent hasn't reaped it</span></div>
+    <div class="bitlegend"><span><b class="k1"></b>base state bit set</span><span><b class="k3"></b>clear</span></div>
+  </div>
+
+  <h4>The modifier bits — policy switches, orthogonal to the base state</h4>
+  <div class="bitfield">
+    <div class="bitrow"><span class="name">TASK_WAKEKILL</span><span class="hex">0x0100</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i class="on mod">1</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i></span>
+      <span class="note">a fatal signal may break this sleep</span></div>
+    <div class="bitrow"><span class="name">TASK_NOLOAD</span><span class="hex">0x0400</span>
+      <span class="bits"><i>0</i><i class="on mod">1</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i></span>
+      <span class="note">do not count me in load average</span></div>
+    <div class="bitlegend"><span><b class="k2"></b>modifier bit set</span><span><b class="k3"></b>clear</span></div>
+  </div>
+
+  <h4>The two compositions that matter operationally</h4>
+  <div class="bitfield">
+    <div class="bitrow"><span class="name">TASK_KILLABLE</span><span class="hex">0x0102</span>
+      <span class="bits"><i>0</i><i>0</i><i>0</i><i class="on mod">1</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i><i>0</i></span>
+      <span class="note">= UNINTERRUPTIBLE | WAKEKILL</span></div>
+    <div class="bitrow"><span class="name">TASK_IDLE</span><span class="hex">0x0402</span>
+      <span class="bits"><i>0</i><i class="on mod">1</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i><i class="on">1</i><i>0</i></span>
+      <span class="note">= UNINTERRUPTIBLE | NOLOAD</span></div>
+    <div class="bitlegend"><span><b class="k1"></b>base state</span><span><b class="k2"></b>modifier</span><span><b class="k3"></b>clear</span></div>
+  </div>
+
+  <div class="col">
+  <p>Neither of those is a new state. Both are <code>TASK_UNINTERRUPTIBLE</code> with <em>one extra switch flipped</em>. That is what “compositions of bits” means, and it is why the enum model fails: with an enum you would need a distinct entry for every combination, and every <code>switch</code> statement in the kernel would need updating whenever someone added an orthogonal property.</p>
+  <p>With bits, each consumer masks for the one bit it cares about and ignores the rest:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the two questions different kernel subsystems ask</span><span class="who">mechanism</span></div>
+<pre><span class="dim">// signal delivery — kernel/signal.c</span>
+wakes on SIGKILL?   state &amp; (TASK_WAKEKILL | TASK_INTERRUPTIBLE)
+  S  (INTERRUPTIBLE)   <span class="ok">yes</span>
+  D  (plain)           <span class="bad">no</span>      <span class="dim">← kill -9 will not wake it</span>
+  D  (KILLABLE)        <span class="ok">yes</span>     <span class="dim">← same letter, opposite answer</span>
+
+<span class="dim">// load accounting — kernel/sched/core.c</span>
+counts toward load?  !(state &amp; TASK_NOLOAD)
+  D  (plain)           <span class="ok">yes</span>
+  I  (IDLE)            <span class="bad">no</span>      <span class="dim">← same base state, opposite answer</span></pre>
+    <figcaption>Two unrelated subsystems, two different bits, neither aware of the other. That independence is the whole reason for the design.</figcaption>
+  </figure>
+
+  <h3>The letters ps shows you — and what it throws away</h3>
+
+  <div class="col">
+  <p><code>fs/proc/array.c</code> picks the letter by masking off everything except the low base-state bits. The modifier bits sit <em>outside</em> that mask, so they are discarded before the letter is chosen.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Letter</th><th>Kernel state</th><th>What it means</th><th>Killable?</th><th>Counts as load?</th></tr>
+    <tr><td><span class="letter">R</span></td><td class="m">TASK_RUNNING</td><td>On-CPU <b>or</b> queued waiting for a CPU</td><td class="yes">yes</td><td class="yes">yes</td></tr>
+    <tr><td><span class="letter calm">S</span></td><td class="m">TASK_INTERRUPTIBLE</td><td>Normal idle waiting — most tasks, most of the time</td><td class="yes">yes</td><td class="no">no</td></tr>
+    <tr><td><span class="letter warn">D</span></td><td class="m">TASK_UNINTERRUPTIBLE</td><td>Blocked in a kernel I/O path</td><td class="no">no</td><td class="yes">yes</td></tr>
+    <tr><td><span class="letter warn">D</span></td><td class="m">TASK_KILLABLE</td><td>Same letter. Fatal signals <em>do</em> break it out.</td><td class="yes">yes</td><td class="yes">yes</td></tr>
+    <tr><td><span class="letter calm">I</span></td><td class="m">TASK_IDLE</td><td>Idle kernel worker waiting for work</td><td class="no">n/a</td><td class="no">no</td></tr>
+    <tr><td><span class="letter">T</span></td><td class="m">__TASK_STOPPED</td><td>Suspended by SIGSTOP / Ctrl-Z</td><td class="yes">yes</td><td class="no">no</td></tr>
+    <tr><td><span class="letter">t</span></td><td class="m">__TASK_TRACED</td><td>Stopped at a debugger breakpoint</td><td class="yes">yes</td><td class="no">no</td></tr>
+    <tr><td><span class="letter">Z</span></td><td class="m">EXIT_ZOMBIE</td><td>Already dead. Holds a PID and an exit status, nothing else.</td><td class="no">n/a</td><td class="no">no</td></tr>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The trap this sets</span>
+    <p>Rows three and four are the <em>same letter</em> and opposite answers on the column that decides whether your <code>kill -9</code> lands. “The process is in D” is not a complete description of its state — it describes the low byte. The bits that determine what you can do about it are in the high byte, and <code>ps</code> discarded them before printing anything.</p>
+  </div>
+
+  <h3>Watching a task move through the machine</h3>
+
+  <figure class="term">
+    <div class="cmd"><span>ps -o pid,stat,wchan:20,comm — driving one process through four states</span><span class="who">live</span></div>
+<pre><span class="dim">$ sleep 300 &amp;</span>
+ 2569 <span class="ok">S</span>    hrtimer_nanosleep    sleep   <span class="dim">← asleep on a timer</span>
+
+<span class="dim">$ kill -STOP 2569</span>
+ 2569 <span class="hl">T</span>    do_signal_stop       sleep   <span class="dim">← suspended</span>
+
+<span class="dim">$ kill -CONT 2569</span>
+ 2569 <span class="ok">S</span>    do_sys_restart_sysca sleep   <span class="dim">← resumed, back to sleeping</span>
+
+<span class="dim">$ ( while :; do :; done ) &amp;</span>
+ 2576 <span class="hl">R</span>    -                    bash    <span class="dim">← runnable; no wchan, it isn't waiting</span></pre>
+    <figcaption>Note the <code>wchan</code> column: for a sleeping task it names the exact kernel function it is blocked in. For an <code>R</code> task it is empty — a runnable task isn't waiting on anything, it wants a CPU. That column is the single most valuable field in a hang investigation.</figcaption>
+  </figure>
+
+  <div class="note">
+    <span class="h">R hides the distinction you most want</span>
+    <p>“Executing on a CPU right now” and “sitting on a run queue while something else executes” are the <em>same letter</em>. This is why run-queue latency is invisible to <code>ps</code> — a starved thread and a busy thread look identical. To see the difference you need <code>/proc/&lt;pid&gt;/schedstat</code> field 2 (<code>run_delay</code>, nanoseconds spent waiting for a CPU) or scheduler tracing.</p>
+  </div>
+
+  <h3>Z: not a process, a receipt</h3>
+
+  <figure class="term">
+    <div class="cmd"><span>fork a child that exits; parent never calls wait()</span><span class="who">live</span></div>
+<pre>  PID  PPID STAT   RSS COMMAND
+ 2582  2580 <span class="bad">Z</span>        <span class="hl">0</span> python3   <span class="dim">← RSS is zero: memory already returned</span>
+
+<span class="dim">$ kill -9 2582</span>
+ 2582 <span class="bad">Z</span>    python3                <span class="dim">← still there. SIGKILL is meaningless.</span></pre>
+    <figcaption>A zombie has already released its memory, file descriptors, and address space. What remains is an exit status waiting to be collected. You cannot kill it — it is already dead. Kill or fix the <em>parent</em>, and <code>init</code> reaps the orphan.</figcaption>
+  </figure>
+
+  <div class="col">
+  <p>So a thousand zombies is not a load problem or a memory problem. It is a broken parent that stopped calling <code>wait()</code>, and the only resource being exhausted is PID numbers.</p>
+  </div>
+
+  <h3>D: why it exists, and why kill -9 seems to fail</h3>
+
+  <div class="col">
+  <p>When a task submits I/O it is holding kernel state that must be unwound in a specific order — a page locked for writeback, an open filesystem transaction, a reserved RPC slot, a device queue entry in flight. If a signal could yank the task out at an arbitrary point, every one of those code paths would need its own safe abort-and-restart logic. An enormous, error-prone surface.</p>
+  <p><code>TASK_UNINTERRUPTIBLE</code> is the kernel declining that complexity: <em>“this sleep is short and bounded, do not make me handle interruption here.”</em> The pathology is that “short and bounded” stops being true the moment the NFS server or the NVMe controller stops answering.</p>
+  </div>
+
+  <h4>What kill -9 actually does</h4>
+  <div class="col">
+  <p><code>SIGKILL</code> is not magic and does not bypass anything. It is two steps:</p>
+  <ol>
+    <li>Set a bit in the target's pending-signal set.</li>
+    <li>Call <code>signal_wake_up()</code> to try to wake it.</li>
+  </ol>
+  <p>Step 2 only wakes a sleeper whose state includes <code>TASK_WAKEKILL</code> or <code>TASK_INTERRUPTIBLE</code>. Plain <code>TASK_UNINTERRUPTIBLE</code> matches neither — so the signal stays queued and is delivered the instant the task next heads back toward userspace, which happens only after the I/O completes or times out.</p>
+  <p>You can watch exactly this happen without hanging a filesystem. Block <code>SIGTERM</code> in a process, send it, and read the pending set:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>signal.pthread_sigmask(SIG_BLOCK, {SIGTERM}); kill -TERM $pid</span><span class="who">live</span></div>
+<pre><span class="dim">--- before ---</span>
+State:   S (sleeping)
+ShdPnd:  0000000000000000
+SigBlk:  0000000000004000
+
+<span class="dim">--- after kill -TERM ---</span>
+State:   <span class="ok">S (sleeping)</span>        <span class="dim">← alive. still sleeping.</span>
+ShdPnd:  <span class="hl">0000000000004000</span>    <span class="dim">← the signal IS here. bit 15 = SIGTERM.</span>
+SigBlk:  0000000000004000</pre>
+    <figcaption><code>ShdPnd</code> is the process-wide pending set; <code>SigPnd</code> is the individual thread's. The signal was delivered to the kernel perfectly and is sitting in the queue. Unblock it and the process dies instantly.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">The reframe worth memorising</span>
+    <p><code>kill -9</code> on a D-state process <strong>did not fail</strong>. It queued perfectly and is waiting its turn. Check <code>ShdPnd</code> in <code>/proc/&lt;pid&gt;/status</code> and you can see the bit sitting there. Nothing is broken; the task simply cannot be woken to receive it.</p>
+  </div>
+
+  <h4>TASK_KILLABLE resolves the folklore</h4>
+  <div class="col">
+  <p>Two camps both insist they are right about NFS: one says <code>kill -9</code> never works on a hung mount, the other says it usually does. Both are reporting real experience, on different code paths.</p>
+  <p><code>TASK_KILLABLE</code> was introduced so long-latency network filesystems could still be escaped. Ordinary signals are still ignored; a <em>fatal</em> one breaks the sleep. Modern NFS uses killable sleeps in most of its RPC wait paths — so on a current kernel <code>kill -9</code> often does work, while the folklore was formed on kernels where it didn't. It still shows as <code>D</code> either way, because <code>TASK_WAKEKILL</code> is masked off before the letter is chosen.</p>
+  <p>The practical consequence: <code>wchan</code> tells you which case you are in. A task in <code>rpc_wait_bit_killable</code> will die on <code>kill -9</code>. A task in <code>nfs_wait_on_request</code> will not.</p>
+  </div>
+
+  <h4>TASK_IDLE is why your load isn't 200</h4>
+
+  <figure class="term">
+    <div class="cmd"><span>ps -eo state | sort | uniq -c ; cat /proc/loadavg</span><span class="who">live</span></div>
+<pre>  tasks in <span class="ok">I</span> : 40      <span class="dim">← kworkers etc., uninterruptible but idle</span>
+  tasks in S : 35
+  tasks in R : 1
+
+  loadavg : 0.02 0.01 0.00 <span class="hl">1</span>/100 2965
+                           <span class="dim">↑ tasks runnable right now</span></pre>
+    <figcaption>Forty tasks in uninterruptible sleep, load 0.02. Without <code>TASK_NOLOAD</code> this idle box would report a load of ~40.</figcaption>
+  </figure>
+
+  <div class="col">
+  <p>A modern kernel runs many worker threads (<code>kworker/*</code>, <code>nfsd</code>, <code>xfs-*</code>) that sit in uninterruptible sleep waiting for work — semantically idle, but historically counted as load. <code>TASK_IDLE</code> gives them the safety of an uninterruptible sleep plus an explicit “don't count me” bit.</p>
+  <p>Which sets up the next concept exactly: load average counts <code>nr_running + nr_uninterruptible</code>, and D-state tasks are in that second term. <strong>A node with load 80 and 3% CPU is not CPU-saturated — it has ~80 tasks parked in D on a storage path.</strong></p>
+  </div>
+
+  <h3>The transition map</h3>
+
+  <div class="map">
+<pre>   fork/clone
+       │
+       ▼
+   ┌─────────────────────────┐   exit()
+   │  R  runnable, queued    │──────────────▶  Z  zombie
+   │         ▲       │       │                  │
+   │         │  schedule()   │                  │ parent wait()
+   │  preempt│       ▼       │                  ▼
+   │   ┌─────┴───────────┐   │                 gone
+   │   │  R   on-CPU     │   │
+   │   └─────┬───────────┘   │        ┌── SIGSTOP ──▶  T  stopped
+   └─────────┼───────────────┘        │                 │
+             │                        │◀── SIGCONT ─────┘
+             ├── blocks on socket,
+             │   timer, futex, pipe ──────▶  S  interruptible
+             │                                 │
+             │                                 │  wakes on:
+             │                                 │    • the event
+             │                                 │    • ANY signal
+             │                                 ▼
+             │                              back to R
+             │
+             └── blocks in kernel I/O ─────▶  D  uninterruptible
+                 (bio submit, NFS RPC,          │
+                  page fault on slow dev)       │  wakes on:
+                                                │    • I/O completion
+                                                │    • timeout
+                                                │    • fatal signal ONLY
+                                                │      if TASK_WAKEKILL
+                                                ▼
+                                             back to R
+
+   The asymmetry is the entire operational story:
+   S has two exit triggers.  D has one.</pre>
+  </div>
+</section>
+
+<!-- ═══════════════ PART THREE ═══════════════ -->
+<section>
+  <div class="sec-label"><span>Part three</span><span>using it</span></div>
+  <h2>How you will actually use this</h2>
+
+  <div class="col">
+  <p>Both concepts converge on one workflow: someone says “the node is wedged,” and you have to turn that into a falsifiable claim about a specific state in a specific kernel path. Five steps, in order.</p>
+  </div>
+
+  <ol class="play">
+    <li>
+      <span class="what">Split runnable from blocked</span>
+      <code>cat /proc/loadavg</code>
+      <p>Compare the numerator of field 4 against the three floats. <code>41.9 40.2 33.7 1/2203</code> means the smoothed count is ~42 but only 1 task is runnable — so ~41 are in D. You have localized the incident to the I/O path before running anything else.</p>
+    </li>
+    <li>
+      <span class="what">Confirm with the state letters</span>
+      <code>ps -eo stat --no-headers | sort | uniq -c | sort -rn</code>
+      <p>Count the D's directly. Remember to discount <code>I</code> — those are idle workers and mean nothing.</p>
+    </li>
+    <li>
+      <span class="what">Name the exact kernel path</span>
+      <code>ps -eo pid,stat,wchan:32,comm | awk '$2 ~ /D/'</code>
+      <p>This is the step that turns “stuck” into an incident report. <code>nfs_wait_on_request</code>, <code>rpc_wait_bit_killable</code>, <code>blk_mq_get_tag</code>, <code>io_schedule</code> — each names a different subsystem and a different owner. It also tells you whether <code>kill -9</code> will work.</p>
+    </li>
+    <li>
+      <span class="what">Prove they aren't computing</span>
+      <code>cat /proc/&lt;pid&gt;/stat</code> · <code>/proc/&lt;pid&gt;/schedstat</code>
+      <p>D-state tasks burn no CPU. Near-zero utime/stime alongside a high load number is the arithmetic proof that load is counting waiters, not workers. For the tasks that <em>are</em> in R, <code>schedstat</code> field 2 gives run-queue latency in nanoseconds.</p>
+    </li>
+    <li>
+      <span class="what">Confirm the resource</span>
+      <code>cat /proc/pressure/{cpu,io,memory}</code>
+      <p>Load average is not a saturation metric. PSI measures wall-clock time work spent <em>waiting</em>. <code>io full 97%</code> alongside <code>cpu some 0.4%</code> closes the case: storage incident presenting as a compute symptom.</p>
+    </li>
+  </ol>
+
+  <div class="note calm">
+    <span class="h">The one-sentence version</span>
+    <p>“Load 42 with one runnable task means 41 tasks in uninterruptible sleep; their <code>wchan</code> is in the NFS RPC path, they've consumed 70 ms of CPU between them, and <code>io.pressure full</code> is 97% — this is a storage incident presenting as a compute symptom.”</p>
+  </div>
+
+  <h3>Three things that follow directly</h3>
+
+  <div class="tw">
+  <table>
+    <tr><th>Situation</th><th>What the model tells you</th></tr>
+    <tr>
+      <td><b>A node won't drain</b></td>
+      <td>The kubelet cannot terminate D-state tasks either. It is not a Kubernetes bug — no userspace process can kill something that cannot be woken. Fix the storage path.</td>
+    </tr>
+    <tr>
+      <td><b>“Which thread is the problem?”</b></td>
+      <td><code>ps</code> shows thread groups by default and will hide it. Use <code>ps -eLo</code> or <code>top -H</code>. A 40-thread process with one pegged thread looks 2.5% busy at process granularity.</td>
+    </tr>
+    <tr>
+      <td><b>Distributed training stalls, GPUs idle</b></td>
+      <td>A synchronous all-reduce completes only when its slowest participant arrives. One CPU-side thread (data loader, NCCL proxy) delayed on a run queue delays every GPU in the job. Per-<em>task</em> latency, not per-process.</td>
+    </tr>
+  </table>
+  </div>
+
+  <h3>Drill yourself</h3>
+  <div class="col"><p>If these come out cold, both concepts are solid.</p></div>
+
+  <details class="drill">
+    <summary>Process P has 4 threads. How many <code>task_struct</code>s, how many <code>mm_struct</code>s, and what does <code>getpid()</code> return in thread 3?</summary>
+    <div class="ans">
+      <p>Four <code>task_struct</code>s, one <code>mm_struct</code>. <code>getpid()</code> returns the <em>TGID</em> — the same value in all four threads. To get thread 3's own identity you need <code>gettid()</code>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>PID 24601 is in <code>D</code>. You run <code>kill -9 24601</code> and nothing happens. Where is the signal right now?</summary>
+    <div class="ans">
+      <p>In the process-wide pending set — visible as a set bit in <code>ShdPnd</code> in <code>/proc/24601/status</code>. It was queued successfully. <code>signal_wake_up()</code> declined to wake the task because its state includes neither <code>TASK_WAKEKILL</code> nor <code>TASK_INTERRUPTIBLE</code>.</p>
+      <p>It will be delivered the moment the task next returns toward userspace — which requires the I/O to complete or time out first.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Two processes both show <code>D</code>. One dies on <code>kill -9</code>, one doesn't. Same letter — what differs?</summary>
+    <div class="ans">
+      <p>Bit 8, <code>TASK_WAKEKILL</code> (<code>0x0100</code>). The one that dies is in <code>TASK_KILLABLE</code> (<code>0x0102</code>); the other is in plain <code>TASK_UNINTERRUPTIBLE</code> (<code>0x0002</code>). <code>ps</code> masks that bit off before choosing the letter, so both print <code>D</code>.</p>
+      <p><code>wchan</code> is how you tell them apart in practice.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why doesn't <code>I</code> count toward load average, and which bit says so?</summary>
+    <div class="ans">
+      <p><code>TASK_NOLOAD</code> (<code>0x0400</code>). The load accounting condition in <code>kernel/sched/core.c</code> requires <code>TASK_UNINTERRUPTIBLE</code> set <em>and</em> <code>TASK_NOLOAD</code> clear. <code>TASK_IDLE</code> is <code>0x0402</code> — uninterruptible for safety, excluded from load by policy.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Load is 80, CPU is 3%. One-line diagnosis, and which file confirms it?</summary>
+    <div class="ans">
+      <p>Roughly 80 tasks in uninterruptible sleep on a blocked I/O path — almost certainly storage. <code>/proc/loadavg</code> confirms the split immediately: field 4's numerator will be near zero while the floats sit near 80.</p>
+      <p>Then <code>wchan</code> on the D-state tasks names the subsystem, and <code>/proc/pressure/io</code> confirms the resource.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Is a container a single schedulable entity?</summary>
+    <div class="ans">
+      <p>No. A container is a <em>set</em> of <code>task_struct</code>s sharing <code>nsproxy</code> and <code>cgroups</code> pointers — normally a whole process tree, each process with its own threads. The scheduler has no concept of “container” at all; it schedules individual tasks.</p>
+      <p>The sentence “a container is an ordinary <code>task_struct</code> with private pointers” answers <em>what kind of object</em>, not <em>how many</em>.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ═══════════════ KEEP ═══════════════ -->
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into lessons 02–03</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">One per thread</span><span class="v"><code>task_struct</code> is the unit of scheduling. A process is a group of them; a container is a much bigger group of them.</span></li>
+    <li><span class="k">pid ≠ PID</span><span class="v">The kernel field <code>pid</code> is the thread ID. The kernel field <code>tgid</code> is what userspace calls the PID.</span></li>
+    <li><span class="k">/proc is a view</span><span class="v">Not a separate database — a live rendering of <code>task_struct</code> fields, generated on read.</span></li>
+    <li><span class="k">State is bits</span><span class="v">Base state in the low byte, orthogonal policy switches in the high byte. Always mask, never compare.</span></li>
+    <li><span class="k">The letter lies</span><span class="v">The bits that decide whether you can kill it are masked off before <code>ps</code> picks a letter. Read <code>wchan</code>.</span></li>
+    <li><span class="k">kill -9 queues</span><span class="v">It never fails. It sets a bit in <code>ShdPnd</code> and tries to wake. A plain D sleeper cannot be woken.</span></li>
+    <li><span class="k">D is counted, I is not</span><span class="v">Load is <code>nr_running + nr_uninterruptible</code>, minus everything carrying <code>TASK_NOLOAD</code>.</span></li>
+    <li><span class="k">Per-set vs per-task</span><span class="v">cgroup limits apply to a set; the scheduler acts on individuals. Lesson 03 is built entirely on that gap.</span></li>
+  </ul>
+
+  <footer>
+    Companion notes for lesson 01b.1 · concepts 1–2 of 8 · all terminal output captured live on Linux 6.18<br>
+    <a class="backlink" href="../modules/01b-linux-internals/lessons/01-processes-and-scheduling.html">Back to lesson 01b.1 — Processes and Scheduling</a>
+  </footer>
+</section>
+
+</div>
+
+</body>
+</html>
