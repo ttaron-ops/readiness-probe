@@ -239,3 +239,31 @@ _(each run appends: date · modules enriched · commit shas)_
   unchanged. All other citations (Cloudflare, BentoML, Spheron, ScaleOps, Red Hat, Datadog, Imbue,
   AKS/NPD, DigitalOcean, and the canonical NVIDIA/K8s/Grafana doc pages) verified real and accurate
   — no other fixes were necessary.
+- **2026-08-19** · QA pass · `modules/06-scheduling-capacity` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commit `24e0ba3`. Full consistency sweep via two parallel subagents (structural check +
+  link verification). Verified the prev/next chain across all 8 lessons is unbroken (01→08, null at
+  both ends), all 12 template sections present in every lesson, README lesson-table hours
+  (6/7/10/13/9/9/9/12, summing to the stated ~75 hrs) match the 8 lesson files, and checkpoint.md /
+  practice/kueue-showback / resources/depth-map.md links resolve and stay consistent with lesson
+  content. Link verification checked ~50 unique cited URLs (GitHub source/issues fetched directly;
+  kubernetes.io/kueue.sigs.k8s.io/vendor blogs via WebSearch corroboration since the session's egress
+  proxy blocks those domains) and found zero fabricated or mismatched citations. Found and fixed
+  several real structural defects the prior QA runs' checklist hadn't caught in this module: 6
+  lessons (01, 02, 05, 06, 07, 08) used italic `*Answer:*` instead of the spec-required bold
+  `**Answer:**` self-check marker (all 41 occurrences bolded — the content was always present at
+  the required ≥3-per-lesson count, 6–8 actual, just not grep-matchable as bold); every lesson's
+  References section used inconsistent bucket labels instead of the spec's exact 3 buckets (Primary
+  sources / Real-world engineering blogs / Deeper dives) — lessons 04 and 08 were missing a "Deeper
+  dives" bucket outright (added one to each), lesson 03 had two separate "Primary sources" buckets
+  (merged into one), lessons 06 and 07 had extra unlabeled buckets for hardware background/research
+  papers/datasets (folded into Primary sources, matching the spec's own definition of that bucket),
+  and every real-world bucket was relabeled to the spec's exact wording; `sources:` frontmatter
+  count mismatched the actual reference-bullet count in 01 (11→10), 02 (9→11), 04 (15→16, after
+  adding the new Deeper-dives entry), and 05 (14→18); `concept:` frontmatter in lessons 03–08
+  duplicated the full lesson title instead of a short tag like lessons 01/02 use (gave each a short
+  kebab-case tag); the README's "Kueue TAS … API is v1beta1" note was stale against lesson 06's own
+  enriched content, which already documents the promotion to v1beta2 storage version (updated the
+  README note to match); and lesson 01's Deeper-dives citation for two SIG-Scheduling blog posts
+  pointed at the bare `kubernetes.io/blog` root instead of the specific posts (swapped in the two
+  real, verified post URLs). No dead links, no fabricated sources, and no broken file links were
+  found. No other fixes were necessary.
