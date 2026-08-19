@@ -254,7 +254,7 @@ Draw the fleet as data flowing, one layer per row, arrows labelled with *what fl
 
 **Rendering constraints that decide whether any of this survives publication.** These are not style notes; each one is a way your page silently breaks.
 
-- **Liquid templating is disabled site-wide.** Do not use `{%` tags of any kind, and remove any that exist in files you inherit. Braces inside code blocks are fine as long as no Liquid tag is formed.
+- **Liquid templating is disabled for page content.** `_config.yml` sets `render_with_liquid: false`, and the site is built with Jekyll 4, which honours it — so literal `{{ }}` and `{% %}` in prose or code blocks pass through untouched and need no `{% raw %}` guard. The catch is that this only holds under Jekyll 4: Jekyll 3.10, which the `github-pages` gem pins, ignores the key silently and dies on the first thing resembling an unterminated tag. If you ever see a Pages build fail with `Tag '{%' was not properly terminated`, that is the regression.
 - **The stock GitHub Pages theme does not render mermaid.** A mermaid block renders as a wall of source text on the published site while looking fine in the GitHub file view — which is the worst possible failure, because you will not notice. **ASCII inside a fenced code block renders identically in both places**, which is why every diagram in this course is ASCII.
 - **Relative links to a directory need the explicit `README.md`.** `[chapter](chapters/04-attribution/)` resolves on github.com and 404s on the built site. Always `chapters/04-attribution/README.md`.
 - **One diagram, one screen, no horizontal scroll.** Keep lines under about 78 characters or a phone viewport will wrap them into noise.
@@ -833,7 +833,7 @@ claim · a brag-doc with no metric-free lines · a clean hygiene checklist.
   disagreement you want.
 
 - **Name three rendering constraints that decide whether your published portfolio actually works.**
-  *Answer:* (i) Liquid is disabled site-wide, so `{%` tags must not appear anywhere, including
+  *Answer:* (i) Liquid is disabled for page content via `render_with_liquid: false`, which only takes effect under Jekyll 4, so the build must not use `actions/jekyll-build-pages`; that covers literal `{%` and `{{` anywhere, including
   inside code fences. (ii) The stock Pages theme does not render mermaid, so a mermaid diagram
   appears as raw source on the published site while looking correct in the GitHub file view — ASCII
   in fenced blocks is the only form that renders identically in both. (iii) Relative links to a

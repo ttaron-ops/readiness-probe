@@ -88,9 +88,18 @@ Concretely, for each concept in `## Core concepts`:
 
 ### Diagrams — at least two per lesson
 
-**ASCII art inside fenced code blocks.** Liquid is disabled site-wide and the Pages
-theme does not render mermaid, so fenced ASCII is the only form that renders correctly
-both on GitHub and on the built site. Do not use mermaid, HTML, or images.
+**ASCII art inside fenced code blocks.** The Cayman theme does not render mermaid, so
+fenced ASCII is the only form that renders correctly both on GitHub and on the built
+site. Do not use mermaid, HTML, or images.
+
+Lesson prose and code may contain literal `{{ }}` and `{% %}` — Prometheus alert
+templates, Go templates, Go struct literals — and no escaping or `{% raw %}` guard is
+needed, because `_config.yml` sets `render_with_liquid: false` and the site is built
+with Jekyll 4, which honours it. That combination is load-bearing: Jekyll 3.10, which
+the `github-pages` gem pins and `actions/jekyll-build-pages` uses, ignores that key
+silently, parses the content as Liquid, and fails the build on the first thing that
+looks like an unterminated tag. If the build is ever moved back to that action, this
+has to be re-solved.
 
 Draw the thing that is hard to hold in your head: the layout, the flow, the state
 machine, the timeline, the hierarchy. Label the edges. Diagrams that merely restate a
