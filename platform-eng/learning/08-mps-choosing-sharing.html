@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 04.8: MPS as spatial sharing, the driver-enforced ceilings that make fair-share attribution bounded, the precise fault domain, and the full MIG/time-slicing/MPS matrix.">
+<meta name="color-scheme" content="light dark">
+<title>MPS and the Decision Triangle · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.cmp{overflow-x:auto;margin:26px 0 30px;border:1px solid var(--rule)}
+.cmp table{min-width:640px}
+.cmp td.me{background:var(--amber-bg)}
+.cmp th.me{background:var(--amber);color:var(--paper)}
+.slices{margin:24px 0 8px;padding:18px;background:var(--surface);border:1px solid var(--rule);overflow-x:auto}
+.srow{display:flex;gap:10px;align-items:center;font-family:var(--f-mono);font-size:12px;padding:6px 0;min-width:max-content}
+.srow+.srow{border-top:1px solid var(--rule-soft)}
+.srow .nm{width:190px;flex:none;color:var(--ink);font-weight:500}
+.cells{display:flex;gap:2px}
+.cells i{width:34px;height:22px;display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px}
+.cells i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.cells i.strand{background:var(--clay);color:var(--paper);font-weight:600}
+.srow .rr{color:var(--ink-3);font-size:11.5px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/04-gpu-on-kubernetes/lessons/08-mps-choosing-sharing.html">Back to lesson 04.8</a>
+
+<header class="mast">
+  <p class="kicker">Module 04 · 04.8 · GPU on Kubernetes</p>
+  <h1>The mode that<br>bounds your<br>error bar</h1>
+  <p class="standfirst">The only sharing mode that reclaims wasted SM capacity, and the only one whose attribution estimate comes with a worst case you can state.</p>
+  <div class="mast-meta">
+    <span><b>Axis</b> occupancy, not time</span>
+    <span><b>Ceilings</b> 100/replicas, driver-enforced</span>
+    <span><b>Maturity</b> a three-clause answer</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>MPS is the sharing mode most engineers misplace — either unaware it exists, or reaching for the wrong mechanism when asked how it differs from time-slicing. It is the only mode that reclaims wasted <strong>SM</strong> capacity, and the only one that turns fair-share attribution from a guess into a bounded estimate.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the axis</span></div>
+  <h2>Packing occupancy, not time</h2>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">Time-slicing packs</div>
+      <p>The <b>time</b> axis. No idle GPU-seconds between turns — but each turn still wastes whatever fraction of the SM array the resident job does not need.</p>
+    </div>
+    <div class="add">
+      <div class="tag">MPS packs</div>
+      <p>The <b>occupancy</b> axis. Kernels from different processes execute <b>concurrently on different SMs</b>. On workloads that under-fill the device, that is a direct throughput multiplier.</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">“One shared CUDA context” is the pre-Volta model</span>
+    <p>And it is the single most common inaccuracy about MPS. Volta changed both the work-submission path and the address-space model: clients submit work to the hardware themselves, and each has <strong>its own GPU address space</strong>.</p>
+    <p>MPS is three distinct processes — a <strong>control daemon</strong>, a <strong>per-user server</strong>, and the <strong>clients</strong> — not one context everyone shares.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the knobs</span></div>
+  <h2>What the Kubernetes control daemon computes</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>cmd/mps-control-daemon/mps/daemon.go</span><span class="who">source</span></div>
+<pre>  active thread percentage  = <span class="hl">100 / replicas</span>
+  pinned device mem limit   = <span class="hl">totalMemory / replicas</span>   (MiB)
+  compute mode              = forced to EXCLUSIVE_PROCESS</pre>
+    <figcaption>Both are <b>caps, not reservations</b> — a client can under-use its share but cannot exceed it. Pebble's published config deliberately sums to 120% (60% SM each, two processes) precisely because the active-thread percentage is a ceiling rather than an allocation.</figcaption>
+  </figure>
+
+  <div class="note calm">
+    <span class="h">The attribution upgrade almost nobody mentions</span>
+    <p>Because those ceilings are <em>driver-enforced</em>, fair share stops being a shrug. Under time-slicing a pod can take 98% of the device and your even split is wrong by 4×, with no bound. Under MPS the per-client error is bounded by <code>u/N</code> and is <strong>signed</strong> — you can state a worst case.</p>
+    <p><strong>That is the difference between a number a FinOps lead will accept and one they will not.</strong></p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>risk</span></div>
+  <h2>The fault domain, more precisely than the folklore</h2>
+
+  <div class="col">
+  <p>“MPS has the worst fault domain” is received wisdom and it is too crude. Volta and later contained a fatal fault to <em>the set of clients sharing the offending GPU</em>, rather than every client of the server across all GPUs. That is <strong>narrower</strong> than pre-Volta.</p>
+  <p>It is still an all-clients-on-that-GPU kill, <em>plus</em> a failure mode time-slicing does not have at all: the control daemon and per-user server are processes that can die, hang, or be left in a fault state. The manual warns that a runaway kernel may require a forced server shutdown, and that terminating a client without synchronising its GPU work can leave the server and other clients undefined.</p>
+  <p><strong>Narrower than the folklore, still disqualifying for untrusted tenants.</strong> Getting that nuance right is what a design review is testing.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The maturity answer has three clauses</span>
+    <p>MPS sharing is marked <strong>experimental</strong> in NVIDIA's device plugin since v0.15.0 and remains so through the current v0.19.x line; it is <strong>not supported on MIG-enabled devices by that plugin</strong>; and in the DRA driver it sits behind an <strong>alpha, default-off</strong> feature gate.</p>
+    <p>Note the precision on the middle clause: the MIG incompatibility is a <em>device-plugin</em> limitation, not a hardware one — the DRA driver models MPS on MIG devices explicitly via <code>MigDeviceSharing</code> with an <code>MpsConfig</code>. “MPS and MIG are mutually exclusive, full stop” is the kind of absolute that gets falsified in the follow-up question.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part four</span><span>the triangle</span></div>
+  <h2>Where MPS sits</h2>
+<div class="cmp"><table><tr><th></th><th class="">TIME-SLICING</th><th class="me">MPS (Volta+)</th><th class="">MIG</th></tr><tr><td><b>Shares the …</b></td><td class="">TIME axis</td><td class="me">OCCUPANCY axis</td><td class="">SILICON</td></tr><tr><td><b>Mechanism</b></td><td class="">context preemption</td><td class="me">concurrent kernels via a shared server</td><td class="">hardware partitions — SM + FB + L2 + mem ctrl</td></tr><tr><td><b>Compute isolation</b></td><td class="">NONE</td><td class="me">CAP — active-thread %, not a reservation</td><td class="">RESERVATION — dedicated SMs</td></tr><tr><td><b>Memory cap</b></td><td class="">NONE — free-for-all</td><td class="me">driver-ENFORCED pinned-mem limit</td><td class="">dedicated FB slice</td></tr><tr><td><b>Bandwidth / L2</b></td><td class="">shared</td><td class="me">shared</td><td class="">PARTITIONED</td></tr><tr><td><b>Fault domain</b></td><td class="">the DEVICE</td><td class="me">the DEVICE, plus daemon + server</td><td class="">the INSTANCE</td></tr><tr><td><b>Distinct UUID per tenant</b></td><td class="">no — annotated ::N only</td><td class="me">no — annotated ::N only</td><td class="">YES — MIG-xxxx</td></tr><tr><td><b>DCGM granularity</b></td><td class="">device-wide, fans out N×</td><td class="me">device-wide, fans out N×</td><td class="">PER INSTANCE, 1:1</td></tr><tr><td><b>Attribution accuracy</b></td><td class="">estimate, error UNBOUNDED</td><td class="me">estimate, error ≤ u/N and signed</td><td class="">EXACT</td></tr><tr><td><b>Naive sum() error</b></td><td class="">×N</td><td class="me">×N</td><td class="">none</td></tr><tr><td><b>Concurrency gain</b></td><td class="">none — serialised</td><td class="me">YES for under-filling jobs</td><td class="">yes, capped by slice size</td></tr><tr><td><b>Reconfigure cost</b></td><td class="">plugin restart</td><td class="me">daemon restart</td><td class="">DRAIN + reset</td></tr><tr><td><b>Clients per GPU</b></td><td class="">replicas, no hard limit</td><td class="me">16 (SM 3.5–6.0) / 48 (SM 7.0+)</td><td class="">≤ 7 instances</td></tr><tr><td><b>Maturity</b></td><td class="">GA, ubiquitous</td><td class="me">EXPERIMENTAL in the device plugin</td><td class="">GA, ubiquitous</td></tr></table></div>
+  <div class="note">
+    <span class="h">The one-line decision</span>
+    <p><strong>Need isolation, an SLO, or a defensible per-tenant bill → MIG.</strong> Need throughput from jobs that under-fill the device, and the tenants trust each other → MPS. Need simple density on trusted, bursty, low-stakes work → time-slicing.</p>
+  </div>
+
+
+  <div class="note">
+    <span class="h">The published envelope is narrow, and that is useful</span>
+    <p>Databricks measured two identical inference engines on one H100 across the Qwen2.5 family and found the win confined to <strong>very small models (≈≤3B) at short-to-medium context</strong>. A <em>negative</em> result outside a narrow band is far more useful for policy than a success story.</p>
+    <p>Pebble reported Qwen3-4B-FP8 on an A100-80GB in GKE at 60% SM / 50% memory per process, two processes per GPU: <strong>~50% cost reduction for ~7.5% throughput loss</strong>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>What does MPS share that time-slicing does not?</summary>
+    <div class="ans">
+      <p>The <b>occupancy</b> axis. Kernels from different processes run concurrently on different SMs, so a job that lights only a fraction of the SM array no longer wastes the rest during its turn.</p>
+      <p>Time-slicing packs time; there are no idle GPU-seconds between turns, but each turn still under-fills the device.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>“MPS uses one shared CUDA context.” Correct?</summary>
+    <div class="ans">
+      <p>That is the <b>pre-Volta</b> model, and it is the most common inaccuracy about MPS. From Volta, clients submit work to the hardware themselves and each has its own GPU address space.</p>
+      <p>MPS is three processes: control daemon, per-user server, clients.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why is fair-share attribution better under MPS than under time-slicing?</summary>
+    <div class="ans">
+      <p>Because the control daemon sets a default active-thread percentage (<code>100/replicas</code>) and a pinned-memory limit (<code>totalMemory/replicas</code>), both driver-enforced. They are ceilings, so a client can under-use but not exceed its share.</p>
+      <p>That makes the per-client error <b>bounded by u/N and signed</b>, instead of unbounded. You can state a worst case rather than shrug.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Is MPS's fault domain the worst of the three?</summary>
+    <div class="ans">
+      <p>More precisely than the folklore: from Volta a fatal fault is contained to the clients sharing <em>that</em> GPU, which is narrower than pre-Volta. But it is still an all-clients-on-that-GPU kill, plus the daemon and per-user server are extra processes that can die or hang.</p>
+      <p>Narrower than the received wisdom, still disqualifying for untrusted tenants.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>“MPS and MIG are mutually exclusive.” True?</summary>
+    <div class="ans">
+      <p>Only of the <em>device plugin</em>, which does not support MPS on MIG-enabled devices. It is not a hardware limitation — the DRA driver models MPS on MIG explicitly through <code>MigDeviceSharing</code> with an <code>MpsConfig</code>.</p>
+      <p>Though note the DRA path itself is behind an alpha, default-off gate.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Is MPS production-ready?</summary>
+    <div class="ans">
+      <p>Three clauses: experimental in NVIDIA's device plugin since v0.15.0 and still so at v0.19.x; unsupported on MIG-enabled devices by that plugin; alpha and default-off in the DRA driver.</p>
+      <p>Delivering all three cleanly is the answer — "no" and "yes" are both wrong.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 04.9–04.10</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Occupancy axis</span><span class="v">Concurrent kernels on different SMs. The only mode that reclaims wasted SM capacity.</span></li>
+    <li><span class="k">Three processes</span><span class="v">Control daemon, per-user server, clients — each client with its own address space since Volta.</span></li>
+    <li><span class="k">100/replicas</span><span class="v">Active-thread percentage and pinned-memory limit, both driver-enforced caps rather than reservations.</span></li>
+    <li><span class="k">Bounded error</span><span class="v">Enforced ceilings make fair share an upper-bounded, signed estimator. The strongest argument for MPS.</span></li>
+    <li><span class="k">Narrower, not narrow</span><span class="v">Volta contains faults to one GPU's clients, plus daemon and server as extra failure surfaces.</span></li>
+    <li><span class="k">Three-clause maturity</span><span class="v">Experimental in the plugin, unsupported on MIG there, alpha and off in DRA.</span></li>
+    <li><span class="k">Narrow measured envelope</span><span class="v">Wins concentrate on ≈≤3B models at short-to-medium context.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/04-gpu-on-kubernetes/lessons/08-mps-choosing-sharing.html">Back to lesson 04.8</a>
+  </footer>
+</div>
+
+</body>
+</html>
