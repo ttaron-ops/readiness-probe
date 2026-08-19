@@ -13,6 +13,20 @@ plugins:
   - jekyll-default-layout
   - jekyll-titles-from-headings
   - jekyll-seo-tag
+  - jekyll-github-metadata
+
+# jekyll-github-metadata populates site.github.*, which the Cayman theme uses
+# for the "View on GitHub" header button. The github-pages gem supplied this
+# implicitly; a plain Jekyll build does not, and without it the button silently
+# disappears from every page.
+repository: ttaron-ops/readiness-probe
+
+# Match the markdown processor GitHub Pages used, so rendering does not shift.
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter: rouge
 
 relative_links:
   enabled: true

@@ -35,10 +35,35 @@ jobs:
         with:
           ruby-version: "3.3"
           bundler-cache: true
+      # --baseurl is not optional. The site is served from
+      # https://<user>.github.io/readiness-probe/, so without it every
+      # root-absolute asset URL the theme emits — the stylesheet above all —
+      # points at the domain root and 404s, and the site renders as unstyled
+      # HTML. actions/jekyll-build-pages applied this automatically; a plain
+      # `jekyll build` does not.
       - name: Build with Jekyll
-        run: bundle exec jekyll build --destination ./_site
+        run: bundle exec jekyll build --destination ./_site --baseurl "${{ steps.pages.outputs.base_path }}"
         env:
           JEKYLL_ENV: production
+          JEKYLL_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Catches the two ways this build has broken: a Liquid failure that
+      # drops pages, and asset URLs that do not resolve under the baseurl.
+      - name: Verify the built site
+        run: |
+          set -euo pipefail
+          base="${{ steps.pages.outputs.base_path }}"
+          lessons=$(find ./_site -name '*.html' -path '*lessons*' | wc -l)
+          echo "lesson pages rendered: $lessons"
+          [ "$lessons" -eq 149 ] || { echo "::error::expected 149 lesson pages, got $lessons"; exit 1; }
+          css=$(grep -o 'href="[^"]*style\.css[^"]*"' ./_site/index.html | head -1 | sed 's/.*href="//; s/?.*//; s/"$//')
+          echo "stylesheet href: $css"
+          case "$css" in
+            "$base"/*) ;;
+            *) echo "::error::stylesheet href $css is not under baseurl $base — the site would render unstyled"; exit 1 ;;
+          esac
+          test -f "./_site${css#$base}" || { echo "::error::stylesheet missing from build output"; exit 1; }
+          grep -q 'View on GitHub' ./_site/index.html || { echo "::error::theme header button missing — site.github metadata not populated"; exit 1; }
+          echo "verification passed"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
