@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 09.2: why switch radix decides your tier count and optics bill, when oversubscription is free, and why ECMP silently wastes half a fabric on LLM traffic.">
+<meta name="color-scheme" content="light dark">
+<title>Radix, Ratios and ECMP · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.ladder{margin:26px 0 8px;padding:20px;background:var(--surface);border:1px solid var(--rule)}
+.lrow{display:flex;align-items:center;gap:14px;padding:9px 0;font-family:var(--f-mono);font-size:12.5px}
+.lrow+.lrow{border-top:1px solid var(--rule-soft)}
+.lrow .nm{width:190px;flex:none;color:var(--ink);font-weight:500}
+.lbar{height:20px;border-radius:2px;flex:none}
+.lrow .v{color:var(--ink-2);font-weight:600;white-space:nowrap}
+.lrow.top .lbar{background:var(--moss)} .lrow.mid .lbar{background:var(--amber)}
+.lrow.bot .lbar{background:var(--clay)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/09-networking-topology/lessons/02-inter-node-fabric.html">Back to lesson 09.2</a>
+
+<header class="mast">
+  <p class="kicker">Module 09 · 09.2 · Networking and topology</p>
+  <h1>Four flows,<br>and a hash<br>built for thousands</h1>
+  <p class="standfirst">Switch radix sets the tier count and the optics bill. Rail-local collectives make the spine cheap. And the path-selection mechanism assumes a traffic shape training does not have.</p>
+  <div class="mast-meta">
+    <span><b>Capacity</b> k²/2 two-tier, k³/4 three-tier</span>
+    <span><b>Oversubscription</b> taxes only what crosses</span>
+    <span><b>Entropy</b> = queue pairs, and NCCL uses 1</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Lesson 09.1 established the cliff. This one is about the shape you build on the far side of it — and the two facts that decide the bill: <strong>switch radix sets your tier count</strong>, and <strong>LLM traffic breaks the assumption ECMP was designed around</strong>.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>radix</span></div>
+  <h2>Why the tier count is a design variable</h2>
+
+  <div class="col">
+  <p>A switch has a fixed port count at a given speed — its <strong>radix</strong> — bounded by the ASIC's total switching capacity divided by the per-port rate. 51.2 Tb/s buys 64 ports at 800G or 128 at 400G. That is the trade, not a choice you escape by buying a bigger box.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>fat-tree capacity for radix k, ports split evenly up and down</span><span class="who">arithmetic</span></div>
+<pre>  2-tier (leaf + spine):      max endpoints = <span class="hl">k² / 2</span>
+  3-tier (+ super-spine):     max endpoints = <span class="hl">k³ / 4</span>
+
+      k = 64   Quantum-2 400G     2-tier →  <span class="bad">2,048</span>
+                                  3-tier →  65,536
+      k = 128  SN5600 at 400G     2-tier →  <span class="ok">8,192</span>
+                                  3-tier → 524,288</pre>
+    <figcaption>A 2,048-GPU cluster on 64-port switches fits in two tiers. A 24,576-GPU cluster does not — it needs three, and the third tier is the long-reach one, row to row and hall to hall, <b>which is where optics costs concentrate</b>.</figcaption>
+  </figure>
+
+  <div class="note calm">
+    <span class="h">The structural version of “Ethernet is cheaper”</span>
+    <p>Doubling radix from 64 to 128 <em>quadruples</em> what a 2-tier design holds — which is exactly why a higher-radix Ethernet switch can sometimes let you <strong>delete a tier</strong>. Deleting a tier deletes an entire population of optical transceivers, not just some switches.</p>
+    <p>That argument is far more durable than any price quote.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>oversubscription</span></div>
+  <h2>The ratio that sets the bill</h2>
+
+  <div class="map">
+<pre>   NON-BLOCKING LEAF                4:1 OVERSUBSCRIBED LEAF
+   ┌────────────────────┐           ┌────────────────────┐
+   │  32 up  (12.8 Tb/s)│           │   8 up   (3.2 Tb/s)│
+   │  32 down(12.8 Tb/s)│           │  32 down(12.8 Tb/s)│
+   └────────────────────┘           └────────────────────┘
+        ratio 1:1                        ratio 4:1
+
+   Consequences of the 4:1 leaf:
+     · a flow between two GPUs on the SAME leaf     → <b>400 Gb/s</b>
+       it never touches an uplink; the ratio is irrelevant
+     · all 32 GPUs sending simultaneously OFF-leaf  → 3.2 Tb/s
+       shared 32 ways = <b>100 Gb/s each</b> = line rate / 4
+     · cost saved: 24 fewer uplinks per leaf, 48 fewer
+       transceivers, a proportionally smaller spine tier</pre>
+  </div>
+
+  <ol class="play">
+    <li><span class="what">Oversubscription only taxes traffic that crosses the oversubscribed tier</span>
+      <p>Intra-leaf traffic is unaffected. This is the entire foundation of the rail-optimised argument.</p></li>
+    <li><span class="what">Worst case per endpoint through an X:1 tier is line rate ÷ X</span>
+      <p>And only when <em>every</em> endpoint under the tier is active across it. If a fraction cross, survivors get proportionally more — <strong>the ratio is a worst case, not a constant tax</strong>.</p></li>
+  </ol>
+
+  <div class="note">
+    <span class="h">So the design question is never “full bisection or not”</span>
+    <p>It is <strong>“at which tier can this traffic pattern tolerate oversubscription, and by how much”</strong> — and answering it requires knowing the traffic pattern, which for LLM training we do.</p>
+  </div>
+
+  <div class="col">
+  <p>A general-purpose cloud cannot oversubscribe aggressively: any VM may talk to any VM, so the traffic matrix is dense and unpredictable. LLM training's is neither.</p>
+  </div>
+
+  <div class="split">
+    <div class="sh">
+      <h5>Heavy collectives are rail-local</h5>
+      <ul>
+        <li>all-reduce, all-gather, reduce-scatter</li>
+        <li>run <b>GPU-N ↔ GPU-N</b></li>
+        <li>every participant on the same rail</li>
+        <li>bytes ride one leaf and terminate</li>
+      </ul>
+    </div>
+    <div class="pv">
+      <h5>NVLink absorbs the residue</h5>
+      <ul>
+        <li>GPU3 wanting GPU5 crosses rails</li>
+        <li>shuffled sideways <em>inside</em> the node first</li>
+        <li>450 GB/s against the NIC's 50</li>
+        <li>NCCL implements this as PXN</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Which is why the spine can be oversubscribed almost for free</span>
+    <p>Put those two together and the aggregation tier carries only cross-pod jobs, checkpoints, storage and control traffic — so a ratio like 1:7 there costs the training collectives essentially nothing while deleting a large fraction of the optics bill.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>path selection</span></div>
+  <h2>ECMP assumes many flows. You have four.</h2>
+
+  <div class="col">
+  <p>A fat tree gives many equal-cost paths; <strong>ECMP</strong> hashes packet header fields to choose among them. Hashing rather than round-robin is deliberate — every packet of a flow hashes identically, so packets keep their order, which matters enormously to a transport that recovers from reordering badly.</p>
+  <p><strong>The mechanism only works if there are many more flows than paths.</strong> Here is exactly where that breaks:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>flow entropy on a RoCEv2 fabric</span><span class="who">mechanism</span></div>
+<pre>  hash inputs = the IP five-tuple
+
+  destination UDP port = <span class="bad">always 4791</span>   <span class="dim">identifies RoCE, not the flow</span>
+                                          <span class="dim">→ contributes ZERO entropy</span>
+  source UDP port      = <span class="hl">randomised per QUEUE PAIR</span>
+
+  ⇒ flow entropy = <span class="hl">the number of queue pairs</span>
+    not the number of GPUs, not the number of messages
+
+  and NCCL v2.31.2 defaults to ONE QP per connection:
+      NCCL_PARAM(IbQpsPerConn, "IB_QPS_PER_CONNECTION", <span class="bad">1</span>)
+
+  ⇒ one path per peer connection.</pre>
+    <figcaption>A rail-local all-reduce among M nodes is a ring: each GPU has essentially <b>one</b> heavy connection to its ring neighbour, at close to line rate, starting and stopping in lockstep with every other GPU in the job.</figcaption>
+  </figure>
+
+  <div class="map">
+<pre>   WHAT ECMP WAS DESIGNED FOR          WHAT LLM TRAINING SENDS
+   thousands of small, independent,     a handful of huge, synchronised,
+   short-lived flows                    long-lived flows
+
+   uplink 0  ▓▓▓▓▓▓▓▓▓▓  ~equal         uplink 0  ████████████████ 400G
+   uplink 1  ▓▓▓▓▓▓▓▓▓▓  ~equal         uplink 1  ████████████████ 400G
+   uplink 2  ▓▓▓▓▓▓▓▓▓▓  ~equal         uplink 2  (idle)
+   uplink 3  ▓▓▓▓▓▓▓▓▓▓  ~equal         uplink 3  (idle)
+
+   law of large numbers                 two hashes collided; half the
+   smooths the imbalance                tier is saturated, half idle</pre>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The consequence is a silent 2× on a healthy-looking fabric</span>
+    <p>Every switch counter is green, no link is down, no ratio is violated — and half your uplinks carry nothing while the other half queue. The fix is raising entropy (more QPs per connection) or replacing hashing with adaptive routing, not adding bandwidth.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>How many endpoints fit in a 2-tier fat tree of 64-port switches, and why does it matter?</summary>
+    <div class="ans">
+      <p><code>k²/2</code> = 2,048. A 24,576-GPU cluster therefore needs three tiers on that switch.</p>
+      <p>It matters because the third tier is the long-reach one — row to row, hall to hall — and that is where optical transceiver cost concentrates. Higher radix can delete a tier, and deleting a tier deletes a whole population of optics.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>What does a 4:1 leaf actually cost a flow?</summary>
+    <div class="ans">
+      <p>Nothing at all if both endpoints are on that leaf — the flow never touches an uplink. If all 32 endpoints send off-leaf simultaneously, each gets 3.2 Tb/s ÷ 32 = 100 Gb/s, a quarter of line rate.</p>
+      <p>The ratio is a <em>worst case</em>, not a constant tax.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why can an LLM cluster oversubscribe its spine when a general-purpose cloud cannot?</summary>
+    <div class="ans">
+      <p>Because the traffic matrix is known and sparse. The bandwidth-dominant collectives run GPU-N ↔ GPU-N, so they are rail-local and terminate at the leaf. Cross-rail residue is shuffled inside the node over NVLink first (NCCL's PXN), so it also leaves on its own rail.</p>
+      <p>The aggregation tier is then left carrying only cross-pod jobs, checkpoints and storage — which tolerate 1:7 easily.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Where does flow entropy come from on a RoCEv2 fabric?</summary>
+    <div class="ans">
+      <p>The <b>source UDP port</b>, which the NIC randomises per queue pair. The destination port is always 4791 — it identifies RoCE, not the flow — so it contributes nothing.</p>
+      <p>So entropy equals the number of QPs, and NCCL defaults to one QP per connection. One path per peer.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Half your uplinks are saturated and half are idle. Every counter is green. What happened?</summary>
+    <div class="ans">
+      <p>ECMP hash collision. With a handful of huge synchronised flows and entropy equal to the QP count, two flows hashed to the same uplink while others got none. The law of large numbers that normally smooths ECMP does not apply at four flows.</p>
+      <p>The fix is more entropy (QPs per connection) or adaptive routing — not more bandwidth.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 09.3–09.7</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Radix sets tiers</span><span class="v">k²/2 for two tiers, k³/4 for three. The third tier is where optics money goes.</span></li>
+    <li><span class="k">Delete a tier, delete optics</span><span class="v">The structural argument for higher radix, more durable than any price quote.</span></li>
+    <li><span class="k">Oversubscription taxes crossers only</span><span class="v">Intra-leaf traffic is untouched — the whole basis of rail-optimised design.</span></li>
+    <li><span class="k">X:1 is a worst case</span><span class="v">Line rate ÷ X only when every endpoint under the tier is crossing at once.</span></li>
+    <li><span class="k">Collectives are rail-local</span><span class="v">GPU-N ↔ GPU-N, plus NVLink absorbing cross-rail residue via PXN.</span></li>
+    <li><span class="k">Entropy = QP count</span><span class="v">Dest port is always 4791. Source port varies per QP. NCCL defaults to one.</span></li>
+    <li><span class="k">ECMP fails silently</span><span class="v">A handful of synchronised elephant flows collide, and every counter still reads green.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/09-networking-topology/lessons/02-inter-node-fabric.html">Back to lesson 09.2</a>
+  </footer>
+</div>
+
+</body>
+</html>
