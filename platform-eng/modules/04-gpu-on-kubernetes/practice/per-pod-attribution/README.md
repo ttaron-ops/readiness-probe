@@ -29,6 +29,14 @@ A written `failure-mode-log.md` — the "interview gold" — assembled from the 
 work in L2 (crash-loops), L5 (driver upgrade), and L6 (MIG reconfigure). For each:
 **symptom → `kubectl`/log evidence → root cause → fix → prevention.**
 
+## Plus: the 200-node driver-upgrade runbook
+
+L5's Practice Part B has you write a **200-node rollout runbook** (canary wave, health
+gate, rollback trigger, blast-radius/topology rule, and the vendor-boundary note). Commit
+it here as `driver-upgrade-runbook.md` — it's a separate artifact from the failure-mode
+log (that log is what actually broke; this runbook is how you'd roll a fleet-wide change
+without repeating it), but they should read consistently with each other.
+
 ## Suggested layout
 
 ```
@@ -39,6 +47,7 @@ per-pod-attribution/
 │   ├── attribute/               # UUID→pod→ns map + MIG vs time-sliced handling
 │   └── metrics/                 # per-pod GPU-cost GaugeVec
 ├── failure-mode-log.md          # the break/fix log (L2/L5/L6)
+├── driver-upgrade-runbook.md    # the 200-node rollout runbook (L5 Part B)
 └── README.md                    # run instructions + the time-sliced caveat
 ```
 
@@ -49,6 +58,7 @@ per-pod-attribution/
 - [ ] handles a **MIG** device (clean 1:1) and a **time-sliced** device (shared UUID → per-PID fallback), with the caveat documented
 - [ ] the map stays fresh as pods are created/deleted
 - [ ] `failure-mode-log.md` has ≥5 real break/fix entries (symptom → evidence → root cause → fix → prevention)
+- [ ] `driver-upgrade-runbook.md` covers all seven bullet categories from L5's Practice Part B, each with concrete values (not "TBD"), a named rollback trigger, and an explicit topology/blast-radius rule
 
 ## Guardrails
 

@@ -176,3 +176,66 @@ _(each run appends: date · modules enriched · commit shas)_
   broader H100 market median (~$2.29–$3.12/hr per third-party trackers) is close enough to the
   cited figure that no fix was needed, and the lesson already explicitly flags it as a dated
   snapshot to re-pull at build time per the spec's sourcing rule. No other fixes were necessary.
+- **2026-08-18** · QA pass · `modules/04-gpu-on-kubernetes` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commit `7bc177c`. Full consistency sweep via two parallel subagents (structural
+  check + link verification). Verified the prev/next chain across all 10 lessons is unbroken
+  (01→10, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (4–5 actual), README lesson-table hours (10/12/12/9/11/10/
+  10/7/12/16, summing to the stated ~109 hrs) match the 10 lesson files exactly, and checkpoint.md
+  / practice/per-pod-attribution links resolve and stay consistent with lesson content. Found and
+  fixed a real factual error: lesson 09 and the README claimed the DRA kubelet multi-ResourceClaim
+  bug (`kubernetes/kubernetes#135901`) and a device double-allocation race were fixed in Kubernetes
+  **1.34.2** — a live fetch of `CHANGELOG-1.34.md` showed both fix PRs (#136480, #136566) actually
+  landed under **v1.34.4** (released 2026-02-10); corrected all 6 occurrences across README and
+  lesson 09 (Core concepts, Worked example, Practice, Common pitfalls, Self-check ×2, References).
+  Also fixed: `dcgm-exporter#642` (central to lessons 07/10's attribution-hole thesis) had closed
+  2026-04-06 with a maintainer confirming `DCGM_FI_DEV_GPU_UTIL` is device-aggregate by design —
+  updated the "open, unresolved" framing in both lessons to the stronger, maintainer-confirmed
+  version; standardized lesson 07's name ("attribution trap"→"attribution hole") to match its use
+  everywhere else in the module; fixed a `cloudzero.com` vs `www.cloudzero.com` URL mismatch
+  between lessons 07 and 10; added 3 previously title-only-but-verified-real URLs (2 NVIDIA
+  Developer Blog posts in lesson 03, 1 Modal blog post in lesson 04); corrected `sources:`
+  frontmatter counts in lessons 01/03/04/06/07/08 to match actual reference counts; linked the
+  shared `practice/fake-gpu-fleet/` lab from the module README (built for this module per
+  depth-map.md but never referenced from README/checkpoint/lessons); and added the L5 200-node
+  driver-upgrade runbook as a named artifact in the `per-pod-attribution` deliverable spec, which
+  previously only mentioned the failure-mode log even though L5's Practice section directs it
+  there. All other checked URLs (GitHub issues/PRs, named vendor blogs, canonical NVIDIA/K8s docs)
+  verified real and accurate — no fabricated links found.
+- **2026-08-18** · QA pass · `modules/05-gpu-observability` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commits `f453c86`, `54fde94`. Full consistency sweep via a dedicated link-verification
+  subagent plus direct spot-checks: verified the prev/next chain across all 8 lessons is unbroken
+  (01→08, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (4–5 actual), README lesson-table hours (7/6/6/5/6/7/6/10,
+  summing to the stated ~53 hrs) match the 8 lesson files exactly, and checkpoint.md /
+  practice/gpu-dashboard-lie / resources/depth-map.md links resolve and stay consistent with
+  lesson content. Directly fetched (not just search-corroborated) the module's highest-risk,
+  most-specific citations: DCGM's `dcgm_errors.h` enum values (all 7 cited constants —
+  `DCGM_FR_VOLATILE_DBE_DETECTED`=4, `DCGM_FR_PENDING_ROW_REMAP`=85, `DCGM_FR_ROW_REMAP_FAILURE`=80,
+  `DCGM_FR_NVLINK_ERROR_THRESHOLD`=13, `DCGM_FR_UNCONTAINED_ERROR`=81, `DCGM_FR_SXID_ERROR`=109,
+  `DCGM_FR_XID_ERROR`=101 — match exactly), dcgm-exporter's live `default-counters.csv` (confirms
+  `SM_ACTIVE`/`SM_OCCUPANCY` really do ship commented out while `GPU_UTIL`/`GR_ENGINE_ACTIVE`/
+  `PIPE_TENSOR_ACTIVE`/`DRAM_ACTIVE` are enabled), vLLM's `optimization.md` (chunked-prefill V1
+  default, decode-priority scheduling, and the `max_num_batched_tokens` TTFT/ITL tradeoff all match
+  verbatim), both cited GitHub issues (`NVIDIA/DCGM#287` and `NVIDIA/dcgm-exporter#34`, both real
+  with matching quoted text), Meta's Llama 3 paper interruption stats (466 total / 419 unexpected /
+  58.7% GPU-related, all confirmed via search corroboration since arxiv.org was proxy-blocked), and
+  Anyscale's PD-disaggregation TTFT figures (355ms/389ms and 165ms/190ms pairs at concurrency 256,
+  both confirmed). Found and fixed five issues across two rounds: (1) lesson 02's `sources:`
+  frontmatter said 6 but the References section actually has 7 bullets; (2) lesson 05 cited
+  NVSentinel's "1,100+ nodes / ~40,000 GPUs across AWS/GCP/Azure/OCI" stat to the bare GitHub repo
+  link — traced the figure to NVIDIA's own NVSentinel docs site
+  (`docs.nvidia.com/nvsentinel/getting-started/overview/`) and re-pointed the citation there
+  (bumping `sources:` 10→11); (3) lesson 01's acecloud.ai citation attached specific numbers (a
+  24-GPU H100 fleet, tensor-active 0.55, throughput "nearly tripled") that repeated targeted
+  searches could not corroborate, even though the article itself is real and on-topic — removed the
+  unconfirmed specifics per the spec's "never invent a quote" rule, keeping only the article's
+  verifiable general content; (4) lesson 07's Nsight Compute case-study citation ("87.5%" memory
+  reduction, "68%" duration reduction) was likewise uncorroborated after search — softened all
+  three occurrences to describe the walkthrough's real, verifiable shape without asserting
+  unconfirmed percentages. The DCGM field-ids "Field Identifiers" URL was flagged as a possibly
+  wrong slug by the verification subagent but confirmed real and correctly named on independent
+  re-search (a different, also-real "Field APIs" page just kept surfacing instead) — left
+  unchanged. All other citations (Cloudflare, BentoML, Spheron, ScaleOps, Red Hat, Datadog, Imbue,
+  AKS/NPD, DigitalOcean, and the canonical NVIDIA/K8s/Grafana doc pages) verified real and accurate
+  — no other fixes were necessary.
