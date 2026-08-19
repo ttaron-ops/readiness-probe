@@ -2,13 +2,13 @@
 lesson: "06.5"
 title: "Scheduler alternatives — Volcano, NVIDIA KAI, and when to pick which"
 module: "06"
-concept: "Scheduler alternatives — Volcano, NVIDIA KAI, and when to pick which"
+concept: "scheduler-alternatives-volcano-kai"
 status: not-started
 est_time: "9h"
 prev: "04-kueue-cohorts-borrowing-preemption.md"
 next: "06-topology-aware-placement.md"
 artifacts: []
-sources: 14
+sources: 18
 ---
 
 # 06.5 · Scheduler alternatives — Volcano, NVIDIA KAI, and when to pick which
@@ -1149,7 +1149,7 @@ a new tenant from your matrix without asking you a question, it passes.
 ## Self-check
 
 - **Name one workload where Volcano beats Kueue, and give the mechanism, not the feature
-  name.** *Answer:* a multi-node MPI all-reduce job sharing a cluster with a CPU-heavy
+  name.** **Answer:** a multi-node MPI all-reduce job sharing a cluster with a CPU-heavy
   preprocessing tenant. Two mechanisms do the work. First, gang: Volcano's `allocate` action
   accumulates placements in a `Statement` and calls `Commit()` only when `JobPipelined(job)`
   is true — i.e. allocated-plus-pipelined tasks have reached `minMember` — otherwise it calls
@@ -1162,7 +1162,7 @@ a new tenant from your matrix without asking you a question, it passes.
   approximate this.
 
 - **What does KAI's consolidation do that Kueue cannot, and where does it sit in the cycle?**
-  *Answer:* `consolidate` is action 2 of 5, running after `allocate` and before every
+  **Answer:** `consolidate` is action 2 of 5, running after `allocate` and before every
   disruptive action. When a pending workload cannot fit because free capacity is scattered, it
   relocates already-running pods to compact that capacity — and it evicts a pod only if the
   scheduler has already found it a new home, which is what makes it "temporary eviction" rather
@@ -1171,7 +1171,7 @@ a new tenant from your matrix without asking you a question, it passes.
   admit or wait. On 8-GPU nodes this is the difference between two stranded 3-GPU holes and
   one runnable 6-GPU slot.
 
-- **Can Kueue and a gang scheduler compose? State the rule that makes it safe.** *Answer:*
+- **Can Kueue and a gang scheduler compose? State the rule that makes it safe.** **Answer:**
   yes, because they own disjoint decisions: Kueue owns *when* a workload is admitted and
   *against whose quota*, and the underlying scheduler owns *where* the pods land and
   all-or-nothing binding. The safety rule is **exactly one layer may preempt**. If Kueue is
@@ -1182,7 +1182,7 @@ a new tenant from your matrix without asking you a question, it passes.
   stack and both layers would own quota.
 
 - **What does gang-granularity eviction fix that pod-granularity eviction cannot, and how does
-  Volcano implement it?** *Answer:* pod-granularity eviction can free k GPUs from an n-pod
+  Volcano implement it?** **Answer:** pod-granularity eviction can free k GPUs from an n-pod
   gang while stranding the other n−k, because the survivors cannot reach `minMember` and make
   zero progress — a net-negative capacity change. The `gangpreempt`/`gangreclaim` actions group
   candidate victims into **bundles** per job: `BundleSafe` holds tasks covered by a positive
@@ -1194,7 +1194,7 @@ a new tenant from your matrix without asking you a question, it passes.
   one candidate domain, and the statement is committed only if that plan validates.
 
 - **A tenant says "we need fractional GPUs." What are the three follow-up questions?**
-  *Answer:* (1) *What isolation do you need?* MIG gives hard memory and SM isolation at fixed
+  **Answer:** (1) *What isolation do you need?* MIG gives hard memory and SM isolation at fixed
   profile geometry and costs a full GPU drain to reconfigure; KAI's `gpu-fraction` gives none
   by default; Volcano's HAMi-backed vGPU enforces memory and core limits via an interposed
   library. (2) *Is the demand shape stable?* MIG geometry has to match a stable profile mix or
@@ -1204,7 +1204,7 @@ a new tenant from your matrix without asking you a question, it passes.
   Only after those three does the choice of mechanism follow.
 
 - **Why is "in-quota resources are never reclaimable" the load-bearing guarantee in KAI's queue
-  model?** *Answer:* because it is what makes a quota a *promise* rather than a suggestion.
+  model?** **Answer:** because it is what makes a quota a *promise* rather than a suggestion.
   Surplus distribution is priority-ordered and can starve a low-priority queue of over-quota
   capacity entirely — a priority-2/weight-1 queue takes surplus before a priority-1/weight-100
   queue. That is tolerable only because Phase 1 hands every queue `min(quota, requested)`
@@ -1214,7 +1214,7 @@ a new tenant from your matrix without asking you a question, it passes.
   expresses the same guarantee through `nominalQuota` plus `lendingLimit`; Volcano expresses a
   stronger version through `guarantee`, which is never lent out at all and can be node-locked.
 
-- **Your stock Volcano install is not preempting. Walk the diagnosis.** *Answer:* first check
+- **Your stock Volcano install is not preempting. Walk the diagnosis.** **Answer:** first check
   the action list in the scheduler ConfigMap — the shipped default is
   `actions: "enqueue, allocate, backfill"`, so no preemption action is registered at all. If
   `preempt` is present but nothing happens, check that the preemptor and victim are in the
@@ -1263,7 +1263,7 @@ required/preferred annotations — and lesson 6 takes the first of them apart in
 - `kubernetes-sigs/kueue` — `apis/kueue/v1beta2/clusterqueue_types.go`, `topology_types.go`, `resourceflavor_types.go` — the Kueue side of every comparison row: `reclaimWithinCohort`, `borrowWithinCohort`, `withinClusterQueue`, and the TAS annotations. Read at commit `e5084fe` (2026-08-17). *Fetched by cloning; `kueue.sigs.k8s.io` is proxy-blocked.*
 - Ghodsi, A. et al., "Dominant Resource Fairness: Fair Allocation of Multiple Resource Types" (NSDI 2011) — https://www.usenix.org/conference/nsdi11/dominant-resource-fairness-fair-allocation-multiple-resource-types (**not fetched: proxy 403**; canonical USENIX URL) — the formal paper behind Volcano's `drf` plugin and the fairness intuition under Kueue's cohort fair sharing. The share formula and the strategy-proofness argument in §2.5 are reproduced from the algorithm as implemented in `drf.go`, which matches the paper's definition.
 
-**Real-world engineering accounts**
+**Real-world engineering blogs**
 
 - Altoros — "Scheduling 300,000 Kubernetes Pods in Production Daily" — https://www.altoros.com/blog/volcano-scheduling-300000-pods-in-production-daily/ (**not fetched: proxy 403**; canonical URL, search-confirmed) — what it reports: Volcano's production scale and enterprise adoption. Treat the pod-count figure as the blog's claim.
 - NVIDIA — "Practical Tips for Preventing GPU Fragmentation for Volcano Scheduler" — https://developer.nvidia.com/blog/practical-tips-for-preventing-gpu-fragmentation-for-volcano-scheduler/ (**not fetched: proxy 403**; canonical URL) — the anti-fragmentation `binpack` configuration for multi-GPU nodes. The scoring function it tunes is reproduced from source in §2.6; lesson 06.7 quantifies the effect.

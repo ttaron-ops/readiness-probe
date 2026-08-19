@@ -2,7 +2,7 @@
 lesson: "06.8"
 title: "Priority, preemption, and capacity economics"
 module: "06"
-concept: "Priority, preemption, and capacity economics"
+concept: "priority-preemption-capacity-economics"
 status: not-started
 est_time: "12h"
 prev: "07-fragmentation-effective-capacity.md"
@@ -1290,7 +1290,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
 
 ## Self-check
 
-- **Why is preemption economically useless without checkpointing?** *Answer:* Preemption's value is
+- **Why is preemption economically useless without checkpointing?** **Answer:** Preemption's value is
   reclaiming capacity you already paid for and giving it to work that needs it more; its cost is
   the work destroyed in the victim. With checkpointing at interval `T_ckpt`, an eviction landing
   uniformly in the cycle destroys `T_ckpt/2` in expectation, so
@@ -1301,7 +1301,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   training-loop property, not a scheduler knob, which is why the best-effort tier's admission
   criterion is a documented resume path.
 
-- **Walk the victim-selection algorithm.** *Answer:* It runs in `PostFilter`, after the pod fails
+- **Walk the victim-selection algorithm.** **Answer:** It runs in `PostFilter`, after the pod fails
   `Filter` everywhere. **(0)** `PodEligibleToPreemptOthers`: reject if `preemptionPolicy: Never`, or
   if the pod already has a nominated node with victims still terminating from its previous
   preemption — the anti-cascade guard. **(1)** Keep only nodes whose failure was `Unschedulable`,
@@ -1317,7 +1317,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   youngest work) → first node. **(5)** Execute: patch `DisruptionTarget`/`PreemptionByScheduler`,
   delete with bare `DeleteOptions{}`, set `nominatedNodeName`, requeue the preemptor.
 
-- **What ordering does `MoreImportantVictim` use, and what does it protect?** *Answer:* Five rules
+- **What ordering does `MoreImportantVictim` use, and what does it protect?** **Answer:** Five rules
   in sequence. (1) **Priority** — higher is more important, and it dominates. (2) **Workload type**
   — `CompositePodGroup` > `PodGroup` > individual `Pod`, to preserve group integrity: at equal
   priority the scheduler would rather kill a lone pod than break a gang. (3) For two individual
@@ -1327,7 +1327,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   amplification; 3 and 5 encode "older work has more to lose", the same instinct as node tiebreak 5.
 
 - **Where does the victim's grace period come from, and why does it matter economically?**
-  *Answer:* From the victim. After patching `DisruptionTarget`, the scheduler calls
+  **Answer:** From the victim. After patching `DisruptionTarget`, the scheduler calls
   `Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})` — **no `GracePeriodSeconds` override** — so
   the pod's own `terminationGracePeriodSeconds` applies, defaulting to 30 s. Economically it is the
   budget for a checkpoint-on-SIGTERM: long enough and the loss window collapses toward zero, too
@@ -1336,7 +1336,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   which the preemptor cannot preempt elsewhere, because Step 0's guard sees the terminating victim
   on its nominated node. Set it just above your measured flush time, and measure it.
 
-- **Derive the cost-minimising checkpoint interval and give the field diagnostic.** *Answer:*
+- **Derive the cost-minimising checkpoint interval and give the field diagnostic.** **Answer:**
   Overhead per unit wall-clock is `Ω(T) = C/T + λT/2 + λR`, with `C` the GPU-blocking cost of one
   checkpoint, `T` the interval, `λ` the preemption rate, `R` the restart overhead. `C/T` is
   checkpointing; `λT/2` is rework, since an eviction landing uniformly in the cycle destroys `T/2`
@@ -1350,7 +1350,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   The curve is asymmetric — too-frequent is much worse than too-rare — so err long of `T*`.
 
 - **How does async sharded checkpointing change the economics, and what is the *biggest* effect?**
-  *Answer:* It shrinks `C`, not the formula. Each rank saves only its own shard in parallel, so `C`
+  **Answer:** It shrinks `C`, not the formula. Each rank saves only its own shard in parallel, so `C`
   scales with `state/world_size` instead of total state; and with `async_save` only the
   device→host copy blocks the GPU while the durable network write overlaps the next steps on CPU
   threads. For a 7B model over 8 ranks that is roughly `C: 49 s → 0.6 s`, which through
@@ -1362,7 +1362,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   the in-flight async save *and* take a final synchronous one inside the grace period.
 
 - **At what sustained utilisation does a 1-year reserve beat on-demand, and how do you size the
-  ladder?** *Answer:* A single reserved GPU beats on-demand once its sustained utilisation exceeds
+  ladder?** **Answer:** A single reserved GPU beats on-demand once its sustained utilisation exceeds
   `R/D` — with $2.35 committed against $3.90 on-demand (specialized-neocloud snapshot), ≈ **60%**.
   The portfolio version is a newsvendor problem: `E[cost(Q)] = Q·R + E[max(0, X−Q)]·D`, and
   `dE/dQ = R − D·P(X>Q) = 0` gives **`P(X > Q*) = R/D`** — reserve to the `(1 − R/D)` quantile of
@@ -1375,7 +1375,7 @@ Three artifacts, all feeding the deliverable, all runnable on the kind cluster w
   free compute if you can backfill it.
 
 - **Why does Borg forbid same-tier production preemption, and how do you get that on Kubernetes?**
-  *Answer:* To prevent cascades: A evicts B, B must be re-placed and evicts C, C evicts D — one
+  **Answer:** To prevent cascades: A evicts B, B must be re-placed and evicts C, C evicts D — one
   legitimate reclaim becomes a chain reaction that destabilises the tier, and every link destroys
   work. Borg's fix is structural, not a tiebreak. On Kubernetes you get the same property three
   ways: victims must be **strictly lower** priority, so preemption within one PriorityClass is
@@ -1459,8 +1459,6 @@ trees* cloned this session; canonical URLs are given with their reachability sta
    condition pair written onto the victim Workload. **Read from the cloned repo this session;**
    https://kueue.sigs.k8s.io/docs/concepts/preemption/ was unreachable from this environment.
 
-**Research and foundational systems**
-
 8. **Verma, Pedrosa, Korupolu, Oppenheimer, Tune, Wilkes — "Large-scale cluster management at
    Google with Borg" (EuroSys 2015)** — https://research.google.com/pubs/archive/43438.pdf. The
    priority-band model (monitoring / production / batch / best-effort) this lesson's tiers descend
@@ -1482,7 +1480,7 @@ trees* cloned this session; canonical URLs are given with their reachability sta
     raised the GPU allocation ratio from **68% to 93%**. *(Search-verified; usenix.org blocked by
     egress.)*
 
-**Engineering accounts and tooling**
+**Real-world engineering blogs**
 
 11. **PyTorch — `torch.distributed.checkpoint`** —
     https://docs.pytorch.org/docs/stable/distributed.checkpoint.html, plus
@@ -1491,6 +1489,8 @@ trees* cloned this session; canonical URLs are given with their reachability sta
     `save`/`async_save`/`load` API, sharded parallel saves, save-plan caching, and a named
     production deployment (IBM) — the mechanism behind §12's `C: 49 s → 0.6 s`.
     *(Search-verified; fetches blocked by egress.)*
+
+**Deeper dives**
 
 12. **Market references — SemiAnalysis, "The Great GPU Shortage: Rental Capacity"**
     (https://newsletter.semianalysis.com/p/the-great-gpu-shortage-rental-capacity) **and a live

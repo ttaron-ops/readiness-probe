@@ -8,7 +8,7 @@ est_time: "7h"
 prev: "01-why-default-scheduler-fails.md"
 next: "03-kueue-queueing-model.md"
 artifacts: []
-sources: 9
+sources: 11
 ---
 
 # 06.2 · Gang scheduling: all-or-nothing admission
@@ -987,7 +987,7 @@ This pairs with the L1 capture as the deliverable's complete gang-scheduling dem
 
 ## Self-check
 
-- **What is `minMember`, and what breaks if it is set wrong in each direction?** *Answer:* It is
+- **What is `minMember`, and what breaks if it is set wrong in each direction?** **Answer:** It is
   the quorum — the number of the group's pods that must be simultaneously placeable before any
   member is allowed to bind. Set **too low** (below the job's real collective barrier), quorum
   is reached early, `Permit` returns `Success`, that subset binds, and the processes block in
@@ -999,7 +999,7 @@ This pairs with the L1 capture as the deliverable's complete gang-scheduling dem
   operator policy choice between minimum-viable and target size for an elastic one.
 
 - **Walk the mechanism: which extension points does the plugin implement, and what does each
-  do?** *Answer:* Five. **`QueueSort`** orders by priority, then `PodGroup` creation timestamp,
+  do?** **Answer:** Five. **`QueueSort`** orders by priority, then `PodGroup` creation timestamp,
   then `namespace/name` — so members are adjacent in `activeQ` and older groups go first.
   **`PreFilter`** is the partial-scheduling guard: it deny-lists recently failed groups, rejects
   when fewer than `minMember` pods exist, and (if `minResources` is set) checks whether the
@@ -1018,7 +1018,7 @@ This pairs with the L1 capture as the deliverable's complete gang-scheduling dem
   plugin set does not have.
 
 - **How does gang scheduling change queue behaviour for OTHER jobs, and what does it cost?**
-  *Answer:* A member parked at `Permit` has already been assumed into the scheduler cache, so
+  **Answer:** A member parked at `Permit` has already been assumed into the scheduler cache, so
   its GPU is unavailable to any other pod while the gang waits. A large gang assembling slowly
   therefore converts free capacity into held-but-idle capacity — head-of-line blocking, or the
   convoy effect. The worked example prices a `minMember: 32` gang assembling at one GPU per five
@@ -1031,7 +1031,7 @@ This pairs with the L1 capture as the deliverable's complete gang-scheduling dem
   simultaneously and its effective fleet is therefore smaller than the fleet.
 
 - **Where does gang scheduling live — admission or binding — and why does the distinction
-  matter?** *Answer:* At **admission**, specifically the `Permit` extension point. Binding is
+  matter?** **Answer:** At **admission**, specifically the `Permit` extension point. Binding is
   inherently per-pod — the kubelet receives one `Pod`→`Node` assignment at a time via the
   binding subresource, and no scheduler can change that — but no member enters its binding cycle
   until the whole group is cleared. The distinction matters because it tells you *what is held
@@ -1041,7 +1041,7 @@ This pairs with the L1 capture as the deliverable's complete gang-scheduling dem
   before any pod exists — so a waiting Workload holds nothing at all.
 
 - **How do Kueue's Workload admission and the coscheduling plugin differ, and can they be
-  combined?** *Answer:* They enforce the same constraint at different altitudes. Kueue's
+  combined?** **Answer:** They enforce the same constraint at different altitudes. Kueue's
   mutating webhook forces `spec.suspend: true` so **zero pods are created**, sums the Job's pod
   sets into a `Workload`, and unsuspends only when quota for *all* pod sets can be reserved at
   once — so a waiting Workload consumes nothing. The coscheduling plugin lets all pods be
@@ -1054,7 +1054,7 @@ This pairs with the L1 capture as the deliverable's complete gang-scheduling dem
   rather than coscheduling as the primary placement guarantee.
 
 - **Why doesn't the native Kubernetes `Workload`/`PodGroup` API (beta, off by default, v1.37)
-  make Kueue redundant — and where is it actually *better* than the plugin?** *Answer:* It
+  make Kueue redundant — and where is it actually *better* than the plugin?** **Answer:** It
   solves the same problem this lesson does — atomic group admission, with
   `PodGroupSpec.schedulingPolicy = Gang{minCount}` playing the role of `minMember` and
   `spec.schedulingGroup.podGroupName` replacing the label. It is architecturally better than the
@@ -1136,7 +1136,7 @@ given for convenience with their reachability stated honestly.
   earlier session; API specifics above were re-verified against the source tree, since KEP text
   and merged API can drift.**
 
-**Real-world engineering accounts**
+**Real-world engineering blogs**
 
 - **OpenAI — "Scaling Kubernetes to 7,500 Nodes"** —
   https://openai.com/index/scaling-kubernetes-to-7500-nodes/ — a gang scheduling plugin running

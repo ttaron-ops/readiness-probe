@@ -2,7 +2,7 @@
 lesson: "06.6"
 title: "Topology-aware placement — packing a gang into one NVLink domain"
 module: "06"
-concept: "Topology-aware placement — packing a gang into one NVLink domain"
+concept: "topology-aware-placement-nvlink-domain"
 status: not-started
 est_time: "9h"
 prev: "05-alternatives-volcano-kai.md"
@@ -1189,7 +1189,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
 
 ## Self-check
 
-- **Why does a topology-spread all-reduce gang waste GPU-hours, and how much?** *Answer:*
+- **Why does a topology-spread all-reduce gang waste GPU-hours, and how much?** **Answer:**
   Synchronous training does an all-reduce every step, and the collective cannot complete faster
   than its slowest path. The floor is information-theoretic: partition the ranks into two groups
   and at least `S` bytes must cross the boundary in each direction, so `T_cross ≥ S / B_cut`. On
@@ -1201,7 +1201,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
   snapshot. On a rail-optimised NDR fabric (`B_cut = 200 GB/s`) the same split costs 1.00×. **The
   multiplier is a property of the fabric, not a constant.**
 
-- **`required` vs `preferred` — behaviour, and when is each right?** *Answer:* `required` is a
+- **`required` vs `preferred` — behaviour, and when is each right?** **Answer:** `required` is a
   hard constraint: the whole PodSet must fit in one domain at the named level or the Workload is
   not admitted — no fallback, no spread, it waits. `preferred` starts at the named level and, if
   no single domain fits, evaluates each coarser level in turn; if it does not fit even at the top
@@ -1213,7 +1213,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
   comm-bound runs → `required`; short or comm-tolerant work → `preferred`; and
   `unconstrained` when you want TAS's gap-filling with no locality requirement at all.
 
-- **How do TAS and gang scheduling interact?** *Answer:* Conjunctively, at different layers.
+- **How do TAS and gang scheduling interact?** **Answer:** Conjunctively, at different layers.
   Kueue admits a Workload only when quota is available **and** TAS can assign the *entire* PodSet
   to a domain satisfying its annotation; Kueue does not admit fractions of a Workload unless
   partial admission is explicitly enabled. Whatever enforces gang at the pod layer — coscheduling,
@@ -1223,7 +1223,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
   leaves the rest pending, which is lesson 1's deadlock. Together the only admissible outcome for
   tightly-coupled training is all pods, one domain, or wait holding nothing.
 
-- **Walk the TAS placement algorithm, and say which strategy runs when.** *Answer:* Two phases.
+- **Walk the TAS placement algorithm, and say which strategy runs when.** **Answer:** Two phases.
   Phase 1 is a bottom-up roll-up: compute how many pods of this PodSet fit in each leaf domain —
   allocatable of Ready and schedulable nodes, minus other admitted TAS workloads, minus all
   non-TAS pods — then sum those counts up the tree. Phase 2 is top-down: at the annotated level
@@ -1237,7 +1237,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
   prioritise minimising fragmentation. `TASBalancedPlacement` (alpha, off) swaps `preferred` to
   BalancedPlacement, which matters for all-to-all patterns where `[6,6]` beats `[10,2]`.
 
-- **How is a TAS assignment actually enforced, given that Kueue never binds a pod?** *Answer:*
+- **How is a TAS assignment actually enforced, given that Kueue never binds a pod?** **Answer:**
   With a scheduling gate and node-selector injection. When Kueue unsuspends the Job, each pod is
   created carrying the `kueue.x-k8s.io/topology` scheduling gate, which makes it ineligible for
   scheduling — `kube-scheduler` will not even consider it. The `topology_ungater` controller then
@@ -1250,7 +1250,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
   large assignments small in etcd.
 
 - **A node running a TAS workload goes NotReady. What happens, and when does it not work?**
-  *Answer:* Because TAS pinned the workload to named nodes, it cannot just be rescheduled
+  **Answer:** Because TAS pinned the workload to named nodes, it cannot just be rescheduled
   anywhere, so Kueue tries **hot swap**: find a replacement node meeting the same constraints and
   patch only that entry of the assignment, leaving the rest intact. Gated by
   `TASFailedNodeReplacement` (beta, on since v0.14). Since v0.19 the default trigger is *pod
@@ -1265,7 +1265,7 @@ should be able to rerun the commands on a fresh kind cluster and reproduce every
   evicted and requeued promptly instead of waiting for a node that cannot exist.
 
 - **Your `required` workload is pending on a cluster with plenty of idle GPUs. Give three
-  distinct causes and the signal that distinguishes them.** *Answer:* (1) **Missing topology
+  distinct causes and the signal that distinguishes them.** **Answer:** (1) **Missing topology
   labels** — a node lacking one level's label is not in the tree at that level; check
   `kubectl get nodes -L <block>,<rack>` for blanks. (2) **Missing flavor tolerations** — TAS
   computes capacity itself and does not see the provider's toleration-injecting webhook, so
@@ -1356,8 +1356,6 @@ head. Where a canonical doc URL is given for convenience, its reachability is st
    the real not-fit condition message, and `sample-gpu-queues.yaml` with the ResourceFlavor
    toleration comment that §7 turns into a pitfall. **Read from the cloned repo this session.**
 
-**Hardware and collective-communication background**
-
 7. **NVIDIA DGX H100 / HGX H100 platform specifications** —
    https://www.nvidia.com/en-us/data-center/dgx-h100/. Source for §2's node-level figures: 8×
    H100 SXM5 with fourth-generation NVLink at 900 GB/s bidirectional per GPU, four NVSwitches
@@ -1380,7 +1378,7 @@ head. Where a canonical doc URL is given for convenience, its reachability is st
    figure — **run `all_reduce_perf -b 1G -e 8G -f 2 -g 8` on your own hardware before using it in
    a cost model.**
 
-**Real-world engineering accounts**
+**Real-world engineering blogs**
 
 10. **Meta — "MAST: Global Scheduling of ML Training across Geo-Distributed Datacenters at
     Hyperscale" (OSDI 2024)** — https://www.usenix.org/system/files/osdi24-choudhury.pdf,

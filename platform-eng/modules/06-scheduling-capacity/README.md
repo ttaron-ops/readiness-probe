@@ -64,7 +64,9 @@ Total ≈ **75 hrs ≈ 6.5–7 weeks** (+ ~12 hrs capstone). Spine = L3–L4 + t
 - **Kueue TAS** for topology; **SemiAnalysis** rental-capacity for the commitment thesis.
 
 > ⚠️ GPU $/hr figures are snapshots — the durable lesson is the committed-vs-spot
-> divergence. Kueue TAS is beta-default (v0.14); API is v1beta1 — verify feature gates.
+> divergence. Kueue TAS is beta-default (v0.14); the TAS API's storage version is now
+> **v1beta2** (`v1beta1` is still served but deprecated) — verify feature gates and API
+> version against your installed release.
 
 ## Deliverable & checkpoint
 

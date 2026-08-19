@@ -2,7 +2,7 @@
 lesson: "06.7"
 title: "Fragmentation & effective capacity"
 module: "06"
-concept: "Fragmentation & effective capacity"
+concept: "fragmentation-effective-capacity"
 status: not-started
 est_time: "9h"
 prev: "06-topology-aware-placement.md"
@@ -1143,7 +1143,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
 
 ## Self-check
 
-- **Why is 90% *allocated* capacity not 90% *usable* capacity?** *Answer:* "Allocated" counts GPUs
+- **Why is 90% *allocated* capacity not 90% *usable* capacity?** **Answer:** "Allocated" counts GPUs
   handed out; "usable" counts GPUs that can still form a **new indivisible, co-located job**.
   Because a multi-GPU job needs its GPUs on one node (or one topology domain) and cannot be split,
   free GPUs scattered across many partially-full nodes cannot form a large job. Usable capacity is
@@ -1154,7 +1154,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
   simply the wrong shape.
 
 - **Derive how fast fragmentation grows with utilisation, and say what the exponent depends on.**
-  *Answer:* Model each GPU as independently occupied with probability `u` on `G`-GPU nodes. Free
+  **Answer:** Model each GPU as independently occupied with probability `u` on `G`-GPU nodes. Free
   GPUs per node are `Binomial(G, 1−u)`, so `E[placeable_real(k)] = N·Σ_f C(G,f)(1−u)^f u^(G−f)
   ⌊f/k⌋`. For a whole-node job (`k = G`) only the `f = G` term survives, giving
   `E[placeable_real(G)] = N(1−u)^G` against a naive `N(1−u)`, so the surviving fraction is exactly
@@ -1166,7 +1166,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
   fleet). The point of the model is that for large `k`, placement policy is not a marginal
   optimisation.
 
-- **What does consolidation cost, and when is it worth doing?** *Answer:* A running job must be
+- **What does consolidation cost, and when is it worth doing?** **Answer:** A running job must be
   evicted and rescheduled: SIGTERM, `terminationGracePeriodSeconds` (default 30 s) for a final
   checkpoint, delete, re-queue — as a *whole gang* if it is a gang, which means queueing behind
   everyone else — restart on the new node, reload model and optimizer state, warm up. Expected
@@ -1180,7 +1180,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
   and the payback stretches to 15 hours. **Defrag is only economically usable on checkpointing
   workloads, and it is worthless with an empty queue, because `D = 0`.**
 
-- **Name every mechanism that strands a GPU, not just the obvious one.** *Answer:* Four.
+- **Name every mechanism that strands a GPU, not just the obvious one.** **Answer:** Four.
   (1) **Structural / node-level** — free GPUs spread across too many nodes to assemble a
   co-located block; cured by bin-packing placement and defrag. (2) **Dimensional** — free GPUs on
   a node with no matching CPU or memory; this is vector bin-packing, and the fix is proportional
@@ -1192,7 +1192,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
   reasons idle GPUs become unallocatable, plus user headroom as the fourth, and its SpotGPU
   harvesting framework took the allocation ratio from **68% to 93%** by attacking the fourth.
 
-- **How does MIG change the fragmentation surface?** *Answer:* Both ways. Finer granularity means
+- **How does MIG change the fragmentation surface?** **Answer:** Both ways. Finer granularity means
   small asks — inference, notebooks — stop stranding whole 80 GB devices, so GPU-level waste for
   heterogeneous small demand drops. But MIG adds a new axis: **profile geometry**. An H100-80GB
   exposes seven compute slices and a fixed profile menu (`1g.10gb` ×7, `1g.20gb` ×4, `2g.20gb` ×3,
@@ -1205,7 +1205,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
   only when the small-job demand profile is stable.
 
 - **What does the FGD measure add over `Σ floor(free_i / k)`, and what did it achieve?**
-  *Answer:* It generalises from one job size to a demand distribution.
+  **Answer:** It generalises from one job size to a demand distribution.
   `F_n(M) = Σ_{m∈M} p_m · F_n(m)`, where `p_m` is the historical popularity of task class `m` and
   `F_n(m)` is the amount of node `n`'s unallocated GPU that a task of class `m` cannot use — so
   the measure is the *expected* unusable free capacity for the next arrival, rather than the
@@ -1218,7 +1218,7 @@ A reviewer should be able to run `python3 effective_capacity.py` and get the doc
   stating: trace-driven emulation, and 49% is the best case in their sweep.
 
 - **A fragmentation number computed from a six-month trace versus a point-in-time snapshot — why
-  trust the first?** *Answer:* A snapshot captures one arrival/departure state, which can look
+  trust the first?** **Answer:** A snapshot captures one arrival/departure state, which can look
   artificially fragmented (caught mid-defrag, or just after a wave of small jobs landed) or
   artificially clean (right after a large job exited and freed a whole node). Fragmentation is
   driven by the *sequence* of arrivals and completions, which has strong diurnal and weekly
@@ -1284,8 +1284,6 @@ stated honestly.
    summing to exactly seven compute slices. Also carries the H100 NVL, H200, B200, B300, GB200 and
    GB300 menus if you need a different generation. **Cloned and read directly this session.**
 
-**Research**
-
 5. **Weng, Yang, Yu, Wang, Tang, Yang, Zhang — "Beware of Fragmentation: Scheduling GPU-Sharing
    Workloads with Fragmentation Gradient Descent" (USENIX ATC '23)** —
    https://www.usenix.org/conference/atc23/presentation/weng, paper PDF
@@ -1308,8 +1306,6 @@ stated honestly.
    **SpotGPU** raising the GPU allocation ratio from **68% to 93%**. *(Search-verified;
    usenix.org unreachable from this environment.)*
 
-**Data you can run the calculator against**
-
 7. **Alibaba clusterdata — `cluster-trace-gpu-v2026`** —
    https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2026. Four released
    tables: `asi_opensource_pod_hourly` (pod workload, request, utilisation, priority, state; days
@@ -1323,7 +1319,7 @@ stated honestly.
    smaller (~6,200-GPU) production trace behind FGD's evaluation — the sensible first dataset for
    validating a calculator. **Fetched directly this session.**
 
-**Engineering accounts**
+**Real-world engineering blogs**
 
 9. **NVIDIA — "Practical Tips for Preventing GPU Fragmentation for Volcano Scheduler"** —
    https://developer.nvidia.com/blog/practical-tips-for-preventing-gpu-fragmentation-for-volcano-scheduler/.

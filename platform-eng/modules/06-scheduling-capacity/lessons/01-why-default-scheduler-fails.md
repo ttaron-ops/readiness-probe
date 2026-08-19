@@ -8,7 +8,7 @@ est_time: "6h"
 prev: null
 next: "02-gang-scheduling.md"
 artifacts: []
-sources: 11
+sources: 10
 ---
 
 # 06.1 · Why the default scheduler fails distributed jobs
@@ -915,7 +915,7 @@ the "after".
 ## Self-check
 
 - **Why doesn't the default scheduler roll back the already-bound pods to unblock the
-  cluster?** *Answer:* Because the scheduling cycle is per-pod and greedy with no cross-pod
+  cluster?** **Answer:** Because the scheduling cycle is per-pod and greedy with no cross-pod
   transaction. The scheduler `assume()`s a pod into its cache before `Permit` and hands the
   binding to a goroutine; the decision is final for that pod's lifetime. The only rollback
   hook, `Unreserve`, is invoked from `unreserveAndForget()` when a *later stage of that same
@@ -927,7 +927,7 @@ the "after".
   member's assumed placement.
 
 - **The scheduler retries the pending pod forever. Why doesn't that help, and what exactly is
-  it waiting for?** *Answer:* Retry re-runs the same pure function over an unchanged input.
+  it waiting for?** **Answer:** Retry re-runs the same pure function over an unchanged input.
   The pending pod goes to `unschedulablePods` or `backoffQ` and is retried on an exponential
   backoff starting at 1s and capping at 10s (`DefaultPodInitialBackoffDuration`,
   `DefaultPodMaxBackoffDuration`), plus a forced flush after 5 minutes
@@ -936,7 +936,7 @@ the "after".
   siblings, and they will not exit because they are blocked in the collective rendezvous
   waiting for it. The loop is real and correct; the input never changes.
 
-- **What does the deadlock cost, and how do you size it honestly?** *Answer:*
+- **What does the deadlock cost, and how do you size it honestly?** **Answer:**
   `stranded_GPU_hours = held_GPUs × hours_held`, times your rate. Three GPUs held for an hour
   at a $2.35/GPU-hr snapshot is $7.05; the same job with `activeDeadlineSeconds: 3600` and the
   default `backoffLimit: 6` retries seven times for 21 GPU-hours ≈ $49; a mutual deadlock
@@ -948,7 +948,7 @@ the "after".
   presents as a networking bug.
 
 - **Name two extension points where a gang plugin could intervene, and say which does the real
-  work.** *Answer:* **`Permit`** is load-bearing: it is the only point that can hold a pod
+  work.** **Answer:** **`Permit`** is load-bearing: it is the only point that can hold a pod
   after its placement decision but before binding, by returning `Wait` and parking it in the
   framework's waiting-pods map with a timeout; a gang plugin counts running-plus-waiting
   members and calls `Allow()` on all of them at once when the count reaches `minMember`.
@@ -958,7 +958,7 @@ the "after".
   hold and release the soft claim. Note the cost: a pod parked at `Permit` is already assumed
   in the cache, so a waiting gang holds resources — that is L2's head-of-line-blocking problem.
 
-- **Why would tuning `kube-scheduler` never fix this, no matter how carefully?** *Answer:*
+- **Why would tuning `kube-scheduler` never fix this, no matter how carefully?** **Answer:**
   Every exposed knob is a *preference over placements* — `percentageOfNodesToScore` trades
   scoring breadth for throughput, plugin weights and `NodeResourcesFit` strategies change which
   feasible node wins, backoff settings change retry cadence, priority changes who may evict
@@ -970,7 +970,7 @@ the "after".
   admission layer above the scheduler (Kueue) — both of which are the rest of this module.
 
 - **Why would a GPU-memory dashboard under-report this while an SM-activity metric catches
-  it?** *Answer:* A deadlocked rank has already created a CUDA context and run framework/NCCL
+  it?** **Answer:** A deadlocked rank has already created a CUDA context and run framework/NCCL
   initialisation, both of which allocate device memory before any kernel launches, so
   memory-allocated is non-zero and looks "in use". SM activity is derived from hardware
   performance counters measuring cycles with work resident, so it reflects actual compute and
@@ -1038,7 +1038,7 @@ canonical doc URL is given below for convenience, its reachability status is sta
   `preFilter` is an optional early-exit optimisation. **Cloned and read directly this session.**
   L2 covers this in depth.
 
-**Real-world engineering accounts**
+**Real-world engineering blogs**
 
 - **OpenAI — "Scaling Kubernetes to 7,500 Nodes"** —
   https://openai.com/index/scaling-kubernetes-to-7500-nodes/ — a gang scheduling plugin built
@@ -1052,11 +1052,14 @@ canonical doc URL is given below for convenience, its reachability status is sta
 
 **Deeper dives**
 
-- **Kubernetes blog — "Introducing Workload Aware Scheduling" (v1.35) and "Advancing
-  Workload-Aware Scheduling" (v1.36)** — https://kubernetes.io/blog/. SIG-Scheduling's own
-  narrative framing of why per-pod scheduling is insufficient for workloads. *(Both
-  search-verified; `kubernetes.io` is unreachable from this environment, which is why the
-  technical claims in §11 are sourced from the code rather than from these posts.)*
+- **Kubernetes blog — "Kubernetes v1.35: Introducing Workload Aware Scheduling"** —
+  https://kubernetes.io/blog/2025/12/29/kubernetes-v1-35-introducing-workload-aware-scheduling/
+  — and **"Kubernetes v1.36: Advancing Workload-Aware Scheduling"** —
+  https://kubernetes.io/blog/2026/05/13/kubernetes-v1-36-advancing-workload-aware-scheduling/.
+  SIG-Scheduling's own narrative framing of why per-pod scheduling is insufficient for
+  workloads. *(Both search-verified; `kubernetes.io` is unreachable from this environment,
+  which is why the technical claims in §11 are sourced from the code rather than from these
+  posts.)*
 - **Module 02 (this course)** — the scheduling cycle and the `Filter`/`Score`/`Reserve`/`Permit`
   extension points. Reread its cycle diagram alongside §1 and §2 above and the hole becomes
   structural rather than incidental.

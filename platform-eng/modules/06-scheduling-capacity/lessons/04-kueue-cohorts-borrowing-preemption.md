@@ -2,13 +2,13 @@
 lesson: "06.4"
 title: "Kueue II — cohorts: borrowing, lending, preemption, and fair sharing"
 module: "06"
-concept: "Kueue cohorts: borrowing, lending, preemption, and fair sharing"
+concept: "kueue-cohorts-borrowing-preemption"
 status: not-started
 est_time: "13h"
 prev: "03-kueue-queueing-model.md"
 next: "05-alternatives-volcano-kai.md"
 artifacts: []
-sources: 15
+sources: 16
 ---
 # 06.4 · Kueue II — cohorts: borrowing, lending, preemption, and fair sharing
 
@@ -1232,10 +1232,12 @@ Next: **[05 — Alternatives: Volcano & KAI](05-alternatives-volcano-kai.md)**, 
 12. **Kueue concept docs, in-repo** (`site/content/en/docs/concepts/{cohort,cluster_queue,preemption,fair_sharing}.md`) — **[verified against source]**; the published site at https://kueue.sigs.k8s.io/docs/concepts/preemption/ is **[not reachable]**. Source for the classic-preemption candidate and target heuristics, the "must declare nominalQuota even if 0 to borrow" rule, the borrowing/lending worked examples, `lendingLimit` stable at v0.17, Fair Sharing stable at v0.7, and the **no-loop proof** reproduced in §8 including its stated open limitation for the hierarchical case.
 13. **`CHANGELOG/CHANGELOG-0.11.md` and `CHANGELOG-0.19.md`** — **[verified against source]**. v0.11: "[FSxHC] Make Fair Sharing compatible with Hierarchical Cohorts during preemption / during scheduling." v0.19.1: the `flavorFungibility.preference: PreemptionOverBorrowing` fix describing quota "sourceable at a shallower borrowing level in the cohort tree."
 
-**Theory**
-
 14. **Ghodsi, Zaharia, Hindman, Konwinski, Shenker, Stoica — "Dominant Resource Fairness: Fair Allocation of Multiple Resource Types," USENIX NSDI 2011** — https://www.usenix.org/conference/nsdi11/dominant-resource-fairness-fair-allocation-multiple-resource-types — **[not reachable]** from this environment; cited directly by KEP-1714 (entry 11) as the basis of Kueue's value function, and that citation *was* verified. Read for the formal treatment of what "fair" means when tenants want different resource *mixes*, not just different amounts of one resource. You meet it again as Volcano's native model in [L5](05-alternatives-volcano-kai.md).
 
-**Real-world engineering**
+**Real-world engineering blogs**
 
 15. **kubernetes-sigs/kueue issue #7016**, "Clusterqueues must prefer borrowing within a cohort before borrowing across cohorts" — https://github.com/kubernetes-sigs/kueue/issues/7016 — **[title and closed state verified via GitHub this session]**. **Correction recorded:** an earlier version of this lesson described this as a live, unresolved design debate; it is now closed. The durable lesson is the one in §10 — hierarchical borrowing order is actively refined, so verify against your version rather than a remembered mental model. IBM Research's Vela/Blue Vela material (arXiv 2407.05467; KubeCon EU 2025 tutorial deck) and Red Hat's "Improve GPU utilization with Kueue in OpenShift AI" are **[not reachable]** from this environment and are listed as narrative depth only.
+
+**Deeper dives**
+
+16. **Kueue releases and the source tree** — https://github.com/kubernetes-sigs/kueue/releases and https://github.com/kubernetes-sigs/kueue. Check the release notes for your installed version before relying on any default stated here; `pkg/scheduler/preemption` and `pkg/cache/scheduler/fair_sharing.go` are the two packages worth reading end to end to see the cohort/fair-sharing model in full. Dominant Resource Fairness (entry 14) resurfaces as Volcano's native model in [L5](05-alternatives-volcano-kai.md).

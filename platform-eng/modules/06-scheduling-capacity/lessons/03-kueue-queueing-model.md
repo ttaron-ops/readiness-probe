@@ -2,7 +2,7 @@
 lesson: "06.3"
 title: "Kueue I — the queueing model: suspend, admit, and the quota pool"
 module: "06"
-concept: "Kueue's queueing model: suspend, admit, and the quota pool"
+concept: "kueue-queueing-suspend-admit"
 status: not-started
 est_time: "10h"
 prev: "02-gang-scheduling.md"
@@ -1238,7 +1238,7 @@ Next: **[04 · Kueue II — cohorts: borrowing, lending, preemption, and fair sh
 
 > **A note on verification.** This environment's egress proxy blocks `kubernetes.io`, `kueue.sigs.k8s.io`, and most vendor blog domains. Everything marked **[verified against source]** was read directly from a clone of `kubernetes-sigs/kueue` at commit `e5084fe` (2026-08-17), or from `kubernetes/enhancements` via `raw.githubusercontent.com`. Entries marked **[not reachable]** are further reading only; no claim in this lesson depends on them.
 
-**Primary sources — Kueue**
+**Primary sources**
 
 1. **`apis/kueue/v1beta2/clusterqueue_types.go`** — https://github.com/kubernetes-sigs/kueue/blob/main/apis/kueue/v1beta2/clusterqueue_types.go — **[verified against source]**. Ground truth for every ClusterQueue field used here: `cohortName` (**renamed from `cohort` in v1beta2**), `namespaceSelector` and its documented `null` = nothing-selector default, `queueingStrategy` with `BestEffortFIFO` as the default, `stopPolicy`, `admissionScope`, `flavorFungibility` (`MayStopSearch`/`TryNextFlavor`, defaults, `preference`, and the deprecated `Borrow`/`Preempt` aliases), `ResourceQuota` (`nominalQuota`, `borrowingLimit`, `lendingLimit`), the ResourceGroup limits (16 groups, 64 flavors/resources per group, 256 total), the CEL rule forbidding `borrowingLimit` without a cohort, the `Active` condition reason strings, and the status fields.
 2. **`apis/kueue/v1beta2/workload_types.go`** — **[verified against source]**. `WorkloadSpec` (`podSets` 1–18 and immutable, `queueName`, `priority`/`priorityClassRef`, `active`, `maximumExecutionTimeSeconds`, `preemptionGates`), `PodSet` (`count`, `minCount` for alpha partial admission, `topologyRequest`), `Admission`/`PodSetAssignment` (`flavors`, `resourceUsage`, `count`), `WorkloadStatus`, and the complete condition/reason vocabulary reproduced in §8 — `QuotaReserved` reasons (`WaitingForQuota`, `PendingEvaluation`, `NoMatchingFlavor`, `ExceedsMaxQuota`, `TopologyPlacementFailed`, `WaitingForPreemptedWorkloads`, `Misconfigured`, `Suspended`, `WaitingForPodsReady`), `Admitted` reasons, and `Evicted`/`Preempted` reasons.
@@ -1252,11 +1252,9 @@ Next: **[04 · Kueue II — cohorts: borrowing, lending, preemption, and fair sh
 10. **Kueue concept docs, in-repo** (`site/content/en/docs/concepts/{cluster_queue,local_queue,resource_flavor,workload,admission,admission_fair_sharing,cohort}.md`) — **[verified against source]**; the published site at https://kueue.sigs.k8s.io/docs/concepts/ is **[not reachable]** from this environment. Source for the flavor-fit rule (1)/(2)/(3), the two-phase admission description and its failure handling, the `pods` reserved resource name, the request-adjustment rules (LimitRange defaults, limits-as-requests, RuntimeClass overhead, pod-level resources on Kubernetes 1.32+), and the AdmissionFairSharing configuration and entry-penalty rationale.
 11. **`site/content/en/docs/getting-started/installation.md`** — **[verified against source]**. The install command and the "Kubernetes 1.34 or newer is recommended" prerequisite for this Kueue version.
 
-**Primary sources — Kubernetes**
-
 12. **KEP-2232, "Suspend Job"** (kubernetes/enhancements, SIG-Apps, `@adtac`) — https://github.com/kubernetes/enhancements/tree/master/keps/sig-apps/2232-suspend-jobs — **[verified against source]**, including `kep.yaml`: alpha **v1.21**, beta **v1.22**, stable **v1.24**, status `implemented`, feature gate `SuspendJob`. The field Kueue's entire admission model is built on.
 
-**Real-world engineering**
+**Real-world engineering blogs**
 
 13. **CoreWeave — Kueue on CoreWeave Kubernetes Service** — https://www.coreweave.com/blog/kueue-a-kubernetes-native-system-for-ai-training-workloads — **[not reachable]**. Listed for depth: a named target employer running Kueue in production for AI-lab customers.
 14. **Netflix TechBlog — "How Netflix Simplified Batch Compute with Kueue"** — https://netflixtechblog.com/how-netflix-simplified-batch-compute-with-kueue-87860682629c — **[not reachable]**. Kueue at millions-of-workloads scale, plus the hardest-tenant-first migration strategy.
