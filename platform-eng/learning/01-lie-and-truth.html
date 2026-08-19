@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 05.1: why DCGM_FI_DEV_GPU_UTIL reads 100% on a GPU doing 0.34% useful work, derived from H100 datasheet numbers, and the two fields that actually classify a workload.">
+<meta name="color-scheme" content="light dark">
+<title>The GPU Utilisation Lie · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.matrix{display:grid;grid-template-columns:auto 1fr 1fr;gap:0;margin:28px 0 10px;
+  border:1px solid var(--rule);background:var(--surface)}
+.matrix>div{padding:16px 18px;border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft)}
+.matrix .axis{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);display:grid;place-items:center;text-align:center;background:var(--sunk);min-width:56px}
+.matrix .hdr{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--sunk);text-align:center}
+.matrix .q .n{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;font-weight:600;display:block;margin-bottom:6px}
+.matrix .q .t{font-family:var(--f-head);font-weight:600;font-size:16px;display:block;margin-bottom:6px}
+.matrix .q p{margin:0;font-size:14.5px;color:var(--ink-2);line-height:1.45}
+.matrix .q .do{display:block;margin-top:9px;font-family:var(--f-mono);font-size:11.5px;font-weight:600}
+.q.reclaim .n,.q.reclaim .do{color:var(--amber)} .q.reclaim{background:var(--amber-bg)}
+.q.good .n,.q.good .do{color:var(--moss)} .q.good{background:var(--moss-bg)}
+.q.stall .n,.q.stall .do{color:var(--clay)} .q.stall{background:var(--clay-bg)}
+.q.odd .n,.q.odd .do{color:var(--ink-3)}
+@media(max-width:640px){.matrix{grid-template-columns:1fr}.matrix .axis{display:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/05-gpu-observability/lessons/01-lie-and-truth.html">Back to lesson 05.1</a>
+
+<header class="mast">
+  <p class="kicker">Module 05 · 05.1 · GPU observability</p>
+  <h1>100% utilised,<br>0.34% useful</h1>
+  <p class="standfirst">The number every GPU dashboard shows measures whether a kernel was present, not whether the silicon was working. Here is the arithmetic that proves it, and the two fields that replace it.</p>
+  <div class="mast-meta">
+    <span><b>Corrects</b> “GPU-Util 100% means saturated”</span>
+    <span><b>Centrepiece</b> batch-1 decode, derived</span>
+    <span><b>Hardware</b> H100 SXM5 · 132 SMs · 3.35 TB/s</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>This is the same shape of problem as load average on a Linux node: a number everyone reads, that answers a question nobody asked, and stays pinned at its maximum while the resource does nothing useful. The difference is that here the number is attached to the most expensive hardware you rent.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the ambiguity</span></div>
+  <h2>One word, three questions</h2>
+
+  <div class="col">
+  <p>A platform team asks a GPU dashboard two completely different questions and uses the same word for both.</p>
+  </div>
+
+  <div class="split">
+    <div class="pv">
+      <h5>Question 1 — occupancy</h5>
+      <ul>
+        <li><b>“Is this GPU doing anything at all?”</b></li>
+        <li>Owner: platform / finance</li>
+        <li>Fix: reclaim the card</li>
+        <li>Answered by <b>SM_ACTIVE</b></li>
+      </ul>
+    </div>
+    <div class="sh">
+      <h5>Question 2 — efficiency</h5>
+      <ul>
+        <li><b>“Is it doing as much as it can?”</b></li>
+        <li>Owner: the workload's team</li>
+        <li>Fix: batching, precision, kernels</li>
+        <li>Answered by <b>PIPE_TENSOR_ACTIVE</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The default metric answers neither</span>
+    <p><code>DCGM_FI_DEV_GPU_UTIL</code> answers a third question nobody asked: <em>“was anything scheduled on this device during the sampling window?”</em></p>
+    <p>That third question is cheap to answer, which is why the driver answers it, which is why it is the one number every tool surfaces — <code>nvidia-smi</code>'s <code>GPU-Util</code> column, NVIDIA's own DCGM Grafana dashboard, and your cloud provider's GPU graph are all the same counter.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>provenance</span></div>
+  <h2>Two paths, different silicon</h2>
+
+  <div class="col">
+  <p>Before any field semantics, hold this picture. The two families of metric come from <strong>different hardware, through different driver interfaces, at different cost, with different failure modes.</strong> Almost every confusion in GPU telemetry dissolves once you can draw it.</p>
+  </div>
+
+  <div class="map">
+<pre>                    ONE GPU, TWO INDEPENDENT MEASUREMENT PATHS
+ ═════════════════════════════════════════════════════════════════════════════
+
+  PATH A — NVML DUTY CYCLE               PATH B — HARDWARE PERF MONITORS
+  cheap · always available · coarse      costed · Volta+ · fine-grained
+  ────────────────────────────────       ──────────────────────────────────
+
+   ┌───────────────────────────┐          ┌─────────────────────────────────┐
+   │ GPU scheduler channel     │          │ per-SM + per-partition counters │
+   │ state:                    │          │   · elapsed cycles              │
+   │  "is >=1 kernel resident  │          │   · cycles with >=1 warp        │
+   │   on the device RIGHT     │          │   · resident-warp accumulator   │
+   │   NOW?"                   │          │   · tensor-pipe issue counters  │
+   │      yes / no   (1 BIT)   │          │   · DRAM interface active       │
+   └────────────┬──────────────┘          └───────────────┬─────────────────┘
+                │                                         │
+   driver integrates that bit               Hopper+ : nvmlGpmSampleGet()
+   over 1 s … 1/6 s, product-dependent      Volta–Ampere : DCP profiling
+                │                                         │
+                ▼                                         ▼
+   ┌───────────────────────────┐          ┌─────────────────────────────────┐
+   │ DCGM_FI_DEV_GPU_UTIL  203 │          │ DCGM_FI_PROF_*  1001 … 1085     │
+   │   int64, PERCENT          │          │   1002 SM_ACTIVE                │
+   │   no root required        │          │   1003 SM_OCCUPANCY             │
+   │   any Fermi+ device       │          │   1004 PIPE_TENSOR_ACTIVE       │
+   │   NOT available under MIG │          │   1005 DRAM_ACTIVE              │
+   └────────────┬──────────────┘          │   double, RATIO 0.0–1.0         │
+                │                         │   needs CAP_SYS_ADMIN / root    │
+                │                         └───────────────┬─────────────────┘
+                └──────────────┬──────────────────────────┘
+                               ▼
+                    dcgm-exporter :9400 /metrics
+                    same series namespace, same gpu/UUID/modelName labels
+                          ↑
+                    THIS is the trap
+
+  Path A has no notion of how many SMs exist.
+  Path B has no notion of whether a context was bound.
+  NEITHER CAN BE DERIVED FROM THE OTHER.
+</pre>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>field 203</span></div>
+  <h2>What the lying number actually is</h2>
+
+  <div class="col">
+  <p>Its collection is a straight passthrough. In <code>DcgmCacheManager.cpp</code> the handler calls <code>nvmlDeviceGetUtilizationRates()</code> once, takes <code>.gpu</code>, casts to <code>long long</code>, and appends it to the cache. No averaging, no scaling, no derivation. <strong>Field 203 is <code>nvmlUtilization_t.gpu</code>, unmodified.</strong> So the semantics are NVML's semantics:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>nvml.h</span><span class="who">source</span></div>
+<pre>/**
+ * Utilization information for a device.
+ * <span class="dim">Each sample period may be between 1 second and 1/6 second,</span>
+ * <span class="dim">depending on the product being queried.</span>
+ */
+typedef struct nvmlUtilization_st {
+    unsigned int gpu;     <span class="hl">//!&lt; Percent of time over the past sample period</span>
+                          <span class="hl">//!&lt; during which one or more kernels was executing</span>
+    unsigned int memory;  <span class="dim">//!&lt; ... during which global memory was read/written</span>
+} nvmlUtilization_t;</pre>
+    <figcaption>Note what is <em>not</em> in that comment: any mention of how much of the GPU the kernel used.</figcaption>
+  </figure>
+
+  <div class="note">
+    <span class="h">Say it in one sentence, with no ambiguous word in it</span>
+    <p><code>DCGM_FI_DEV_GPU_UTIL</code> is <strong>the percentage of a short driver-internal sample window during which at least one kernel was resident on the GPU.</strong></p>
+    <p>Every clause is load-bearing. “sample window” — 1 s to 1/6 s, so microsecond gaps vanish. “at least one” — one kernel and ten thousand kernels are the same reading. “resident” — not executing usefully, merely present.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part four</span><span>the derivation</span></div>
+  <h2>Why batch-1 decode pins it at 100</h2>
+
+  <div class="col">
+  <p>The general shape of the lie: <strong>any workload that keeps a continuous stream of small kernels resident satisfies the predicate ~100% of the time, regardless of how much silicon each kernel uses.</strong> Autoregressive LLM decode at batch size 1 is the purest instance — and you can <em>derive</em> the numbers rather than quote them.</p>
+  <p>Take Llama-3-8B in BF16 on one H100 SXM5.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Quantity</th><th class="m">Value</th><th>Source</th></tr>
+    <tr><td>SMs enabled (H100 SXM5)</td><td class="m">132</td><td>H100 datasheet / GH100 die config</td></tr>
+    <tr><td>Max resident warps per SM (CC 9.0)</td><td class="m">64</td><td>Hopper Tuning Guide (2048 threads ÷ 32)</td></tr>
+    <tr><td>HBM3 bandwidth</td><td class="m">≈3.35 TB/s</td><td>H100 SXM5 datasheet</td></tr>
+    <tr><td>Dense BF16 tensor throughput</td><td class="m">≈989 TFLOP/s</td><td>H100 SXM5 datasheet</td></tr>
+  </table>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>one decode step, batch size 1</span><span class="who">arithmetic</span></div>
+<pre>  MEMORY SIDE ─────────────────────────────────────────────────────────
+  every weight read from HBM once per token (batch 1 → no reuse)
+      bytes_moved = 8e9 params x 2 bytes         = 16 GB
+      t_memory    = 16 GB / 3.35 TB/s            <span class="hl">≈ 4.78 ms</span>
+
+  COMPUTE SIDE ────────────────────────────────────────────────────────
+  a forward pass is ~2 FLOP per parameter per token
+      flops       = 2 x 8e9                      = 16 GFLOP
+      t_compute   = 16 GFLOP / 989 TFLOP/s       <span class="hl">≈ 16.2 us</span>
+
+  RATIO ───────────────────────────────────────────────────────────────
+      t_compute / t_memory = 16.2us / 4780us     <span class="bad">≈ 0.0034  (0.34%)</span>
+
+  ROOFLINE POSITION ───────────────────────────────────────────────────
+      arithmetic intensity = 16 GFLOP / 16 GB    ≈ 1 FLOP/byte
+      H100 ridge point     = 989e12 / 3.35e12    ≈ 295 FLOP/byte
+      → the workload sits <span class="bad">~295x to the LEFT</span> of the ridge</pre>
+    <figcaption>Two conclusions fall straight out, and they are the entire lesson.</figcaption>
+  </figure>
+
+  <div class="split">
+    <div class="sh">
+      <h5>(a) PIPE_TENSOR_ACTIVE ≈ 0.003</h5>
+      <ul>
+        <li>tensor pipes issue 16 µs</li>
+        <li>out of every 4.78 ms</li>
+        <li>no tuning changes this at batch 1</li>
+        <li><b>it is arithmetic, not a guess</b></li>
+      </ul>
+    </div>
+    <div class="pv">
+      <h5>(b) GPU_UTIL ≈ 100</h5>
+      <ul>
+        <li>always exactly one kernel resident</li>
+        <li>GEMV → GEMV → attention → next layer</li>
+        <li>gaps are µs of launch latency</li>
+        <li><b>far below the 1 s sample window</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The field is not broken</span>
+    <p>It is correctly reporting a true fact that is useless. “≥1 kernel resident” is true for essentially the whole window, and it always will be. Measured <code>PIPE_TENSOR_ACTIVE</code> lands a little higher than 0.003 (0.005–0.03) because real kernels are not perfectly bandwidth-efficient and attention adds work — but the order of magnitude is derived, not observed.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part five</span><span>breadth vs depth</span></div>
+  <h2>The second arithmetic that matters</h2>
+
+  <div class="col">
+  <p><code>SM_ACTIVE</code> is the honest idle signal, but it measures <strong>breadth</strong>, not intensity. Per SM the hardware keeps elapsed cycles and cycles-with-at-least-one-warp; the ratio is computed per SM and then <em>averaged across every SM on the device</em>.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>DCGM_FI_PROF_SM_ACTIVE — 1002</span><span class="who">arithmetic</span></div>
+<pre>                    Σ over SMs ( active_cycles[sm] )
+   SM_ACTIVE  =    ─────────────────────────────────
+                    Σ over SMs ( elapsed_cycles[sm] )
+
+   On an H100 with 132 SMs, a kernel occupying exactly 32 SMs
+   continuously for the whole interval reads:
+
+       SM_ACTIVE = 32/132 = <span class="hl">0.24</span>    <span class="dim">← even though those 32 SMs are 100% busy</span>
+
+   A single-block kernel pinned to ONE SM reads:
+
+       SM_ACTIVE = 1/132  = <span class="bad">0.0076</span>  <span class="dim">← and GPU_UTIL reads 100</span>
+
+   <b>That factor of ~130, on the same device in the same second,
+   is the whole exhibit.</b></pre>
+    <figcaption><code>SM_ACTIVE</code> is still not intensity: an SM with one stalled warp counts as active for that cycle exactly as much as an SM with 64 running warps. That is what <code>SM_OCCUPANCY</code> (1003) is for.</figcaption>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Field</th><th class="m">ID</th><th>Measures</th><th>Use it for</th><th>Alert?</th></tr>
+    <tr><td class="m">GPU_UTIL</td><td class="m">203</td><td>≥1 kernel resident</td><td>nothing</td><td class="no">never</td></tr>
+    <tr><td class="m">GR_ENGINE_ACTIVE</td><td class="m">1001</td><td>context bound and a pipe busy</td><td>presence only</td><td class="no">never</td></tr>
+    <tr><td class="m">SM_ACTIVE</td><td class="m">1002</td><td><b>breadth</b> — mean over SMs of cycles with ≥1 warp</td><td>is it idle? (reclaim)</td><td class="yes">yes — page</td></tr>
+    <tr><td class="m">SM_OCCUPANCY</td><td class="m">1003</td><td><b>depth</b> — resident warps ÷ architectural max</td><td>right-sizing</td><td>dashboard</td></tr>
+    <tr><td class="m">PIPE_TENSOR_ACTIVE</td><td class="m">1004</td><td><b>efficiency</b> — cycles any tensor pipe active</td><td>is it doing math?</td><td>warn only</td></tr>
+    <tr><td class="m">DRAM_ACTIVE</td><td class="m">1005</td><td>HBM interface active cycles</td><td>memory-bound?</td><td>dashboard</td></tr>
+    <tr><td class="m">FB_USED</td><td class="m">252</td><td>frame buffer in use (MB)</td><td><b>gate</b> the reclaim alert</td><td>gate only</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part six</span><span>the matrix</span></div>
+  <h2>Two fields classify; one never does</h2>
+
+  <div class="col">
+  <p>This is the decision tree to carry into an interview. Note what is constant across every cell.</p>
+  </div>
+
+  <div class="matrix">
+    <div class="axis"></div>
+    <div class="hdr">PIPE_TENSOR_ACTIVE low</div>
+    <div class="hdr">PIPE_TENSOR_ACTIVE high</div>
+
+    <div class="axis">SM_ACTIVE<br>high</div>
+    <div class="q stall">
+      <span class="n">A</span><span class="t">SM-busy, tensor-idle</span>
+      <p>Spin-waits, NCCL stalls, non-tensor math, FP32 where BF16 would do. The silicon is lit but not computing.</p>
+      <span class="do">→ profiling ladder (05.7)</span>
+    </div>
+    <div class="q good">
+      <span class="n">D</span><span class="t">Healthy training</span>
+      <p>The target state. 0.4–0.7 is typical for a tuned large-model step.</p>
+      <span class="do">→ leave it alone</span>
+    </div>
+
+    <div class="axis">SM_ACTIVE<br>low</div>
+    <div class="q reclaim">
+      <span class="n">B</span><span class="t">Idle / wasted</span>
+      <p>The reclaim case, and where the money is. Gate on <code>FB_USED</code> before acting so you don't kill a loaded-but-quiet server.</p>
+      <span class="do">→ RECLAIM</span>
+    </div>
+    <div class="q odd">
+      <span class="n">C</span><span class="t">Rare and suspicious</span>
+      <p>Few SMs lit but tensor pipes hot — usually a tiny well-fed GEMM, or a MIG slice being reported at device scope.</p>
+      <span class="do">→ investigate scope</span>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">GPU_UTIL reads 100 in all four quadrants</span>
+    <p>And in all eight cases once you overlay <code>DRAM_ACTIVE</code>. A single number that is identical across every distinguishable state carries zero diagnostic information.</p>
+  </div>
+
+  <div class="map">
+<pre>  Overlay DRAM_ACTIVE (1005) to split A and B further:
+
+     low SM,  low DRAM   → genuinely idle             → reclaim
+     low SM,  high DRAM  → memory-bound small-batch   → batch it, don't buy GPUs
+     high SM, low DRAM   → stalled on sync/launch     → Nsight Systems
+     high SM, high DRAM  → memory-bound at scale      → different GPU / better kernels
+</pre>
+  </div>
+
+  <h3>The policy that falls out</h3>
+
+  <ol class="play">
+    <li>
+      <span class="what">Page on SM_ACTIVE, gated by FB_USED</span>
+      <p>The reclaim alert is “allocated, and doing no work for long enough that this is not a gap between steps.” Not a gap — a vacancy.</p>
+    </li>
+    <li>
+      <span class="what">Warn, never page, on PIPE_TENSOR_ACTIVE</span>
+      <p>Efficiency is a conversation, not an incident. It belongs in a weekly report and a dashboard, not in PagerDuty at 03:00.</p>
+    </li>
+    <li>
+      <span class="what">Never alert on GPU_UTIL at all</span>
+      <p>There is no threshold on a constant that means anything.</p>
+    </li>
+  </ol>
+
+  <figure class="term">
+    <div class="cmd"><span>the reclaim rule</span><span class="who">promql</span></div>
+<pre>(
+    avg_over_time(DCGM_FI_PROF_SM_ACTIVE[30m]) &lt; <span class="hl">0.05</span>
+  and on (gpu, UUID, instance)
+    DCGM_FI_DEV_FB_USED &lt; <span class="hl">2048</span>
+)
+
+  <span class="dim">0.05  5% of SM-cycles. A between-steps gap on a healthy training</span>
+  <span class="dim">      job never sustains below this for 30m. Tune to your fleet.</span>
+  <span class="dim">2048  MB. Below ~2 GB the card is not holding a served model.</span>
+  <span class="dim">      Raise it if your smallest served model is bigger.</span></pre>
+    <figcaption>Use <code>exported_namespace</code>, not <code>namespace</code>: dcgm-exporter's own <code>namespace</code> label collides with the one Prometheus attaches from service discovery, and with <code>honor_labels: false</code> — the default in both Prometheus and the exporter's Helm ServiceMonitor — the exporter's version gets renamed. Which spelling you get is a scrape-config property, not an exporter property.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>A dashboard shows <code>GPU_UTIL = 100%</code> across 64 GPUs. What have you learned?</summary>
+    <div class="ans">
+      <p>That at least one kernel was resident on each device during each sample window. Nothing about how much silicon was used, how many SMs were lit, or whether any math happened.</p>
+      <p>It is consistent with a fully saturated training job <em>and</em> with 64 cards running batch-1 decode at 0.3% tensor utilisation.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Derive why batch-1 decode of an 8B model pins the counter at 100.</summary>
+    <div class="ans">
+      <p>16 GB of weights must cross HBM per token with no reuse: 16 GB ÷ 3.35 TB/s ≈ 4.78 ms. The maths is 2 × 8e9 = 16 GFLOP ÷ 989 TFLOP/s ≈ 16.2 µs. So compute is 0.34% of the step.</p>
+      <p>But throughout those 4.78 ms there is always exactly one kernel resident, and the inter-kernel gaps are microseconds — far below NVML's 1 s to 1/6 s window. The predicate is true the whole time.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>A kernel keeps 32 of an H100's 132 SMs 100% busy. What does <code>SM_ACTIVE</code> read, and why?</summary>
+    <div class="ans">
+      <p><b>0.24.</b> The ratio is computed per SM and averaged over all 132, so 32/132 ≈ 0.242 — even though every one of those 32 SMs is fully occupied.</p>
+      <p><code>SM_ACTIVE</code> is a breadth measure. Low <code>SM_ACTIVE</code> means "not much of the GPU is involved," not "the GPU is doing nothing."</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why gate the reclaim alert on <code>FB_USED</code>?</summary>
+    <div class="ans">
+      <p>Because an inference server holding a loaded model and a warm KV cache can legitimately sit at near-zero <code>SM_ACTIVE</code> between requests. Reclaiming it would kill a live service.</p>
+      <p><code>FB_USED &lt; 2048</code> distinguishes "nothing is here" from "something is here and idle."</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>High <code>SM_ACTIVE</code>, near-zero <code>PIPE_TENSOR_ACTIVE</code>. Diagnosis?</summary>
+    <div class="ans">
+      <p>Quadrant A — the SMs are lit but not doing tensor math. Spin-waits, <code>__syncthreads()</code> storms, NCCL collective waits, or FP32 kernels where BF16 would do.</p>
+      <p>This is <em>not</em> a reclaim case: the GPU is allocated and busy. It is an efficiency case, and it escalates to the profiling ladder.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why can't you derive one path's metrics from the other?</summary>
+    <div class="ans">
+      <p>Path A integrates a single scheduler bit and has no notion of how many SMs exist. Path B reads per-SM hardware counters and has no notion of whether a context was bound.</p>
+      <p>They measure different physical things through different driver interfaces. Arriving on the same <code>/metrics</code> endpoint with the same labels is a packaging artefact, not shared provenance — and it is exactly why people assume otherwise.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 05.2–05.8</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Three questions</span><span class="v">Occupancy and efficiency are different questions with different owners. The default metric answers a third one nobody asked.</span></li>
+    <li><span class="k">Two paths</span><span class="v">NVML duty cycle vs hardware counters. Different silicon, different cost, different privileges. Neither derives the other.</span></li>
+    <li><span class="k">203 is one bit, integrated</span><span class="v">“≥1 kernel resident” over a 1 s to 1/6 s window, passed through unmodified from <code>nvmlUtilization_t.gpu</code>.</span></li>
+    <li><span class="k">The lie is derivable</span><span class="v">Batch-1 decode: 4.78 ms memory, 16 µs compute. 0.34% useful, 100% reported. Arithmetic, not anecdote.</span></li>
+    <li><span class="k">SM_ACTIVE is breadth</span><span class="v">32 busy SMs of 132 reads 0.24. Low means “little of the GPU involved,” not “nothing happening.”</span></li>
+    <li><span class="k">Two fields classify</span><span class="v">SM_ACTIVE × PIPE_TENSOR_ACTIVE gives four actionable quadrants. One field gives none.</span></li>
+    <li><span class="k">Page on idle, warn on waste</span><span class="v">Reclaim is an incident; efficiency is a report. Gate reclaim on <code>FB_USED</code>.</span></li>
+    <li><span class="k">exported_namespace</span><span class="v">A scrape-config property, not an exporter property. Bites everyone once.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/05-gpu-observability/lessons/01-lie-and-truth.html">Back to lesson 05.1</a>
+  </footer>
+</div>
+
+</body>
+</html>
