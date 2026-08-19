@@ -6,10 +6,28 @@ description: >-
   roles running GPU fleets.
 show_downloads: false
 
-# Lesson content contains literal {{ }} (Go templates, Prometheus label
-# templates, Go struct literals) that Liquid otherwise tries to parse as
-# template syntax, which fatally breaks the build. None of this content
-# needs Liquid templating, so disable it site-wide.
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+  - jekyll-seo-tag
+
+relative_links:
+  enabled: true
+  collections: false
+
+# Lesson content contains literal {{ }} and {% %} — Prometheus alert
+# templates, Go templates, Go struct literals — that Liquid would otherwise
+# try to parse as template syntax, failing the build on the first thing that
+# looks like an unterminated tag. None of this content needs Liquid, so it is
+# disabled site-wide.
+#
+# This key is a Jekyll 4 feature. The github-pages gem pins Jekyll 3.10, which
+# ignores it silently — which is why the site is built from the Gemfile with
+# Jekyll 4 rather than by actions/jekyll-build-pages. Do not move back to that
+# action without re-solving this.
 defaults:
   - scope:
       path: ""
