@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 02.4: the reflector to workqueue pipeline, where deduplication really happens, and the three-set invariant that makes one missing Done() call silence a single key forever.">
+<meta name="color-scheme" content="light dark">
+<title>Informers, Caches and Workqueues · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.sets{display:flex;gap:14px;align-items:center;font-family:var(--f-mono);font-size:12px;padding:4px 0}
+.sets .cell{display:grid;place-items:center;width:34px;height:22px;border-radius:2px;
+  background:var(--sunk);color:var(--ink-3);font-size:10.5px;letter-spacing:.04em}
+.sets .cell.on{background:var(--amber);color:var(--paper);font-weight:600}
+.sets .cell.on.p{background:var(--clay)}
+.sets .lbl{width:230px;flex:none;color:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/02-kubernetes-controllers/lessons/04-informers-caches-workqueues.html">Back to lesson 02.4</a>
+
+<header class="mast">
+  <p class="kicker">Module 02 · 02.4 · Kubernetes controllers</p>
+  <h1>The machine<br>every controller<br>runs on</h1>
+  <p class="standfirst">Six stages from the API server to your Reconcile function. Each one has a distinct failure mode, and the most-repeated claim about the middle of it is wrong.</p>
+  <div class="mast-meta">
+    <span><b>Corrects</b> “the DeltaFIFO coalesces events”</span>
+    <span><b>Centrepiece</b> queue + dirty + processing</span>
+    <span><b>Verified against</b> client-go 1.33–1.36</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Every Kubernetes controller you will ever write or debug runs on the same six-stage conveyor belt. Nothing about it is optional, and every stage has a distinct failure mode. This is the machinery under <code>controller-runtime</code>; knowing it is the difference between "the controller is stuck" and "key <code>ns/foo</code> is wedged in <code>processing</code> because a worker returned without calling <code>Done</code>."</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>The shape</span><span>six stages</span></div>
+  <h2>The conveyor belt</h2>
+
+  <div class="map">
+<pre>  API SERVER
+      │  LIST (once) then WATCH (forever)
+      ▼
+  ┌──────────────┐   the ONLY component that talks to the apiserver
+  │  REFLECTOR   │   owns a ListerWatcher; loops ListAndWatch under backoff
+  └──────┬───────┘
+         │  Added / Updated / Deleted / Bookmark deltas
+         ▼
+  ┌──────────────┐   RealFIFO today (DeltaFIFO pre-1.33)
+  │    FIFO      │   preserves EVERY notification, in order
+  └──────┬───────┘   ← no coalescing happens here. none.
+         │  Pop(deltas)
+         ▼
+  ┌──────────────────────────────────────────┐
+  │  SHARED INFORMER — processDeltas()       │
+  │    1. write the store   ← ALWAYS FIRST   │
+  │    2. call handlers     ← then notify    │
+  └──────┬───────────────────────┬───────────┘
+         │                       │
+         ▼                       ▼
+  ┌──────────────┐        ┌──────────────┐
+  │   INDEXER    │        │   HANDLERS   │  OnAdd/OnUpdate/OnDelete
+  │ (the cache)  │        └──────┬───────┘  do almost nothing:
+  │  Lister reads│               │          derive a KEY and enqueue it
+  │  from here   │               ▼
+  └──────▲───────┘        ┌──────────────┐
+         │                │  WORKQUEUE   │  ← dedup lives HERE, on keys
+         │                │ queue+dirty+ │
+         │                │  processing  │
+         │                └──────┬───────┘
+         │                       │ Get()
+         │                       ▼
+         │                ┌──────────────┐
+         └────────────────┤   WORKER     │  re-reads CURRENT state from the
+           lister.Get(key)│  Reconcile   │  lister, never the enqueued object
+                          └──────────────┘
+
+  The two arrows that matter most:
+    · handlers write KEYS to the workqueue, never objects
+    · the worker reads the OBJECT back from the indexer, fresh
+</pre>
+  </div>
+
+  <div class="note">
+    <span class="h">The single most misstated fact in this pipeline</span>
+    <p>Almost every blog post says the DeltaFIFO coalesces events. <strong>It does not.</strong> Deduplication happens one layer later, in the workqueue, on keys. Since Kubernetes 1.33 the shared informer does not even use DeltaFIFO by default — and on 1.36 it is unreachable. Details in part three.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Stage one</span><span>reflector</span></div>
+  <h2>LIST once, WATCH forever</h2>
+
+  <div class="col">
+  <p>The reflector is the only component that talks to the API server. Its <code>ListAndWatch</code> loop runs forever under a backoff manager, and the interesting part is the three different ways it can restart.</p>
+  </div>
+
+  <div class="map">
+<pre> t ──────────────────────────────────────────────────────────────────────▶
+
+ START
+  │ LIST rv="0"   ← "any version, newest preferred, staleness tolerated"
+  │                 ALWAYS served from the apiserver's in-memory watch cache,
+  │                 never from etcd. Deliberate: cheap controller startup.
+  ├──────────────▶ store.Replace(all)
+  │
+  │ WATCH rv=10245   timeout = rand[5m, 10m)   ← randomised to spread load
+  ├──▶ MODIFIED rv=10596 ─▶ Updated delta
+  ├──▶ ADDED    rv=10601 ─▶ Added   delta
+  ├──▶ BOOKMARK rv=12746 ─▶ advances lastSyncResourceVersion only
+  │
+  │ ═══ resync timer fires — LOCAL ONLY, zero apiserver traffic ══════════
+  ├──▶ store.Resync() ─▶ Sync delta per key ─▶ OnUpdate(old == new)
+  │
+  │ ═══ watch times out server-side at ~7m ═══════════════════════════════
+  ├──▶ re-WATCH from rv=12746          ← cheap. no LIST.
+  │
+  │ ═══ disconnect longer than the apiserver's 5-minute history window ═══
+  ├──▶ WATCH rv=12746 ─▶ 410 Gone "too old resource version"
+  ├──▶ RELIST rv=""  (consistent read) ─▶ store.Replace(all)
+  │        └─ Replace() SYNTHESISES Deleted deltas for every key the store
+  │           knew about that the new list lacks → your DeleteFunc fires,
+  │           wrapped in DeletedFinalStateUnknown
+  │
+  │ ═══ apiserver unreachable ════════════════════════════════════════════
+  └──▶ backoff 0.8s → 1.6s → 3.2s … cap 30s, jitter 1.0
+       steady state ≈ [30s, 60s) ≈ 0.22 QPS per reflector
+</pre>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Why the backoff numbers matter at fleet scale</span>
+    <p>client-go's comment says these parameters "achieve ~98% traffic reduction when API server is not healthy." If the apiserver falls over, 2,000 reflectors retrying at 0.22 QPS is ≈440 req/s in aggregate, not 2,000/s. <strong>The backoff is what makes an apiserver outage recoverable instead of self-sustaining.</strong></p>
+  </div>
+
+  <h3>Two counter-intuitive details worth memorising</h3>
+
+  <div class="tw">
+  <table>
+    <tr><th>Detail</th><th>Why it is backwards from your instinct</th></tr>
+    <tr>
+      <td><b>Pagination is turned <em>off</em></b> when <code>resourceVersion != "0"</code></td>
+      <td>A paginated list <em>skips the watch cache</em> and goes to etcd. The reflector sets <code>pager.PageSize = 0</code> deliberately — the source comment says "to avoid thundering herd on etcd (e.g. on master upgrades)." Turning paging off to force a cache read is the opposite of the usual instinct.</td>
+    </tr>
+    <tr>
+      <td><b>Bookmarks exist to prevent <code>410 Gone</code></b></td>
+      <td>A <code>BOOKMARK</code> event carries only a resourceVersion and means "you have seen everything up to here." Without it, a watch on a quiet resource sits at a stale RV and 410s on every reconnect, forcing a full relist of everything.</td>
+    </tr>
+  </table>
+  </div>
+
+  <h3>The thundering herd, with real numbers</h3>
+
+  <figure class="term">
+    <div class="cmd"><span>cost of one full LIST, measured on corev1.Pod (k8s.io/api v0.36.3)</span><span class="who">arithmetic</span></div>
+<pre>  one production GPU training Pod, serialised:
+      JSON      <b>1,730 bytes</b>
+      protobuf  <b>1,074 bytes</b>
+
+  x 20,000 pods            = <span class="hl">34.6 MB</span> JSON  /  21.5 MB protobuf
+                               <span class="dim">per watching process, per full LIST</span>
+
+  x 200 controller replicas restarting in the same minute
+                           = <span class="bad">~6.9 GB</span>
+                               <span class="dim">that the apiservers must serve, concentrated at</span>
+                               <span class="dim">the exact moment the cluster is already churning</span></pre>
+    <figcaption>OpenAI's 7,500-node writeup reports the production-scale version: up to <b>70 GB of heap per API server</b>, and 5 apiservers + 5 etcd nodes on their largest clusters specifically to spread that load. Their sharpest finding is the same shape — cluster-wide <code>Endpoints</code> watches make bandwidth <b>O(N²)</b> in node count.</figcaption>
+  </figure>
+
+  <div class="col">
+  <p>Practical consequences for your operator: stagger controller restarts, scope caches to the namespaces and label selectors you actually need, and stop being surprised when "everything reconciles slowly for 30 seconds after a fleet-wide rollout" turns out to be every cache refilling at once.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Stage two</span><span>the FIFO</span></div>
+  <h2>The 1.33 change nobody announced</h2>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">What every blog post says</div>
+      <p>The DeltaFIFO coalesces the five updates into one, so your handler only sees the latest state.</p>
+    </div>
+    <div class="add">
+      <div class="tag">What actually happens</div>
+      <p>The FIFO preserves <b>every</b> notification, in order. Deduplication happens one layer later, in the <b>workqueue</b>, on <b>keys</b>.</p>
+    </div>
+  </div>
+
+  <div class="col">
+  <p>The DeltaFIFO's only dedup logic is <code>dedupDeltas</code>, and it collapses <strong>the last two deltas only, and only when both are deletions</strong> — preferring the one carrying a real object over a tombstone. That is the entire mechanism. Read it once and you will never overclaim again.</p>
+  <p>Worse, the DeltaFIFO had a subtle defect: because it queues <em>per key</em>, a key already in the queue keeps its original position while newer deltas pile onto it. So object B's change at t=2 can be delivered before object A's change at t=3, even though A's earlier change is what put A in the queue. <strong>It reorders events across objects.</strong></p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>k8s.io/client-go/tools/cache/controller.go — newQueueFIFO</span><span class="who">source</span></div>
+<pre>if clientgofeaturegate.FeatureGates().Enabled(
+        clientgofeaturegate.<span class="hl">InOrderInformers</span>) {
+    f := NewRealFIFOWithOptions(...)    <span class="ok">// ← the default path today</span>
+} else {
+    f := NewDeltaFIFOWithOptions(...)   <span class="dim">// ← the legacy path</span>
+}
+
+type RealFIFO struct {
+    items []Delta   <span class="dim">// strictly watch-stream order; NO per-key grouping</span>
+}</pre>
+    <figcaption><code>RealFIFO</code>'s doc comment states the contract: "every notification from the Reflector is passed in order to the Queue via <code>Pop</code>… it delivers multiple notifications per item instead of simply the most recent value."</figcaption>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Feature gate</th><th class="m">Version</th><th>Default</th><th>Effect</th></tr>
+    <tr><td class="m">InOrderInformers</td><td class="m">1.33</td><td>Beta, on</td><td>shared informers use <code>RealFIFO</code></td></tr>
+    <tr><td class="m">InOrderInformers</td><td class="m">1.36</td><td><b>GA, locked on</b></td><td><code>DeltaFIFO</code> unreachable from a shared informer</td></tr>
+    <tr><td class="m">InOrderInformersBatchProcess</td><td class="m">1.35</td><td>Beta, on</td><td><code>Pop</code> hands over a batch in one transaction</td></tr>
+    <tr><td class="m">AtomicFIFO</td><td class="m">1.36</td><td>Beta, on</td><td>one <code>ReplacedAll</code>/<code>SyncAll</code> instead of N</td></tr>
+    <tr><td class="m">UnlockWhileProcessingFIFO</td><td class="m">1.36</td><td>Beta, on</td><td><code>Pop</code> may release the lock while the handler runs</td></tr>
+    <tr><td class="m">WatchListClient</td><td class="m">1.30 β / 1.35 on</td><td>on</td><td>reflector uses streaming lists</td></tr>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="h">Say this in an interview</span>
+    <p>Not "the DeltaFIFO coalesces the updates." Say: <em>"The FIFO preserves every notification in order; deduplication happens one layer later, in the workqueue, on keys."</em> On any cluster at 1.33+ the first version is wrong, and on 1.36 the DeltaFIFO is not even in the path.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Stage three</span><span>ordering</span></div>
+  <h2>Store first, handlers second</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>processDeltas — tools/cache/controller.go</span><span class="who">source</span></div>
+<pre>for _, d := range deltas {                    <span class="dim">// oldest to newest</span>
+    switch d.Type {
+    case Sync, Replaced, Added, Updated:
+        if old, exists, _ := clientState.Get(obj); exists {
+            clientState.Update(obj)           <span class="hl">// 1. STORE FIRST</span>
+            handler.OnUpdate(old, obj)        <span class="ok">// 2. then notify</span>
+        } else {
+            clientState.Add(obj)
+            handler.OnAdd(obj, isInInitialList)
+        }
+    case Deleted:
+        clientState.Delete(obj)
+        handler.OnDelete(obj)
+    }
+}</pre>
+    <figcaption>The ordering is load-bearing. By the time your handler runs, the indexer already holds the new object — so a worker that pops the key and reads the lister is guaranteed to see at least the state that triggered the event.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">Pop holds the FIFO lock while your handler runs</span>
+    <p>Which is why <strong>a slow event handler stalls the entire informer</strong>. client-go emits a trace when the queue is deeper than 10 and one item takes over 100 ms, with the literal reason string <code>"slow event handlers blocking the queue"</code>. That was added after a report of informer memory reaching <b>2.3 GB in 30 minutes</b> with pods churning every 10 seconds.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Stage four</span><span>keys, not objects</span></div>
+  <h2>The deepest idea in the module</h2>
+
+  <div class="col">
+  <p>Your event handlers should do almost nothing: derive a key and enqueue it. Three reasons, and together they are what makes level-triggered reconciliation <em>true at the plumbing layer</em> rather than merely a design intention.</p>
+  </div>
+
+  <ol class="play">
+    <li>
+      <span class="what">Dedup</span>
+      <code>sets.Set[T]</code>
+      <p>The workqueue stores keys in a set, so ten changes to one object collapse to one entry. Enqueue the <em>object</em> and every enqueue is a distinct value — nothing collapses. Since the FIFO does not coalesce, <strong>the workqueue is the only place dedup happens anywhere in the pipeline.</strong></p>
+    </li>
+    <li>
+      <span class="what">Freshness</span>
+      <code>lister.Get(key)</code>
+      <p>When a worker finally pops the key, it re-reads current state. Enqueue the object and you freeze a snapshot at enqueue time, then reconcile it after the world has moved on.</p>
+    </li>
+    <li>
+      <span class="what">Level-triggered semantics</span>
+      <code>reconcile(name)</code>
+      <p>You reconcile toward "what should be true for this name," not "replay this event." Missing an intermediate event becomes harmless by construction.</p>
+    </li>
+    <li>
+      <span class="what">And a practical fourth</span>
+      <code>[T comparable]</code>
+      <p>The workqueue's type parameter requires comparability. A <code>*v1.Pod</code> is comparable but useless as a dedup key; a <code>v1.Pod</code> struct is not comparable at all and will not compile.</p>
+    </li>
+  </ol>
+
+  <div class="tw">
+  <table>
+    <tr><th>Key func</th><th>Returns</th><th>Use for</th></tr>
+    <tr><td class="m">MetaNamespaceKeyFunc</td><td><code>"ns/name"</code> string</td><td>classic string-keyed queues</td></tr>
+    <tr><td class="m">ObjectToName</td><td><code>cache.ObjectName{Namespace, Name}</code></td><td>typed generic queues — the current idiom</td></tr>
+    <tr><td class="m">DeletionHandlingMetaNamespaceKeyFunc</td><td>unwraps the tombstone first</td><td><b>any delete handler</b></td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">The classic first-controller panic</span>
+    <p><code>Replace()</code> synthesises deletions as <code>DeletedFinalStateUnknown{key, lastKnownObject}</code>. A <code>DeleteFunc</code> that blindly type-asserts to <code>*v1.Pod</code> panics the moment a relist happens. Use <code>DeletionHandlingMetaNamespaceKeyFunc</code>, always.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Stage five</span><span>the workqueue</span></div>
+  <h2>Three sets and one invariant</h2>
+
+  <div class="col">
+  <p>The base queue is three fields plus a condition variable, and the whole behaviour of every controller you have ever run falls out of them:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>k8s.io/client-go/util/workqueue</span><span class="who">source</span></div>
+<pre>type Typed[T comparable] struct {
+    queue      Queue[T]      <span class="dim">// ordered work list</span>
+    dirty      sets.Set[T]   <span class="dim">// everything that needs processing</span>
+    processing sets.Set[T]   <span class="dim">// everything a worker currently holds</span>
+    cond       *sync.Cond
+}</pre>
+    <figcaption>The invariant, quoted from the source: <em>"Every element of <code>queue</code> should be in the <code>dirty</code> set and not in the <code>processing</code> set."</em></figcaption>
+  </figure>
+
+  <h3>Every state one key can be in</h3>
+
+  <div class="bitfield">
+    <div class="sets"><span class="lbl">idle — nothing pending</span>
+      <span class="cell">queue</span><span class="cell">dirty</span><span class="cell">proc</span></div>
+    <div class="sets"><span class="lbl">queued, waiting for a worker</span>
+      <span class="cell on">queue</span><span class="cell on">dirty</span><span class="cell">proc</span></div>
+    <div class="sets"><span class="lbl">a worker is reconciling it</span>
+      <span class="cell">queue</span><span class="cell">dirty</span><span class="cell on p">proc</span></div>
+    <div class="sets"><span class="lbl">reconciling AND it changed again</span>
+      <span class="cell">queue</span><span class="cell on">dirty</span><span class="cell on p">proc</span></div>
+    <div class="bitlegend">
+      <span><b class="k1"></b>in queue / dirty</span>
+      <span><b class="k2"></b>held by a worker</span>
+      <span><b class="k3"></b>absent</span>
+      <span>the last row is the one everyone gets wrong — <code>Done()</code> converts that dirty bit into exactly one re-queue</span>
+    </div>
+  </div>
+
+  <div class="map">
+<pre>                         Add(k)
+                           │
+             ┌─────────────┴──────────────┐
+             │ k already in dirty?        │
+             ├── yes ─▶ k in processing?  │
+             │            ├─ no  ─▶ queue.Touch(k); RETURN   (pure no-op dedup)
+             │            └─ yes ─▶ RETURN                   (already re-marked)
+             └── no ──▶ dirty.Insert(k)
+                            │
+                            ├── k in processing? ─ yes ─▶ RETURN
+                            │     do NOT push — a worker still holds it.
+                            │     the re-queue happens later, inside Done.
+                            └── no ─▶ queue.Push(k); cond.Signal()
+
+
+  Get()                              Done(k)
+   ├─ block while queue empty         ├─ processing.Delete(k)
+   ├─ k = queue.Pop()                 ├─ dirty.Has(k)?
+   ├─ processing.Insert(k)            │    ├─ yes ─▶ queue.Push(k); Signal()
+   └─ dirty.Delete(k)                 │    └─ no  ─▶ nothing
+                                      └─ return
+</pre>
+  </div>
+
+  <h3>What that buys you: 1,001 events, 2 reconciles</h3>
+
+  <figure class="term">
+    <div class="cmd"><span>1,000 events arrive for one key during a 3-second reconcile</span><span class="who">timeline</span></div>
+<pre>  t=0.00  Add(k)          queue=[k]  dirty={k}  processing={}
+  t=0.01  Get() -> k      queue=[]   dirty={}   processing={k}   worker starts
+  t=0.02  Add(k) x1000    queue=[]   dirty={k}  processing={k}
+                          <span class="hl">↑ 1000 events collapse to ONE dirty bit</span>
+  t=3.00  Done(k)         queue=[k]  dirty={k}  processing={}
+                          <span class="hl">↑ exactly one re-queue</span>
+  t=3.01  Get() -> k      worker reconciles CURRENT state, once.
+
+  Net: <b>1,001 events -> 2 reconciles.</b> Never 2 concurrent reconciles of k.</pre>
+    <figcaption>Two guarantees you should be able to state cold: a key is never processed by two workers at once, and a change arriving during processing is never lost and never duplicated.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>The failure mode</span><span>Done vs Forget</span></div>
+  <h2>How one key goes permanently deaf</h2>
+
+  <div class="col">
+  <p><code>Done(item)</code> is the only thing that removes a key from <code>processing</code>. Skip it — an early <code>return</code> before the <code>defer</code>, a panic with no recover, a <code>Reconcile</code> blocked forever on an HTTP call with no context deadline — and here is the exact cascade:</p>
+  </div>
+
+  <ol class="play">
+    <li><span class="what">The key stays in <code>processing</code> forever</span>
+      <p>Nothing else will ever remove it.</p></li>
+    <li><span class="what">Every future <code>Add(k)</code> becomes a silent no-op</span>
+      <p>It inserts into <code>dirty</code>, sees <code>processing.Has(k)</code>, and returns without pushing. The key is now permanently invisible to <code>Get</code>.</p></li>
+    <li><span class="what">That one object stops reconciling — for the life of the process</span>
+      <p>Every <em>other</em> object keeps working perfectly, which is what makes this so vicious to diagnose. Your controller is not "down." It is deaf to exactly one key.</p></li>
+    <li><span class="what">Two metrics climb linearly forever</span>
+      <code>workqueue_unfinished_work_seconds</code> · <code>workqueue_longest_running_processor_seconds</code>
+      <p>That pair is the fingerprint. Learn it.</p></li>
+    <li><span class="what">Shutdown hangs until SIGKILL</span>
+      <p><code>ShutDownWithDrain()</code> waits for <code>processing.Len() == 0</code>, so the pod blocks until <code>terminationGracePeriodSeconds</code> expires.</p></li>
+  </ol>
+
+  <figure class="term">
+    <div class="cmd"><span>the shape of every correct worker — defer on line two</span><span class="who">pattern</span></div>
+<pre>func (c *Controller) processNextItem(ctx context.Context) bool {
+    key, shutdown := c.workqueue.Get()
+    if shutdown { return false }
+    <span class="hl">defer c.workqueue.Done(key)</span>       <span class="dim">// ALWAYS. releases the key.</span>
+
+    if err := c.reconcile(ctx, key); err != nil {
+        c.workqueue.<span class="bad">AddRateLimited</span>(key)  <span class="dim">// failure: requeue with backoff</span>
+        return true
+    }
+    c.workqueue.<span class="ok">Forget</span>(key)             <span class="dim">// success: reset THIS key's count</span>
+    return true
+}</pre>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Call</th><th>Touches</th><th>Effect</th><th>When</th></tr>
+    <tr><td class="m">Done(k)</td><td>the three sets</td><td>releases <code>k</code> from <code>processing</code>; re-queues if dirty</td><td class="yes">always, deferred</td></tr>
+    <tr><td class="m">Forget(k)</td><td>the rate limiter's failure map</td><td><code>delete(failures, k)</code> → next <code>When(k)</code> returns <code>baseDelay</code></td><td>on <b>success</b> only</td></tr>
+    <tr><td class="m">AddRateLimited(k)</td><td>rate limiter + delaying heap</td><td><code>AddAfter(k, When(k))</code>; increments <code>failures[k]</code></td><td>on <b>failure</b></td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">Forget and Done are not alternatives</span>
+    <p>The source comment settles it: <em>"This only clears the <code>rateLimiter</code>, you still have to call <code>Done</code> on the queue."</em> <code>Forget</code> touches the backoff bookkeeping. <code>Done</code> touches the queue. You need both, and they fire on different conditions.</p>
+  </div>
+
+  <h3>The delaying layer, briefly</h3>
+  <div class="col">
+  <p><code>AddAfter(item, d)</code> does not sleep. It pushes a <code>waitFor{data, readyAt}</code> into <code>waitingLoop</code>, which keeps a <strong>min-heap ordered by <code>readyAt</code></strong> plus an item→entry map. Re-adding an item already waiting does not duplicate it — <code>insert()</code> keeps the <em>earlier</em> <code>readyAt</code>. When the time passes, the item goes onto the base queue through the ordinary <code>Add</code>, so it re-enters the three-set dance and dedupes normally.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>diagnosis</span></div>
+  <h2>Reading a stuck controller</h2>
+
+  <div class="tw">
+  <table>
+    <tr><th>Symptom</th><th>Stage</th><th>What is actually happening</th></tr>
+    <tr>
+      <td>One object never reconciles, everything else is fine</td>
+      <td>workqueue</td>
+      <td>Missing <code>Done()</code>. Key stuck in <code>processing</code>, all <code>Add</code>s no-op. Check <code>workqueue_unfinished_work_seconds</code>.</td>
+    </tr>
+    <tr>
+      <td>Periodic reconcile spikes, no matching cluster activity</td>
+      <td>reflector</td>
+      <td>Watch flapping past the 5-minute history window → <code>410 Gone</code> → full relist re-delivers everything.</td>
+    </tr>
+    <tr>
+      <td>Everything slow for ~30s after a fleet rollout</td>
+      <td>reflector</td>
+      <td>Every cache refilling at once. 34.6 MB × replicas. Stagger restarts, scope the cache.</td>
+    </tr>
+    <tr>
+      <td>Informer memory climbing without bound</td>
+      <td>Pop loop</td>
+      <td>Slow event handler holding the FIFO lock. Look for the <code>"slow event handlers blocking the queue"</code> trace.</td>
+    </tr>
+    <tr>
+      <td><code>DeleteFunc</code> panics on type assertion</td>
+      <td>FIFO</td>
+      <td><code>Replace()</code> handed you a <code>DeletedFinalStateUnknown</code> tombstone after a relist.</td>
+    </tr>
+    <tr>
+      <td>Pod hangs on shutdown until SIGKILL</td>
+      <td>workqueue</td>
+      <td><code>ShutDownWithDrain</code> blocked on a key that never got <code>Done()</code>.</td>
+    </tr>
+  </table>
+  </div>
+
+  <h3>Drill yourself</h3>
+
+  <details class="drill">
+    <summary>Five updates to one Pod arrive before the consumer drains. How many deltas, how many reconciles?</summary>
+    <div class="ans">
+      <p>Five deltas — the FIFO does not coalesce. But <strong>one or two reconciles</strong>, because the handler enqueues the same key five times and the workqueue's <code>dirty</code> set collapses them.</p>
+      <p>If a worker was already holding the key, all five collapse into a single dirty bit, and <code>Done()</code> converts that into exactly one re-queue.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>A worker panics before calling <code>Done</code>. What breaks, and what keeps working?</summary>
+    <div class="ans">
+      <p>That one key stops reconciling permanently. Every other key keeps working normally — which is why this looks like "the controller is fine, but this one object is ignored."</p>
+      <p>Fingerprint: <code>workqueue_unfinished_work_seconds</code> and <code>workqueue_longest_running_processor_seconds</code> climbing linearly forever. Shutdown will also hang, because <code>ShutDownWithDrain</code> waits for <code>processing</code> to empty.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does the reflector turn <em>off</em> pagination when resuming from a resourceVersion?</summary>
+    <div class="ans">
+      <p>Because a paginated LIST skips the apiserver's watch cache and reads from etcd. Setting <code>pager.PageSize = 0</code> forces the cheap watch-cache path. The source comment: "to avoid thundering herd on etcd (e.g. on master upgrades)."</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your <code>DeleteFunc</code> panics type-asserting to <code>*v1.Pod</code>. When, and why?</summary>
+    <div class="ans">
+      <p>After a relist. <code>Replace()</code> synthesises deletions for keys the store knew about but the new list lacks, wrapped as <code>DeletedFinalStateUnknown{key, lastKnownObject}</code> — not as the object itself.</p>
+      <p>Fix: <code>cache.DeletionHandlingMetaNamespaceKeyFunc</code>, which unwraps the tombstone.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Where does deduplication happen in this pipeline, and where does it definitely not?</summary>
+    <div class="ans">
+      <p>It happens in <strong>the workqueue</strong>, on <strong>keys</strong>, via the <code>dirty</code> set.</p>
+      <p>It does <em>not</em> happen in the FIFO. The DeltaFIFO's only dedup is <code>dedupDeltas</code>, which collapses the last two deltas and only when both are deletions. And since 1.33 the default is <code>RealFIFO</code>, which does no per-key grouping at all.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why enqueue a key rather than the object you already have in hand?</summary>
+    <div class="ans">
+      <p>Dedup (keys collapse in a set, objects do not), freshness (the worker re-reads current state instead of a frozen snapshot), and level-triggered semantics (you reconcile toward a name, so missed intermediate events are harmless).</p>
+      <p>Plus the mechanical reason: the queue is <code>[T comparable]</code>, and a <code>v1.Pod</code> struct is not comparable.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 05–08</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">One talker</span><span class="v">The reflector is the only component that touches the apiserver. Everything else reads a local cache.</span></li>
+    <li><span class="k">FIFO preserves</span><span class="v">Every notification, in order. No coalescing. <code>RealFIFO</code> since 1.33, locked GA at 1.36.</span></li>
+    <li><span class="k">Store then notify</span><span class="v"><code>processDeltas</code> writes the indexer before calling handlers, so a worker reading the lister sees at least the triggering state.</span></li>
+    <li><span class="k">Keys, never objects</span><span class="v">Dedup, freshness, and level-triggered semantics all come from this one choice.</span></li>
+    <li><span class="k">Three sets</span><span class="v"><code>queue</code> + <code>dirty</code> + <code>processing</code>. A key is never processed twice concurrently; a change during processing is never lost.</span></li>
+    <li><span class="k">Done always</span><span class="v">Deferred, on line two. Skipping it makes exactly one key permanently deaf while everything else looks healthy.</span></li>
+    <li><span class="k">Forget on success</span><span class="v">Different job from <code>Done</code> — it resets backoff bookkeeping, not queue state.</span></li>
+    <li><span class="k">410 is normal</span><span class="v">A relist re-delivers everything and synthesises tombstones. Handle them, and expect the reconcile spike.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/02-kubernetes-controllers/lessons/04-informers-caches-workqueues.html">Back to lesson 02.4</a>
+  </footer>
+</div>
+
+</body>
+</html>
