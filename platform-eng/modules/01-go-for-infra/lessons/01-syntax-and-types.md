@@ -16,6 +16,8 @@ sources: 13
 > **Concept.** Type idiomatic Go fluently — receivers, slice/map aliasing, zero values, `struct{}` sets, field layout, and escape analysis — with no OOP baggage.
 >
 > Module: [🐹 01 — Go for infrastructure engineers](../README.md) · Deliverable: [`gpu-cost-exporter`](../practice/gpu-cost-exporter/README.md)
+>
+> **Warm-up** — new to Go from Python? [Python to Go](../../../learning/00-go-warm-up.html) covers the mental-model shifts this module's skip-list assumes you have already made — value vs reference, the four nils, errors as values, implicit interfaces — with both sides of every comparison run live. Skip it if Go is already familiar.
 
 ## Where this fits
 
