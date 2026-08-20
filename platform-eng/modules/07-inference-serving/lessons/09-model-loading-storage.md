@@ -8,7 +8,7 @@ est_time: "6h"
 prev: "08-autoscaling-inference.md"
 next: "10-multi-model-lora.md"
 artifacts: []
-sources: 13
+sources: 14
 ---
 # 07.9 · Model loading and storage
 
@@ -791,15 +791,17 @@ is short enough for the decision it gates — not when you have run out of techn
   opens one. This is the highest-leverage, lowest-effort change available to anyone serving
   weights from S3/GCS/Azure, and it requires no new infrastructure.
 
-- **Modal's GPU memory snapshotting.** Modal reports cutting a vLLM server's cold start from
-  roughly two minutes to about ten seconds by snapshotting post-initialisation GPU state and
-  restoring it, with a follow-up benchmark on a Mistral model showing ≈118 s → ≈12 s median.
-  **What it shows:** the ceiling on this problem is not "read the bytes faster" — it is "do
-  not read them at all." It also shows what that costs: the snapshot is bound to a GPU model,
-  driver and process layout, so it is a platform capability rather than a flag, which is why
-  it belongs in the "know it exists" tier rather than in this lesson's practice. *(modal.com
-  is blocked by this environment's egress proxy; these figures are reported as Modal's
-  published claims rather than as measurements verified for this rewrite.)*
+- **[Modal's GPU memory snapshotting](https://modal.com/blog/gpu-mem-snapshots).** Modal reports
+  cutting a Qwen2.5-0.5B vLLM server's cold start from ~45 s to ~5 s by snapshotting
+  post-initialisation GPU state and restoring it, with a
+  [follow-up post on a Mistral model](https://modal.com/blog/mistral-3) showing the Ministral-3
+  (3B) median falling ≈118 s → ≈12 s. **What it shows:** the ceiling on this problem is not
+  "read the bytes faster" — it is "do not read them at all." It also shows what that costs: the
+  snapshot is bound to a GPU model, driver and process layout, so it is a platform capability
+  rather than a flag, which is why it belongs in the "know it exists" tier rather than in this
+  lesson's practice. *(modal.com is blocked by this environment's egress proxy; these figures
+  are Modal's own published claims, corroborated via web search rather than a direct fetch for
+  this QA pass.)*
 
 ## Worked example
 
@@ -1251,7 +1253,7 @@ deliverable.
 
 ## References & further reading
 
-**Primary sources — vLLM (v0.27.1, cross-checked against `main` @ `c1e4387`, 2026-08-17)**
+**Primary sources (vLLM v0.27.1, cross-checked against `main` @ `c1e4387`, 2026-08-17; safetensors format spec and reference implementation)**
 
 1. **`vllm/config/load.py`** — https://github.com/vllm-project/vllm/blob/main/vllm/config/load.py — the authoritative `load_format` list with each option's description (`auto`, `safetensors`, `pt`, `npcache`, `dummy`, `tensorizer`, `runai_streamer`, `runai_streamer_sharded`, `instanttensor`, `sharded_state`, `bitsandbytes`, `mistral`, `modelexpress`); `safetensors_load_strategy` (`lazy` / `eager` / `prefetch` / `torchao`) **including the automatic NFS-detection behaviour and the 90 %-of-RAM condition**; `DEFAULT_SAFETENSORS_PREFETCH_NUM_THREADS = 8` and `DEFAULT_SAFETENSORS_PREFETCH_BLOCK_SIZE = 16 MiB`; and `ignore_patterns` defaulting to `["original/**/*"]`.
 2. **`docs/models/extensions/runai_model_streamer.md`** — https://github.com/vllm-project/vllm/blob/main/docs/models/extensions/runai_model_streamer.md — installation (`pip install vllm[runai]`), the `s3://` / `gs://` / `az://` URI support, the S3-compatible environment variables, and the three tunables quoted in §6: `concurrency` ("the number of client instances the host is opening to the S3 server"), `memory_limit`, and `distributed`. Also the sharded loader's `model-rank-{rank}-part-{part}.safetensors` pattern and its `pattern` override.
@@ -1263,12 +1265,14 @@ deliverable.
 8. **`vllm/v1/worker/gpu_worker.py` and `vllm/utils/mem_utils.py`** — https://github.com/vllm-project/vllm/blob/main/vllm/v1/worker/gpu_worker.py — the `Memory profiling takes N seconds` line and its breakdown, the `kv_cache_memory_bytes` path that skips profiling with its "does not respect gpu_memory_utilization" warning, and `sleep()` / `wake_up()` for §11's in-process alternative.
 9. **`docs/benchmarking/sweeps.md`** — https://github.com/vllm-project/vllm/blob/main/docs/benchmarking/sweeps.md — `vllm bench sweep startup`, for comparing startup across engine configurations (`--startup-cmd`, `--serve-params`, `--startup-params`, `--strict-params`).
 
-**Primary sources — safetensors**
-
 10. **`huggingface/safetensors` — README §Format** — https://github.com/huggingface/safetensors — the byte layout quoted in §3: 8-byte little-endian `N`, an N-byte JSON header (must begin with `{`, may be space-padded), then the byte buffer; the `{"dtype","shape","data_offsets":[BEGIN,END)}` per-tensor record with offsets **relative to the buffer, not the file**; the `__metadata__` string-to-string map; and the constraints — no duplicate keys, the buffer must be **entirely indexed with no holes** (an explicit anti-polyglot measure), little-endian, C/row-major.
 11. **`safetensors/src/tensor.rs`** — https://github.com/huggingface/safetensors/blob/main/safetensors/src/tensor.rs — `MAX_HEADER_SIZE = 100_000_000` and the three sites that enforce it. Relevant if you generate checkpoints with very many small tensors.
 12. **`docs/source/speed.mdx`** — https://github.com/huggingface/safetensors/blob/main/docs/source/speed.mdx — the benchmark numbers used in §3 and pitfall 8: GPT-2 CPU load 0.004 s (safetensors) versus 0.307 s (`torch.load`) — **76.6×** — on an Intel Xeon @ 2.00GHz; and GPU load on a Tesla T4, 0.165 s versus 0.354 s — **2.1×** — with the doc's own explanation that the GPU path works by memory-mapping the file, creating an empty tensor and calling `cudaMemcpy` directly.
 
+**Real-world engineering blogs**
+
+13. **Modal — "GPU Memory Snapshots: Supercharging sub-second startup"** — <https://modal.com/blog/gpu-mem-snapshots> — reports cutting a Qwen2.5-0.5B vLLM server's cold start from ~45 s to ~5 s by snapshotting post-initialisation GPU state; a companion post, **"Modal + Mistral 3: 10x faster cold starts with GPU snapshotting"** (<https://modal.com/blog/mistral-3>), reports the Ministral-3 (3B) median figure quoted in this lesson's Real-world use cases (~118 s → ~12 s). **What it shows:** the ceiling on cold start is not "read the bytes faster," it is "do not read them at all" — the source for the claim this lesson's use-case section previously carried without a citation. *(modal.com is blocked by this environment's egress proxy; both figures are Modal's own published claims, corroborated via web search rather than a direct fetch for this QA pass.)*
+
 **Deeper dives**
 
-13. **07.4 §1 and §9 — vLLM in production** — [04-vllm-in-production.md](04-vllm-in-production.md) — the startup timeline this lesson decomposes, the memory-profiling mechanism behind stage 4a, `--kv-cache-memory-bytes` for fleet-deterministic sizing, and the CUDA-graph and compile-cache flags. Read together, 07.4 §1 is the *what happens* and this lesson is the *how long and why*.
+14. **07.4 §1 and §9 — vLLM in production** — [04-vllm-in-production.md](04-vllm-in-production.md) — the startup timeline this lesson decomposes, the memory-profiling mechanism behind stage 4a, `--kv-cache-memory-bytes` for fleet-deterministic sizing, and the CUDA-graph and compile-cache flags. Read together, 07.4 §1 is the *what happens* and this lesson is the *how long and why*.

@@ -1371,7 +1371,7 @@ number you emit into `gpu-cost-operator` and builds the fleet-level economics on
 
 ## References & further reading
 
-**Primary sources — vLLM LoRA implementation (v0.27.1, cross-checked against `main` @ `c1e4387`, 2026-08-17)**
+**Primary sources (vLLM LoRA implementation, v0.27.1, cross-checked against `main` @ `c1e4387`, 2026-08-17)**
 
 1. **`vllm/config/lora.py`** — https://github.com/vllm-project/vllm/blob/main/vllm/config/lora.py — every flag default this lesson depends on: `max_lora_rank = 16` with `MaxLoRARanks = Literal[1, 8, 16, 32, 64, 128, 256, 320, 512]` (**correction**: `1` and `320` were omitted from earlier versions of this lesson), `max_loras = 1`, `max_cpu_loras = None` with `_validate_lora_config` defaulting it to `max_loras`, `lora_dtype = "auto"`, `target_modules`, `fully_sharded_loras`, `specialize_active_lora = False`, and the MoE-specific `enable_mixed_moe_lora_format` / `enable_moe_shared_loras`.
 2. **`vllm/lora/layers/base_linear.py`** — https://github.com/vllm-project/vllm/blob/main/vllm/lora/layers/base_linear.py — `create_lora_weights` allocating `lora_a_stacked` as `[max_loras, 1, max_lora_rank, in_features]` and `lora_b_stacked` as `[max_loras, 1, out_features, max_lora_rank]` per slice, and `set_lora` copying into the leading sub-slice. This is the source for §3's `L_slot` derivation and for the rank-padding waste in §9(b).
@@ -1385,7 +1385,7 @@ number you emit into `gpu-cost-operator` and builds the fleet-level economics on
 10. **`vllm/entrypoints/serve/lora/api_router.py` and `vllm/entrypoints/cli/serve.py`** — https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/serve/lora/api_router.py — the endpoints are only registered when `VLLM_ALLOW_RUNTIME_LORA_UPDATING` is set, the router's "ONLY be used for local development" warning, and the CLI's hard rejection of `api_server_count > 1` with runtime LoRA updating.
 11. **`vllm/benchmarks/serve.py`** — https://github.com/vllm-project/vllm/blob/main/vllm/benchmarks/serve.py — `--lora-modules` and `--lora-assignment {random,round-robin}` (default `random`), which is what makes §Worked example's diversity measurement controlled rather than incidental.
 
-**Research lineage**
+**Deeper dives**
 
 12. **Hu et al., "LoRA: Low-Rank Adaptation of Large Language Models" (2021)** — https://arxiv.org/abs/2106.09685 — the `W + BA` formulation, the `α/r` scaling, zero-initialisation of `B`, and the mergeability that §1 turns into "merge for speed, keep separate for multiplexing." Cited by vLLM's own LoRA documentation as the reference for the technique. *(arxiv.org is blocked by this environment's egress proxy; the formulation and its consequences are derived in §1 from the shapes vLLM allocates, so nothing here depends on a figure quoted from the paper.)*
 13. **Chen et al., "Punica: Multi-Tenant LoRA Serving" (2023)** — https://arxiv.org/abs/2310.18547 — the SGMV (Segmented Gather Matrix-Vector) kernel that applies different adapters to different rows of one batch in a single launch. **This citation appears verbatim in the header of `vllm/lora/ops/triton_ops/lora_shrink_op.py`**, which is the strongest available evidence of the lineage. *(Also behind the blocked arxiv domain; §4 describes the mechanism as implemented in vLLM's Triton kernels rather than as described in the paper.)*
