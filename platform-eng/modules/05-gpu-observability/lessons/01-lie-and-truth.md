@@ -16,6 +16,8 @@ sources: 15
 > **Concept.** `DCGM_FI_DEV_GPU_UTIL` measures whether a kernel was *resident*, not whether the silicon was *working* — the four PROF metrics measure the work, and each drives a different money decision.
 >
 > Module: [📊 05 — GPU observability and telemetry](../README.md) · Deliverable: ["Your GPU dashboard is lying to you"](../practice/gpu-dashboard-lie/README.md)
+>
+> **Advanced Learning** — [The GPU Utilisation Lie](../../../learning/01-lie-and-truth.html): the two measurement paths drawn apart, the lie derived from H100 datasheet numbers, and the SM_ACTIVE × TENSOR quadrants. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

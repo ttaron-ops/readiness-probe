@@ -16,6 +16,8 @@ sources: 11
 > **Concept.** MPS shares a GPU by running clients concurrently on the SMs (spatial sharing, one shared CUDA context, one shared fault domain) — the third point in the MIG / time-slicing / MPS decision triangle, and it is marked *experimental* in NVIDIA's own device plugin as of this writing, which is itself part of the senior answer about when to use it.
 >
 > Module: [📦 04 — GPU on Kubernetes](../README.md) · Deliverable: [Per-pod GPU attribution](../practice/per-pod-attribution/README.md)
+>
+> **Advanced Learning** — [MPS and the Decision Triangle](../../../learning/08-mps-choosing-sharing.html): the full MIG / time-slicing / MPS comparison matrix, and the ceilings that bound the fair-share estimate. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

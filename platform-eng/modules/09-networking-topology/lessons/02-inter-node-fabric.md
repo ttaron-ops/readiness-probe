@@ -16,6 +16,8 @@ sources: 12
 > **Concept.** A GPU cluster's fabric is a Clos/fat-tree, and its cost is set by one dial — how much bisection bandwidth you buy at each tier; rail-optimized design lets you keep that dial low at the spine *for free* because LLM traffic is rail-local and NVLink absorbs the rest. But "3-tier Clos, 1:7 at the top" is one design, not the only correct one — this lesson also shows you when and why hyperscalers deviate from it.
 >
 > Module: [🔗 09 — Networking and topology](../README.md) · Deliverable: [Network architecture read](../practice/network-architecture-read/README.md)
+>
+> **Advanced Learning** — [Radix, Ratios and ECMP](../../../learning/02-inter-node-fabric.html): fat-tree capacity arithmetic, when oversubscription is free, and ECMP's assumption against what training sends. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

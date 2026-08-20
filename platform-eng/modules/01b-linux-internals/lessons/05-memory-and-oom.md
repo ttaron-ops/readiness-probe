@@ -16,6 +16,8 @@ sources: 9
 > **Concept.** Virtual vs resident vs working set, the page cache and the reclaim path, and how the kernel chooses a victim — cgroup-scoped or global — when memory runs out.
 >
 > Module: [🐧 01b — Linux systems internals](../README.md) · Deliverable: [Anatomy of a Container](../practice/anatomy-of-a-container/README.md)
+>
+> **Advanced Learning** — [Four Numbers and Three Kills](../../../learning/05-memory-and-oom.html): the four quantities called “memory used” side by side, and the QoS bias arithmetic that decides a global OOM. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

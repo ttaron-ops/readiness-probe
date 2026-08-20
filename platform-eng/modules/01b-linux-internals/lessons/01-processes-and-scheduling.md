@@ -16,6 +16,8 @@ sources: 15
 > **Concept.** A process is a set of kernel states, not a "running program" — and load average, the scheduler, and the D-state are what you actually reason about when a GPU node looks busy but the CPUs are idle.
 >
 > Module: [🐧 01b — Linux systems internals](../README.md) · Deliverable: [Anatomy of a Container](../practice/anatomy-of-a-container/README.md)
+>
+> **Advanced Learning** — [Task Struct and Task States](../../../learning/01-processes-and-scheduling.html): the `__state` bitmask drawn as lit bit columns, a task driven `S → T → S → R` live, and the `kill -9` pending-signal mechanic reproduced safely. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 
