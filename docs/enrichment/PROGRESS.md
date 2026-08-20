@@ -267,3 +267,37 @@ _(each run appends: date · modules enriched · commit shas)_
   pointed at the bare `kubernetes.io/blog` root instead of the specific posts (swapped in the two
   real, verified post URLs). No dead links, no fabricated sources, and no broken file links were
   found. No other fixes were necessary.
+- **2026-08-20** · QA pass · `modules/07-inference-serving` (next-oldest-enriched, 2026-08-10, not
+  yet QA'd) · commit `8a5bc26`. Full consistency sweep: verified the prev/next chain across all 10
+  lessons is unbroken (01→10, null at both ends), all 12 template sections present in every lesson
+  with ≥3 `**Answer:**` self-check lines each (5–6 actual), README lesson-table hours
+  (6/6/8/8/8/7/6/6/6/6, summing to the stated ~67 hrs) match the 10 lesson files exactly, and
+  checkpoint.md / practice/cost-per-token / resources/depth-map.md links resolve and stay
+  consistent with lesson content. Found and fixed the same defect class as the 2026-08-19 QA pass:
+  References sections not using the spec's exact three buckets. Merged duplicate "Primary sources"
+  sub-headers into one per lesson (04, 05, 07, 08, 09, 10); relabeled "Real-world engineering" →
+  "Real-world engineering blogs" (01, 02, 03, 06); reclassified three mixed/misnamed buckets by
+  content per the spec's own bucket definitions — 05's "Research and industry measurements" split
+  into Primary sources (Orca, DistServe papers) and Real-world engineering blogs (Anyscale, Introl,
+  Character.AI); 07's "Studies and production practice" split into Primary sources (the Neural
+  Magic/IST Austria paper) and Real-world engineering blogs (Fireworks AI, Character.AI), with the
+  tangential Microsoft LoRA-reference entry moved to a new Deeper dives bucket; 08's "Industry
+  positions" (the Google Cloud post) renamed to Real-world engineering blogs; 10's "Research
+  lineage" (LoRA/Punica/S-LoRA papers) renamed to Deeper dives; 06 gained a Deeper dives bucket by
+  moving its SGLang/RadixAttention paper and announcement-blog pair out of Primary sources. Lessons
+  04 and 10 legitimately have no Real-world engineering blogs bucket (their Real-world use cases
+  sections cite vLLM's own engine source, not vendor blogs) and were left as two-bucket lessons
+  rather than forcing a mismatched label. Found and fixed one real citation gap: lesson 09's
+  "Modal's GPU memory snapshotting" real-world use case had no inline link or References entry —
+  added both (`modal.com/blog/gpu-mem-snapshots` and the companion `mistral-3` post), which became
+  that lesson's Real-world engineering blogs bucket (`sources:` 13→14). Verified 10+ of the
+  highest-risk vendor-blog and paper citations carrying specific numeric claims against live
+  sources (WebFetch where the egress proxy allowed it — confirmed the Google Cloud GKE-HPA
+  recommendation verbatim — WebSearch corroboration otherwise): Baseten's 48%/49% P95/P99 and
+  61%/62% RPS/throughput figures, Character.AI's 33× reduction and 20,000 QPS, LMSYS's DeepSeek-EP
+  throughput numbers, DeepSeek's own EP32/4-node prefill and EP144/18-node decode counts, Mooncake's
+  59–498% capacity range, Fireworks AI's KL-divergence methodology, and the newly added Modal cold-
+  start figures — all confirmed accurate, no fabricated URLs or misquoted numbers found. All
+  reference-list numbering renumbered to stay sequential per lesson, with every `sources:`
+  frontmatter count verified to match its lesson's actual reference-entry count. No dead links, no
+  broken file links, and no other fixes were necessary.
