@@ -16,6 +16,8 @@ sources: 13
 > **Concept.** Your maximum concurrent requests is `free VRAM after weights ÷ per-request KV bytes` — and naive contiguous KV allocation throws away 60–80% of that budget to fragmentation, which is exactly the waste PagedAttention exists to reclaim.
 >
 > Module: [🚀 07 — Inference serving](../README.md) · Deliverable: [Cost-per-million-tokens](../practice/cost-per-token/README.md)
+>
+> **Advanced Learning** — [The KV Cache Budget](../../../learning/02-kv-cache-concurrency.html): the VRAM budget as a stacked bar, and 79.7% internal fragmentation derived from a length distribution. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

@@ -16,6 +16,8 @@ sources: 15
 > **Concept.** The reflector → Delta FIFO → shared informer → indexer/lister → rate-limited workqueue → worker machine that every controller runs on — and its failure modes.
 >
 > Module: [⚙️ 02 — Kubernetes internals and controllers](../README.md) · Deliverable: [`gpu-cost-operator`](../practice/gpu-cost-operator/README.md)
+>
+> **Advanced Learning** — [Informers, Caches and Workqueues](../../../learning/04-informers-caches-workqueues.html): the six-stage pipeline end to end, and the queue/dirty/processing state grid behind one permanently deaf key. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

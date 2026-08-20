@@ -16,6 +16,8 @@ sources: 13
 > **Concept.** Time-slicing multiplies one GPU into N schedulable replicas that share it by taking turns — with no memory isolation, no fault isolation, and no per-pod allocation signal — so cost cannot be attributed from allocation counts and must fall back to DCGM per-pod utilisation.
 >
 > Module: [📦 04 — GPU on Kubernetes](../README.md) · Deliverable: [Per-pod GPU attribution](../practice/per-pod-attribution/README.md)
+>
+> **Advanced Learning** — [The Time-Slicing Hole](../../../learning/07-time-slicing-attribution.html): why the naive cost query over-reports by exactly N, and the scheduling-vs-measurement identity split. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

@@ -15,6 +15,8 @@ sources: 15
 > **Concept.** PagedAttention treats the KV cache like OS virtual memory — fixed-size non-contiguous blocks addressed through a per-sequence block table — which kills fragmentation, enables prefix sharing via copy-on-write, and is what lets vLLM's continuous-batching scheduler pack many sequences onto one GPU.
 >
 > Module: [🚀 07 — Inference serving](../README.md) · Deliverable: [Cost-per-million-tokens](../practice/cost-per-token/README.md)
+>
+> **Advanced Learning** — [PagedAttention](../../../learning/03-pagedattention-and-vllm.html): the OS-virtual-memory correspondence term by term, and why every non-paging fix fails. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

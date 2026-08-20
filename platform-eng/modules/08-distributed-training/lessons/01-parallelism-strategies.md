@@ -16,6 +16,8 @@ sources: 14
 > **Concept.** Every parallelism strategy is a trade between *which collective runs*, *over which link*, and *how much GPU memory it saves* — read a run and you can predict its network and memory footprint without reading the model.
 >
 > Module: [🧮 08 — Distributed training infrastructure](../README.md) · Deliverable: [Survive-a-failure lab](../practice/survive-a-failure/README.md)
+>
+> **Advanced Learning** — [Parallelism Axes](../../../learning/01-parallelism-strategies.html): the 16Ψ training budget derived from the Adam update rule, and all six axes on one 32-GPU grid. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

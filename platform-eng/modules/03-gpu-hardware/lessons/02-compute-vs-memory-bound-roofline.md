@@ -16,6 +16,8 @@ sources: 13
 > **Concept.** Compute arithmetic intensity, place a workload under the compute roof or the memory roof, find the ridge point — the single lens for the whole cost story.
 >
 > Module: [🔌 03 — GPU hardware fundamentals](../README.md) · Deliverable: [GPU Efficiency & Cost Report](../practice/gpu-efficiency-report/README.md)
+>
+> **Advanced Learning** — [The Roofline](../../../learning/02-compute-vs-memory-bound-roofline.html): a drawn log–log roofline with six derived workloads plotted on it, from SAXPY to fused attention. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

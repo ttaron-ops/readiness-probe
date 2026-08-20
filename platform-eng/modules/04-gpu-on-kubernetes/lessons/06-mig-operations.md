@@ -16,6 +16,8 @@ sources: 11
 > **Concept.** On Kubernetes, MIG is a resource-surfacing and drain-to-reconfigure problem — each slice becomes a distinct schedulable resource with its own UUID, which is what gives you clean per-slice cost attribution.
 >
 > Module: [📦 04 — GPU on Kubernetes](../README.md) · Deliverable: [Per-pod GPU attribution](../practice/per-pod-attribution/README.md)
+>
+> **Advanced Learning** — [MIG Geometry](../../../learning/06-mig-operations.html): the 7-compute/8-memory asymmetry as slice strips, with the stranded framebuffer priced. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

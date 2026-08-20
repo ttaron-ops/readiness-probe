@@ -16,6 +16,8 @@ sources: 14
 > **Concept.** The unified cgroup-v2 hierarchy and its controllers — and exactly how a pod's requests, limits, and QoS class become cpu.max, cpu.weight, memory.max, and memory.high on the node.
 >
 > Module: [🐧 01b — Linux systems internals](../README.md) · Deliverable: [Anatomy of a Container](../practice/anatomy-of-a-container/README.md)
+>
+> **Advanced Learning** — [YAML to Kernel File](../../../learning/03-cgroups-v2-and-k8s-enforcement.html): every pod-spec field traced to the cgroup file it writes, and the throttling timeline behind 5% average CPU with terrible latency. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

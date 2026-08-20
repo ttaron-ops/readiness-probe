@@ -15,6 +15,8 @@ sources: 12
 > **Concept.** The canonical 8x H100 node — drawn from memory — and how to map a rented instance's real GPUs onto it.
 >
 > Module: [🧬 02b — Host hardware and topology](../README.md) · Deliverable: [Topology Teardown](../practice/topology-teardown/README.md)
+>
+> **Advanced Learning** — [The 8-GPU Node](../../../learning/04-server-architecture-8gpu.html): the same eight GPUs drawn as two separate graphs, to check your from-memory version against. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

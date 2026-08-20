@@ -16,6 +16,8 @@ sources: 13
 > **Concept.** `nvidia-smi topo -m` stops at the PCIe edge of one box; the fabric picks up at the NIC — learn to read the full `GPU → NIC → leaf → spine` path, name the *rail* each GPU rides, and turn 02b's "same root complex" rule into "same rail" across nodes.
 >
 > Module: [🔗 09 — Networking and topology](../README.md) · Deliverable: [Network architecture read](../practice/network-architecture-read/README.md)
+>
+> **Advanced Learning** — [The Bandwidth Cliff](../../../learning/01-intra-to-inter-handoff.html): the 9:1 drop drawn to scale as a ladder, and the ring all-reduce derivation across cluster sizes. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 
