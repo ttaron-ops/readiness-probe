@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 01b.3: every pod-spec field traced to the cgroup-v2 file it writes, and why a pod at 5% average CPU can spend 94% of every period throttled.">
+<meta name="color-scheme" content="light dark">
+<title>YAML to Kernel File · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.mapgrid{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);margin:26px 0 30px;overflow-x:auto}
+.mapgrid>div{background:var(--surface);padding:13px 16px;min-width:0}
+.mapgrid .mh{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk)}
+.mapgrid .y{font-family:var(--f-mono);font-size:12.5px;color:var(--ink);font-weight:500}
+.mapgrid .t{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-2);line-height:1.6}
+.mapgrid .k{font-family:var(--f-mono);font-size:12.5px;color:var(--amber);font-weight:600}
+.mapgrid .k em{display:block;font-style:normal;color:var(--ink-3);font-size:11px;font-weight:400;margin-top:3px}
+@media(max-width:700px){.mapgrid{grid-template-columns:1fr}.mapgrid .mh{display:none}
+  .mapgrid .y{border-top:2px solid var(--amber);padding-top:14px}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/01b-linux-internals/lessons/03-cgroups-v2-and-k8s-enforcement.html">Back to lesson 01b.3</a>
+
+<header class="mast">
+  <p class="kicker">Module 01b · 01b.3 · Linux internals</p>
+  <h1>Where your<br>pod spec actually<br>lands</h1>
+  <p class="standfirst">Seven YAML fields, the transforms the kubelet applies to each, and the kernel files they end up in — plus the throttling mechanism that makes low average CPU and terrible latency the same story.</p>
+  <div class="mast-meta">
+    <span><b>Payoff</b> requests/limits/QoS → cpu.max, cpu.weight, memory.max</span>
+    <span><b>Centrepiece</b> 6.25 ms of work, 93.75 ms throttled</span>
+    <span><b>Follows</b> lesson 01b.1 — per-set vs per-task</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Lesson 01b.1 ended on a mismatch of granularity: <strong>cgroup limits apply to a set of tasks, while the scheduler acts on individuals.</strong> This is the lesson where that gap becomes a YAML field, a kernel file, and a 93-millisecond stall.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>structure</span></div>
+  <h2>Four rules that explain every “why can't I just…”</h2>
+
+  <ol class="play">
+    <li>
+      <span class="what">Availability is set by your parent</span>
+      <code>cgroup.controllers</code>
+      <p>Read-only. It lists which controllers are usable <em>in this cgroup</em>, and the parent decides what appears there.</p>
+    </li>
+    <li>
+      <span class="what">Enablement flows top-down</span>
+      <code>cgroup.subtree_control</code>
+      <p>A controller acts on a cgroup's <strong>children</strong> only if that cgroup lists it here. <code>echo "+cpu +memory -io" &gt; cgroup.subtree_control</code>.</p>
+    </li>
+    <li>
+      <span class="what">No internal processes</span>
+      <p>A non-root cgroup with domain controllers enabled <strong>may not contain processes of its own</strong>. Processes live only on leaves.</p>
+    </li>
+    <li>
+      <span class="what">Delegation hands you a subtree, not your own ceiling</span>
+      <p>Which is exactly why the kubelet can be given a subtree without being able to raise the limits above it.</p>
+    </li>
+  </ol>
+
+  <div class="note">
+    <span class="h">The consequence of rule 2 that catches everyone</span>
+    <p><strong>The interface files in a directory are owned by its parent, not by itself.</strong> <code>cpu.max</code> appears in cgroup <code>C</code> because <em>C's parent</em> enabled <code>cpu</code> in its <code>subtree_control</code>. Anything not prefixed <code>cgroup.</code> is a knob your parent is using to constrain you.</p>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Why rule 3 exists — arithmetic, not aesthetics</span>
+    <p>If cgroup <code>P</code> held both a child cgroup <code>C</code> (weight 100) and its own bare processes, the CPU controller would have to decide how those processes compete against <code>C</code>. There is no principled answer, because bare processes have no weight of their own. The rule rules the question out of existence.</p>
+    <p>Practically: to start controlling a populated cgroup you must first create children, move every process into them, <em>then</em> enable controllers. That is precisely the dance the kubelet does at startup, and why <code>kubepods.slice</code> is empty of processes while its descendants are not.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the mapping</span></div>
+  <h2>Every YAML field to its kernel file</h2>
+
+  <div class="col">
+  <p>This is the highest-value content in the module. Get it exact.</p>
+  </div>
+
+  <div class="mapgrid">
+    <div class="mh">pod spec</div><div class="mh">what the kubelet does</div><div class="mh">kernel file</div>
+
+    <div class="y">requests.cpu: 500m</div>
+    <div class="t">kube-scheduler: bin-packing reservation only. <b>Never re-read after placement. Caps nothing at runtime.</b><br><br>
+      MilliCPUToShares(500) = 500 × 1024 / 1000 = <b>512 shares</b>, then converted twice — differently.</div>
+    <div class="k">cpu.weight<em>see the two conversions below</em></div>
+
+    <div class="y">limits.cpu: 500m</div>
+    <div class="t">MilliCPUToQuota(500, 100000) = 500 × 100000 / 1000 = 50000.<br>
+      Floor of 1000 µs; period from <code>--cpu-cfs-quota-period</code>, default 100 ms.</div>
+    <div class="k">cpu.max = "50000 100000"</div>
+
+    <div class="y">requests.memory: 4Gi</div>
+    <div class="t">Scheduler reservation — <b>plus</b>, only if MemoryQoS is on:<br>
+      Guaranteed → <code>memory.min</code><br>Burstable → <code>memory.low</code></div>
+    <div class="k">memory.min / memory.low<em>= 4294967296</em></div>
+
+    <div class="y">limits.memory: 8Gi</div>
+    <div class="t">Direct write. This one is unconditional.</div>
+    <div class="k">memory.max = 8589934592</div>
+
+    <div class="y">(MemoryQoS, factor 0.9)</div>
+    <div class="t">⌊(4Gi + 0.9 × (8Gi − 4Gi)) / 4096⌋ × 4096</div>
+    <div class="k">memory.high = 8160436224</div>
+
+    <div class="y">QoS class (derived)</div>
+    <div class="t">Not written anywhere. It decides <em>where in the tree</em> the pod slice is created.</div>
+    <div class="k">TREE POSITION</div>
+
+    <div class="y">--pod-pids-limit</div>
+    <div class="t">kubelet flag, applied at the pod slice.</div>
+    <div class="k">pids.max</div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The same 500m becomes two different weights</span>
+    <p>The kubelet converts shares to <code>cpu.weight</code> one way for the pod and QoS slices it writes itself, and runc converts them a completely different way for the container scope. Same input, different output, at different levels of the same tree:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>requests.cpu: 500m → 512 shares → two conversions</span><span class="who">arithmetic</span></div>
+<pre>  <span class="hl">POD + QoS SLICES</span>  (kubelet writes these directly)
+      getCPUWeight(512) = 1 + (512-2) x 9999/262142
+                        ────────────────────────────▶  cpu.weight = <span class="hl">20</span>
+
+  <span class="ok">CONTAINER SCOPE</span>  (via CRI → runc/crun)
+      ConvertCPUSharesToCgroupV2Value(512):
+          l        = log2(512) = 9
+          exponent = (l² + 125l)/612 - 7/34
+                   = (81 + 1125)/612 - 0.20588 = 1.76471
+          weight   = ceil(10^1.76471) = ceil(58.16)
+                        ────────────────────────────▶  cpu.weight = <span class="ok">59</span></pre>
+    <figcaption>Both are “correct” — they are relative weights, and what matters is the ratio between siblings at the same level. But if you read <code>cpu.weight</code> at two levels and expect the same number, you will conclude something is broken when it is not.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>throttling</span></div>
+  <h2>Why low average CPU still throttles</h2>
+
+  <div class="col">
+  <p><strong>The problem the kernel is solving:</strong> charge CPU time against a per-cgroup budget on a many-core machine without taking a global lock on every context switch. A naive shared counter would ping-pong a cache line across sockets thousands of times a second.</p>
+  <p><strong>The design:</strong> a <em>global pool</em> per cgroup, refilled to <code>quota</code> at each period boundary, transferring budget to <em>per-CPU silos</em> in fixed-size slices on demand.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the sysctl that sets the slice size</span><span class="who">live</span></div>
+<pre>$ cat /proc/sys/kernel/sched_cfs_bandwidth_slice_us
+5000              <span class="dim"># 5 ms — the default</span></pre>
+    <figcaption>Larger slices reduce global-lock traffic; smaller slices allow finer-grained consumption. That is the entire trade-off the knob exposes.</figcaption>
+  </figure>
+
+  <div class="col">
+  <p>Now watch a well-behaved app get wrecked by it. The pod asks for 2 CPUs and runs 32 threads on a 64-core node — a completely ordinary shape for a data loader or a JVM.</p>
+  </div>
+
+  <div class="map">
+<pre>  cpu.max = "200000 100000"      quota 200 ms per 100 ms period  (2 CPUs)
+  sched_cfs_bandwidth_slice_us = 5000   (5 ms)
+  App: 32 runnable threads spread over 32 CPUs of a 64-core node
+
+  global pool ████████████████████████████████████  200 ms  (t=0, refill)
+
+  t=0.00 ms  32 CPUs each pull one 5 ms slice   → 160 ms leaves the pool
+             global pool ████                     40 ms remaining
+  t=5.00 ms  silos empty; only 8 slices left    → 8 CPUs continue,
+                                                  24 CPUs THROTTLED
+  t=6.25 ms  the last of the 200 ms is consumed → ALL 32 threads throttled
+
+  ┌───────────────────── period 0 : 100 ms ──────────────────────┐
+  │████│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│
+  │6.25│              93.75 ms THROTTLED                          │
+  │ ms │  every thread dequeued. the 62 idle cores CANNOT be used  │
+  └────┴──────────────────────────────────────────────────────────┘
+   t=0                                                        t=100
+                                                                │
+                                                    period boundary:
+                                                    hrtimer fires, pool
+                                                    refilled, all threads
+                                                    re-enqueued
+  ┌───────────────────── period 1 : 100 ms ──────────────────────┐
+  │███│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│
+  └───┴───────────────────────────────────────────────────────────┘
+   3.75 ms — the remaining work finishes here
+
+  Observed:  cpu.stat nr_throttled increments in period 0 only.
+             Average CPU over the 200 ms window: <b>5%</b>.
+             Wall-clock latency for 10 ms of work: <span class="bad">103.75 ms</span>.</pre>
+  </div>
+
+  <div class="note warn">
+    <span class="h">This is the ticket you will actually get</span>
+    <p>“The pod is nowhere near its CPU limit but latency is terrible.” Both halves are true. Average utilisation is 5%; p99 latency is 10× the work. The metric that shows it is <code>nr_throttled</code> / <code>throttled_usec</code> in <code>cpu.stat</code> — never average CPU.</p>
+    <p>The fixes are: fewer threads, a higher limit, a shorter <code>--cpu-cfs-quota-period</code>, or no CPU limit at all with <code>requests</code> doing the work. Not "add more cores" — the 62 idle ones were unusable by construction.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part four</span><span>the visibility gap</span></div>
+  <h2>What the container sees vs what the kernel enforces</h2>
+
+  <div class="col">
+  <p>A process inside a container reads <code>nproc</code>, <code>/proc/cpuinfo</code> and <code>/proc/meminfo</code> and sees the <strong>host's</strong> hardware. Nothing virtualises them — the cgroup namespace from lesson 02 hides the cgroup <em>path</em>, not the hardware numbers, and there is no "hardware namespace."</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>inside a container: cpu.max "2000000 100000", memory.max 8Gi, on a 64-core / 256 GiB node</span><span class="who">contrast</span></div>
+<pre>$ nproc                                 <span class="bad">64</span>              <span class="dim">← host truth</span>
+$ grep -c ^processor /proc/cpuinfo      <span class="bad">64</span>              <span class="dim">← host truth</span>
+$ grep MemTotal /proc/meminfo           <span class="bad">256 GiB</span>         <span class="dim">← host truth</span>
+$ free -h                         total <span class="bad">251Gi</span>           <span class="dim">← host truth</span>
+
+$ cat /sys/fs/cgroup/cpu.max            <span class="ok">2000000 100000</span>  <span class="dim">← ACTUAL LIMIT</span>
+$ cat /sys/fs/cgroup/memory.max         <span class="ok">8589934592</span>      <span class="dim">← ACTUAL LIMIT</span></pre>
+    <figcaption>Every “why is my JVM heap sized for the whole node” and “why does my thread pool have 64 workers” question is this gap — and note the thread-pool one lands you straight back in part three.</figcaption>
+  </figure>
+
+  <div class="col">
+  <p>The correct fix is always the same shape: make the runtime read <code>/sys/fs/cgroup/cpu.max</code> and <code>memory.max</code>, or use a cgroup-aware runtime version. <code>lxcfs</code> papers over it by bind-mounting a synthesised <code>/proc/meminfo</code>, which helps naive tools but is not the mechanism.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part five</span><span>memory</span></div>
+  <h2>Without MemoryQoS there is only the cliff</h2>
+
+  <div class="note">
+    <span class="h">The default state of most clusters</span>
+    <p>MemoryQoS (feature gate <code>MemoryQoS</code>, alpha since v1.27, beta at v1.37) is what makes the kubelet write <code>memory.min</code> / <code>memory.low</code> / <code>memory.high</code> <em>at all</em>. <strong>Without it, a Kubernetes memory limit sets <code>memory.max</code> and nothing else</strong> — no soft throttle, only the OOM cliff.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>what MemoryQoS writes, per container</span><span class="who">formula</span></div>
+<pre>  memory.min  = requests.memory    <span class="dim">Guaranteed pods — hard protection</span>
+  memory.low  = requests.memory    <span class="dim">Burstable pods  — soft protection</span>
+
+  memory.high = floor( (requests.memory
+                 + factor x ((limits.memory or node allocatable)
+                             - requests.memory)) / pageSize ) x pageSize
+
+      factor = kubelet memoryThrottlingFactor, default <span class="hl">0.9</span></pre>
+    <figcaption>The formula was revised in v1.27 because the original (<code>factor × limits.memory</code>) throttled workloads that legitimately run near their limit — an 0.8 factor started throttling a JVM at 80% of its limit, which for a heap sized at 85% meant <em>permanent</em> throttling. The current form interpolates between request and limit, so <code>memory.high</code> is always above the request.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>A pod's average CPU is 5% and its p99 latency is 10× its work. Where do you look?</summary>
+    <div class="ans">
+      <p><code>cpu.stat</code> — specifically <code>nr_throttled</code> and <code>throttled_usec</code>. Average CPU cannot show this by construction.</p>
+      <p>The shape: many threads drain the global pool in a few milliseconds, then every thread is dequeued for the rest of the 100 ms period. 32 threads against a 2-CPU quota exhaust 200 ms of budget in 6.25 ms of wall clock.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Does <code>requests.cpu</code> cap anything at runtime?</summary>
+    <div class="ans">
+      <p>No. It is a scheduler bin-packing reservation, never re-read after placement. At runtime it becomes <code>cpu.weight</code>, which only matters <em>under contention</em> and only relative to siblings.</p>
+      <p><code>limits.cpu</code> is the cap, via <code>cpu.max</code>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You read <code>cpu.weight</code> at the pod slice and at the container scope for the same 500m request, and get 20 and 59. Bug?</summary>
+    <div class="ans">
+      <p>No. The kubelet's <code>getCPUWeight</code> and runc's <code>ConvertCPUSharesToCgroupV2Value</code> use different formulas on the same 512 shares.</p>
+      <p>Both are valid because weights only mean anything <em>relative to siblings at the same level</em>. The absolute numbers are not comparable across levels.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why can't <code>kubepods.slice</code> hold processes directly?</summary>
+    <div class="ans">
+      <p>Rule 3 — no internal processes. A non-root cgroup with domain controllers enabled in <code>subtree_control</code> may not contain its own processes, because bare processes have no weight and there is no principled way to make them compete against a weighted child cgroup.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your JVM sizes its heap for 256 GiB inside an 8 GiB container. Why, and what's the fix?</summary>
+    <div class="ans">
+      <p>Nothing virtualises <code>/proc/meminfo</code>. The cgroup namespace hides the cgroup path, not the hardware numbers, and no "hardware namespace" exists.</p>
+      <p>Fix: a cgroup-aware runtime that reads <code>/sys/fs/cgroup/memory.max</code>. <code>lxcfs</code> can synthesise a fake <code>/proc/meminfo</code>, which helps naive tools but treats the symptom.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You set <code>limits.memory: 8Gi</code>. What did the kernel actually get?</summary>
+    <div class="ans">
+      <p><code>memory.max = 8589934592</code>, and — unless MemoryQoS is enabled — <strong>nothing else</strong>. No <code>memory.high</code>, no soft throttle, no reclaim pressure short of the limit. Just the cliff.</p>
+      <p>That is the default on most clusters today.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 04, 05, 10</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Parent owns your knobs</span><span class="v">Files not prefixed <code>cgroup.</code> exist because your parent enabled that controller in <code>subtree_control</code>.</span></li>
+    <li><span class="k">Processes on leaves only</span><span class="v">Rule 3 is arithmetic: bare processes have no weight to compete with.</span></li>
+    <li><span class="k">requests ≠ a cap</span><span class="v">A scheduler reservation that becomes <code>cpu.weight</code>. Only <code>limits</code> writes <code>cpu.max</code>.</span></li>
+    <li><span class="k">QoS is a location</span><span class="v">Not a written value — it decides where in the tree the pod slice lives.</span></li>
+    <li><span class="k">Throttling is bursty</span><span class="v">Global pool + per-CPU silos. Many threads drain a period's quota in milliseconds, then everything stops.</span></li>
+    <li><span class="k">nr_throttled, not average</span><span class="v">Average CPU cannot show a workload that is throttled 94% of every period at 5% utilisation.</span></li>
+    <li><span class="k">The container sees the host</span><span class="v"><code>nproc</code> and <code>/proc/meminfo</code> are host truth. The limits live in <code>/sys/fs/cgroup</code>.</span></li>
+    <li><span class="k">No MemoryQoS, no soft limit</span><span class="v">Default clusters get <code>memory.max</code> and the OOM cliff, nothing gentler.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/01b-linux-internals/lessons/03-cgroups-v2-and-k8s-enforcement.html">Back to lesson 01b.3</a>
+  </footer>
+</div>
+
+</body>
+</html>

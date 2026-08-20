@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 07.3: why every non-paging fix to KV fragmentation fails, the exact OS-virtual-memory correspondence, content-addressed block sharing, and why preemption is recomputation.">
+<meta name="color-scheme" content="light dark">
+<title>PagedAttention · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/07-inference-serving/lessons/03-pagedattention-and-vllm.html">Back to lesson 07.3</a>
+
+<header class="mast">
+  <p class="kicker">Module 07 · 07.3 · Inference serving</p>
+  <h1>The block table<br>is a page table</h1>
+  <p class="standfirst">Not an analogy. Refcounts, copy-on-write, LRU eviction and page faults all appear, doing the same jobs — and the waste stops scaling with context length.</p>
+  <div class="mast-meta">
+    <span><b>Fixes</b> 80% fragmentation → under 4%</span>
+    <span><b>Cost</b> indirection on every attention step</span>
+    <span><b>Follows</b> lesson 07.2 — the KV budget</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Lesson 07.2 ended with a contiguous allocator wasting 80% of the pool. The fix is not a better allocator — it is deleting the requirement that made every allocator bad. <strong>The block table is a page table, and the correspondence is exact rather than metaphorical.</strong></p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>elimination</span></div>
+  <h2>Why every obvious fix fails</h2>
+
+  <div class="col">
+  <p>Knowing <em>why</em> the easy answers fail is what makes paging feel inevitable rather than clever.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>“Just…”</th><th>Why it does not work</th></tr>
+    <tr><td><b>…allocate the actual length</b></td><td>You do not know it. The model emits EOS when it decides to. You can cap with <code>max_tokens</code>, but callers set that generously for exactly the same reason allocators over-reserve.</td></tr>
+    <tr><td><b>…grow the buffer with realloc</b></td><td>Growing means copying, and you are copying hundreds of MB of KV on the GPU inside a decode step with a 5 ms budget. One 8k-context 70B sequence is 2.5 GiB — <b>1.5 ms round-trip at 3.35 TB/s, per growth, per sequence.</b></td></tr>
+    <tr><td><b>…compact the pool like a moving GC</b></td><td>Same objection at larger scale, plus you must stop the world across every in-flight sequence to update every kernel's base pointers.</td></tr>
+    <tr><td><b>…set max_model_len low</b></td><td>This works and you should right-size it — but it caps the <em>product</em>, not the waste. At 2048 you still hold ~80% dead reservation, and you have also started refusing long requests.</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">Every failure points the same direction</span>
+    <p>The problem is <strong>the requirement of contiguity</strong>, not the size of the allocation. Break contiguity and all four objections dissolve at once. That is the entire idea.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the correspondence</span></div>
+  <h2>It really is virtual memory</h2>
+
+  <div class="tw">
+  <table>
+    <tr><th>OS virtual memory</th><th>PagedAttention</th><th>Where it lives in vLLM</th></tr>
+    <tr><td>Process virtual address space</td><td>One sequence's logical KV positions</td><td class="m">Request.num_computed_tokens</td></tr>
+    <tr><td>Page (4 KiB)</td><td>KV block — 16 tokens × every layer</td><td class="m">KVCacheBlock</td></tr>
+    <tr><td>Page table</td><td>Block table — array of physical block ids</td><td class="m">req_to_blocks</td></tr>
+    <tr><td>Physical frame</td><td>Physical KV block in HBM</td><td class="m">index into the pool</td></tr>
+    <tr><td>Frame allocator / free list</td><td>Free block queue, LRU-ordered</td><td class="m">FreeKVCacheBlockQueue</td></tr>
+    <tr><td>Page fault → allocate a frame</td><td>Sequence crosses a 16-token boundary → pop a block</td><td class="m">BlockPool.get_new_blocks</td></tr>
+    <tr><td>Shared page + refcount</td><td>Shared KV block + <code>ref_cnt</code></td><td class="m">KVCacheBlock.ref_cnt</td></tr>
+    <tr><td>Copy-on-write</td><td>COW on a partial-hit block</td><td class="m">kv_cache_block_copies</td></tr>
+    <tr><td>Page cache / LRU eviction</td><td>Automatic prefix caching with LRU eviction</td><td class="m">cached_block_hash_to_block</td></tr>
+  </table>
+  </div>
+
+  <div class="map">
+<pre>  CONTIGUOUS ALLOCATION            │  PAGED ALLOCATION
+  ═════════════════════════════════╪═══════════════════════════════════════
+                                   │
+  ┌──────────────────────────────┐ │  Sequence A's BLOCK TABLE
+  │ A: reserved 2048 tokens      │ │  logical  0    1    2    3    4
+  │ ████░░░░░░░░░░░░░░░░░░░░░░░░ │ │         ┌────┬────┬────┬────┬────┐
+  │ ▲190 used   ▲1858 DEAD       │ │         │4711│ 92 │5003│ 17 │ …  │
+  └──────────────────────────────┘ │         └─┬──┴─┬──┴─┬──┴─┬──┴────┘
+  ┌──────────────────────────────┐ │           │    │    │    │
+  │ B: reserved 2048 tokens      │ │           │    │    │    └─────┐
+  │ ████████████████░░░░░░░░░░░░ │ │           │    │    └───────┐  │
+  │ ▲1600 used        ▲448 DEAD  │ │           │    └──────┐     │  │
+  └──────────────────────────────┘ │           ▼           ▼     ▼  ▼
+  ┌──────────────────────────────┐ │  PHYSICAL POOL — order irrelevant
+  │ C: reserved 2048 tokens      │ │  ┌────┬────┬────┬────┬────┬────┬────┐
+  │ █░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ │  │ 17 │ 92 │ 93 │4711│4712│5003│ …  │
+  │ ▲64 used  ▲1984 DEAD         │ │  │ A3 │ A1 │ B0 │ A0 │ C0 │ A2 │free│
+  └──────────────────────────────┘ │  └────┴────┴────┴────┴────┴────┴────┘
+  ┌──────────────────────────────┐ │
+  │ ▒▒ 900-token hole ▒▒         │ │  A 4th sequence needs ONE free block
+  │ too small for a 2048         │ │  to be admitted — not 2048 contiguous
+  │ reservation → UNUSABLE       │ │  tokens. Every free block is
+  └──────────────────────────────┘ │  interchangeable.
+                                   │
+  D arrives → <b>REFUSED</b>              │  D arrives → <b>ADMITTED</b>
+  ─────────────────────────────────┼───────────────────────────────────────
+  WASTE per sequence:              │  WASTE per sequence:
+    max_model_len − actual         │    <= block_size − 1 = <b>15 tokens</b>
+    scales with your context       │    a CONSTANT, independent of context
+    setting; ~80% in practice      │    length; ~1% at realistic lengths
+  EXTERNAL fragmentation: <b>yes</b>      │  EXTERNAL fragmentation:
+                                   │    <b>structurally impossible</b></pre>
+  </div>
+
+  <ol class="play">
+    <li>
+      <span class="what">Near-zero fragmentation</span>
+      <p>The only waste left is the partially filled <em>last</em> block of each sequence — bounded by <code>block_size − 1</code> tokens per sequence <em>forever</em>, however long it grows. The paper reports under 4% waste against 60–80%. External fragmentation is not reduced, it is <strong>eliminated</strong>: uniform blocks mean there is no such thing as a hole of the wrong shape.</p>
+    </li>
+    <li>
+      <span class="what">On-demand growth</span>
+      <p>A sequence takes what its prompt needs, then one more block every 16 generated tokens. This is what turns 07.2's worst-case 48 concurrent into a measured 97 on the same pool.</p>
+    </li>
+    <li>
+      <span class="what">Admission without a search</span>
+      <p>The scheduler admits when <em>enough free blocks exist anywhere</em> — a counter comparison, not a search for a contiguous run. That is what physically permits a high <code>max-num-seqs</code>.</p>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the kernel</span></div>
+  <h2>Why this is a paper, not a config flag</h2>
+
+  <div class="col">
+  <p>This is the part most explanations skip. Standard attention for a query at position <code>t</code> walks <code>K[0], K[1], … K[t-1]</code> at regular address increments — wide, coalesced, prefetchable reads, exactly what a GPU's memory subsystem is built for.</p>
+  <p>Under paging, positions 0–15 live in one physical block, 16–31 in another, and those blocks are <em>anywhere</em>. So for each logical block <code>i</code> the kernel must look up <code>block_table[i]</code>, compute a physical base address, and read 16 positions from there.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="h">Breaking contiguity is free in the allocator and expensive in the kernel</span>
+    <p>You are trading a memory-layout problem for an indirection problem, and the indirection has to be paid on every attention step of every sequence. That is why PagedAttention arrived as a paper with a custom kernel rather than a patch to an allocator — and why "just make the cache non-contiguous" was not a thing anyone could do before.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part four</span><span>sharing</span></div>
+  <h2>Content-addressed blocks</h2>
+
+  <div class="col">
+  <p>Two sequences can share a block only if they agree its contents are identical — and identical <em>tokens</em> do not imply identical <em>KV</em>, because K and V depend on everything before them through attention. The fix is <strong>hash chaining</strong>.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>hash_block_tokens — vllm/v1/core/kv_cache_utils.py</span><span class="who">source</span></div>
+<pre>BlockHash(hash_function((<span class="hl">parent_block_hash</span>,
+                         <span class="hl">curr_block_token_ids_tuple</span>,
+                         <span class="hl">extra_keys</span>)))
+
+                Block 1                Block 2                Block 3
+     [A gentle breeze stirred] [the leaves as children] [laughed in the...]
+B1:  |&lt;--- block tokens ---&gt;|
+B2:  |&lt;------ prefix ------&gt;| |&lt;--- block tokens ---&gt;|
+B3:  |&lt;-------------- prefix --------------&gt;| |&lt;--- block tokens ---&gt;|</pre>
+    <figcaption>Each component is load-bearing. <b>parent_block_hash</b> makes identity depend on the entire prefix, so block 3 cannot collide with block 3 of a different document that happens to end with the same four words. <b>extra_keys</b> carries the LoRA adapter id, multimodal input hashes (image placeholder tokens are identical across images, so the image's own hash must enter here) and the optional <code>cache_salt</code>.</figcaption>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Rule</th><th>Consequence in practice</th></tr>
+    <tr>
+      <td><b>Only full blocks are cached</b></td>
+      <td>A partial tail block has no stable identity — its remaining slots will be written by tokens not yet decided. So <b>prefix hits land on <code>block_size</code> boundaries</b>: a 2,000-token shared system prompt hits on 1,984 tokens and re-prefills the last 16.</td>
+    </tr>
+    <tr>
+      <td><b>The hash default changed to SHA-256</b></td>
+      <td>A deliberate collision-safety decision. A collision in a multi-tenant deployment means one tenant's request reads another tenant's KV — a data-leak class of bug, not a performance bug. <code>xxhash</code> is faster; <code>sha256_cbor</code> is reproducible across languages.</td>
+    </tr>
+    <tr>
+      <td><b><code>cache_salt</code> isolates tenants</b></td>
+      <td>Closes a real timing side channel: without it an adversary can infer whether a prefix was seen recently by measuring TTFT. The cost is fragmenting the cache along salt boundaries — which is exactly the trade you want.</td>
+    </tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part five</span><span>keeping it full</span></div>
+  <h2>Continuous batching</h2>
+
+  <div class="col">
+  <p>PagedAttention makes a large batch physically <em>fit</em>. Continuous batching is what keeps it <em>full</em>.</p>
+  </div>
+
+  <div class="map">
+<pre>  Five requests. Output lengths: A=8, B=2, C=12, D=3, E=6.
+  █ = slot doing useful work      · = slot occupied but IDLE
+
+  ── STATIC BATCHING (batch of 4, then the next) ─────────────────────────
+   iter:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18
+   A   │  █  █  █  █  █  █  █  █  ·  ·  ·  ·│
+   B   │  █  █  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·│    E waits for the ENTIRE
+   C   │  █  █  █  █  █  █  █  █  █  █  █  █│    first batch to drain,
+   D   │  █  █  █  ·  ·  ·  ·  ·  ·  ·  ·  ·│    though slots freed at
+       └────────── batch 1 ─────────────────┘    iteration 3.
+   E   │                                     █  █  █  █  █  █│
+
+  ── CONTINUOUS (ITERATION-LEVEL) BATCHING ──────────────────────────────
+   iter:  1  2  3  4  5  6  7  8  9 10 11 12
+   A   │  █  █  █  █  █  █  █  █│
+   B   │  █  █│                              ← retires at iter 2,
+   C   │  █  █  █  █  █  █  █  █  █  █  █  █│  blocks returned to pool
+   D   │  █  █  █│                           ← retires at iter 3
+   E   │        █  █  █  █  █  █│            ← ADMITTED at iter 3
+
+  The batch is re-planned after EVERY forward pass.</pre>
+  </div>
+
+  <div class="note calm">
+    <span class="h">The multiplier depends entirely on your traffic</span>
+    <p>Anyscale's naive static baseline collapsed to <strong>81 tokens/second</strong> on OPT-13B once realistic output-length variance was introduced, and continuous batching reached up to <strong>23×</strong> that on the same 40 GB A100. Orca (OSDI '22) reported 36.9× at matched latency versus FasterTransformer on GPT-3 175B.</p>
+    <p>Note the framing: with <em>fixed-length</em> outputs static batching is fine. It is the <strong>variance</strong> that destroys it — so your multiplier is a property of your length distribution, not of the software.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part six</span><span>running dry</span></div>
+  <h2>Preemption is recomputation, not suspension</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>_preempt_request — vllm/v1/core/sched/scheduler.py</span><span class="who">source</span></div>
+<pre><span class="dim"># victim selection — FCFS is the default</span>
+preempted_req = self.running.pop()   <span class="hl"># the LAST admitted request (LIFO)</span>
+
+self._free_request_blocks(request)   <span class="dim"># ALL its blocks return to the pool</span>
+request.status = RequestStatus.PREEMPTED
+request.num_computed_tokens = <span class="bad">0</span>       <span class="bad"># everything computed is DISCARDED</span>
+request.num_preemptions += 1
+self.waiting.prepend_request(request) <span class="dim"># goes to the FRONT of the queue</span></pre>
+    <figcaption>LIFO eviction preserves the progress of the oldest requests — the standard anti-convoy choice. Under <code>policy = "priority"</code> the victim is instead the lowest-priority, latest-arriving request.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">A preempted 8k-context request pays a second full 8k prefill</span>
+    <p><code>num_computed_tokens = 0</code> means resumption re-runs the entire prefill. That is why preemptions hit TTFT so hard, and why <code>vllm:num_preemptions_total</code> climbing alongside a latency spike is <strong>one problem, not two</strong>.</p>
+    <p>Prefix caching softens this materially: the recompute is a fresh prefill that goes through <code>get_computed_blocks</code> like any other, and the request's own blocks were only just freed — so unless they have been evicted they are still hashed and hittable. An under-appreciated second-order benefit of default-on APC.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Why can't you just <code>realloc</code> the KV buffer as the sequence grows?</summary>
+    <div class="ans">
+      <p>Growing means copying, and the copy is hundreds of MB to gigabytes of GPU memory inside a decode step with roughly a 5 ms budget. One 8k-context 70B sequence is 2.5 GiB — about 1.5 ms round-trip at 3.35 TB/s, <em>per growth, per sequence</em>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>How much memory does paging waste per sequence, and how does it scale with context length?</summary>
+    <div class="ans">
+      <p>At most <code>block_size − 1</code> = 15 tokens, in the partially filled last block. <strong>It does not scale at all</strong> — it is a constant per sequence regardless of how long the sequence grows, which is why it is ~1% at realistic lengths against 80% for contiguous.</p>
+      <p>External fragmentation is not reduced but structurally eliminated: uniform blocks mean every free block is interchangeable.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Two requests share a 2,000-token system prompt. How many tokens hit the prefix cache?</summary>
+    <div class="ans">
+      <p>1,984 — <code>floor(2000/16) × 16</code>. Only <em>full</em> blocks are cached, because a partial tail block has no stable identity: its remaining slots will be written by tokens not yet decided.</p>
+      <p>The last 16 tokens are re-prefilled.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does a block's hash include its parent's hash?</summary>
+    <div class="ans">
+      <p>Because identical tokens do not imply identical KV — K and V depend on the entire preceding context through attention. Chaining makes a block's identity depend on its whole prefix, so block 3 of one document cannot collide with block 3 of a different document that happens to end with the same words.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary><code>vllm:num_preemptions_total</code> is climbing and p99 TTFT spiked. One problem or two?</summary>
+    <div class="ans">
+      <p>One. Preemption sets <code>num_computed_tokens = 0</code>, so a preempted request re-runs its <em>entire</em> prefill on resumption. It is recomputation, not suspension.</p>
+      <p>With prefix caching on, much of that reprefill may hit cache — the victim's blocks were only just freed and are still hashed unless evicted.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>When is static batching actually fine?</summary>
+    <div class="ans">
+      <p>When output lengths are uniform. The collapse is caused by <em>variance</em>: a 20-token reply batched with a 2,000-token reply leaves its slot idle for 1,980 steps.</p>
+      <p>So the throughput multiplier you get from continuous batching is a property of your traffic's length distribution, not of the serving engine.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 07.4–07.10</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Contiguity was the bug</span><span class="v">Not allocation size. All four obvious fixes fail for the same underlying reason.</span></li>
+    <li><span class="k">Block table = page table</span><span class="v">The correspondence is exact, down to refcounts, copy-on-write, and LRU eviction.</span></li>
+    <li><span class="k">Waste is a constant</span><span class="v">≤15 tokens per sequence, forever, independent of context length.</span></li>
+    <li><span class="k">External frag is impossible</span><span class="v">Uniform blocks mean no hole can be the wrong shape.</span></li>
+    <li><span class="k">The cost is in the kernel</span><span class="v">Indirection through the block table on every attention step. That is why it is a paper.</span></li>
+    <li><span class="k">Hits land on boundaries</span><span class="v">Only full blocks are cached. 2,000-token prompt → 1,984-token hit.</span></li>
+    <li><span class="k">Variance, not length</span><span class="v">Static batching fails on output-length variance. Uniform outputs need no continuous batching.</span></li>
+    <li><span class="k">Preemption discards</span><span class="v">LIFO victim, all blocks freed, <code>num_computed_tokens = 0</code>, full reprefill on resume.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/07-inference-serving/lessons/03-pagedattention-and-vllm.html">Back to lesson 07.3</a>
+  </footer>
+</div>
+
+</body>
+</html>

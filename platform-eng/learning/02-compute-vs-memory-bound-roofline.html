@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 03.2: arithmetic intensity, the ridge point, and six real workloads plotted on a drawn H100 roofline — from SAXPY at 0.06% of peak to fused attention above the compute roof.">
+<meta name="color-scheme" content="light dark">
+<title>The Roofline · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.roofwrap{margin:26px 0 8px;padding:18px 16px 8px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto}
+svg.roof{display:block;min-width:660px;width:100%;height:auto;font-family:var(--f-mono)}
+svg.roof .grid{stroke:var(--rule-soft);stroke-width:1}
+svg.roof .axis{stroke:var(--ink-3);stroke-width:1.2}
+svg.roof .tick,svg.roof .axlbl{fill:var(--ink-3);font-size:11px;letter-spacing:.04em}
+svg.roof .axlbl{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase}
+svg.roof .memroof{stroke:var(--amber);stroke-width:2.5;fill:none}
+svg.roof .roofline{stroke-width:2.5;fill:none}
+svg.roof .roofline.r8{stroke:var(--moss);stroke-dasharray:7 4}
+svg.roof .roofline.r16{stroke:var(--moss)}
+svg.roof .roofline.r32{stroke:var(--ink-3);stroke-dasharray:3 3}
+svg.roof .rooflbl{font-size:11px;font-weight:600;letter-spacing:.03em}
+svg.roof .rooflbl.r8,svg.roof .rooflbl.r16{fill:var(--moss)}
+svg.roof .rooflbl.r32{fill:var(--ink-3)}
+svg.roof .ridge{fill:var(--amber);stroke:var(--surface);stroke-width:2}
+svg.roof .ridgelbl{fill:var(--amber);font-size:10px;font-weight:600;letter-spacing:.05em}
+svg.roof .wedge{fill:var(--ink-3);font-size:12px;font-weight:600;letter-spacing:.14em}
+svg.roof .wedge.sub{font-size:10.5px;font-weight:400;letter-spacing:.04em}
+svg.roof .pt{stroke:var(--surface);stroke-width:2}
+svg.roof .pt.bad{fill:var(--clay)} svg.roof .pt.mid{fill:var(--amber)} svg.roof .pt.good{fill:var(--moss)}
+svg.roof .ptlbl{fill:var(--ink);font-size:11.5px;font-weight:600}
+svg.roof .ptsub{fill:var(--ink-3);font-size:10.5px}
+svg.roof .ptnum{fill:var(--paper);font-size:11px;font-weight:600}
+svg.roof .memlbl{fill:var(--amber);font-size:10.5px;font-weight:600;letter-spacing:.05em}
+.rlegend{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:0;
+  margin-top:16px;border-top:1px solid var(--rule)}
+.ritem{display:grid;grid-template-columns:24px 1fr;gap:4px 10px;padding:11px 14px 11px 0;
+  border-bottom:1px solid var(--rule-soft);align-items:baseline}
+.rn{grid-row:span 3;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+  font-family:var(--f-mono);font-size:11px;font-weight:600;color:var(--paper);align-self:start}
+.rn.bad{background:var(--clay)} .rn.mid{background:var(--amber)} .rn.good{background:var(--moss)}
+.rl{font-family:var(--f-head);font-weight:600;font-size:15px;color:var(--ink)}
+.ra,.rs{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3)}
+.figcap{font-size:14.5px;color:var(--ink-3);margin:12px 0 30px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;max-width:70ch}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/03-gpu-hardware/lessons/02-compute-vs-memory-bound-roofline.html">Back to lesson 03.2</a>
+
+<header class="mast">
+  <p class="kicker">Module 03 · 03.2 · GPU hardware</p>
+  <h1>One chart that<br>orders every<br>optimisation</h1>
+  <p class="standfirst">Arithmetic intensity decides which of two ceilings you are under. Where those ceilings cross is the single most useful number in GPU performance work.</p>
+  <div class="mast-meta">
+    <span><b>Model</b> attainable = min(P, AI × B)</span>
+    <span><b>H100 BF16 ridge</b> 295 FLOP/byte</span>
+    <span><b>Plotted</b> six derived workloads</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Two independent physical facts bound how fast any kernel can finish. The roofline is what you get when you plot both on the same axes — and the single most useful number in GPU performance work is where they cross.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the model</span></div>
+  <h2>Two ceilings, one graph</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>the whole model, in four lines</span><span class="who">derivation</span></div>
+<pre>  t >= FLOPs / P        <span class="dim">compute time floor  — P = peak FLOP/s</span>
+  t >= Bytes / B        <span class="dim">memory  time floor  — B = peak byte/s</span>
+
+  These are <b>simultaneous</b>, not alternatives. The kernel needs both.
+      t >= max( FLOPs/P , Bytes/B )
+
+                        FLOPs
+  attainable FLOP/s = ───────── = <span class="hl">min( P , (FLOPs/Bytes) x B )</span>
+                          t                        ↑
+                                          this ratio does all the work</pre>
+    <figcaption>Everything else in this lesson is a consequence of that last expression.</figcaption>
+  </figure>
+
+  <div class="note">
+    <span class="h">Arithmetic intensity — and the word that matters</span>
+    <p><strong>AI = FLOPs performed ÷ bytes moved to and from DRAM</strong>, in FLOP/byte.</p>
+    <p>Williams, Waterman and Patterson define it as operations per byte of traffic <em>between the processor and off-chip DRAM</em>. Bytes served from L1 or L2 <strong>do not count</strong> — which means AI is a property of the algorithm <em>and its implementation</em> <em>and</em> the cache size, not of the mathematics alone. That is why "fusion raises arithmetic intensity" is a mechanism and not a slogan.</p>
+  </div>
+
+  <div class="col">
+  <p>Plot AI on a log x-axis against attainable FLOP/s on a log y-axis. The memory bound <code>AI × B</code> becomes a slanted line of slope 1; the compute bound <code>P</code> is flat. Where they meet is the <strong>ridge point</strong>:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>machine balance</span><span class="who">definition</span></div>
+<pre>   ridge-point AI = P / B     [FLOP/byte]
+
+   H100 SXM5, dense BF16:   989e12 / 3.35e12 = <span class="hl">295 FLOP/byte</span>
+
+   You need ~295 FLOPs of work per byte of HBM traffic
+   <b>just to stop being memory-bound.</b>
+   Below it, no kernel however perfect reaches the compute roof.
+   Above it, you CAN be compute-bound — nothing guarantees it.</pre>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the chart</span></div>
+  <h2>H100 SXM5, with six real workloads on it</h2>
+
+  <div class="roofwrap">
+<svg viewBox="0 0 900 520" role="img" aria-label="H100 SXM5 roofline on log-log axes: a slanted HBM bandwidth roof meeting three flat compute roofs, with six numbered workloads plotted" class="roof">
+<title>H100 SXM5 roofline with six workloads</title>
+<line class="grid" x1="80.0" y1="28" x2="80.0" y2="462"/>
+<text class="tick" x="80.0" y="482" text-anchor="middle">0.1</text>
+<line class="grid" x1="238.8" y1="28" x2="238.8" y2="462"/>
+<text class="tick" x="238.8" y="482" text-anchor="middle">1</text>
+<line class="grid" x1="397.6" y1="28" x2="397.6" y2="462"/>
+<text class="tick" x="397.6" y="482" text-anchor="middle">10</text>
+<line class="grid" x1="556.4" y1="28" x2="556.4" y2="462"/>
+<text class="tick" x="556.4" y="482" text-anchor="middle">100</text>
+<line class="grid" x1="715.2" y1="28" x2="715.2" y2="462"/>
+<text class="tick" x="715.2" y="482" text-anchor="middle">1k</text>
+<line class="grid" x1="874.0" y1="28" x2="874.0" y2="462"/>
+<text class="tick" x="874.0" y="482" text-anchor="middle">10k</text>
+<line class="grid" x1="80" y1="462.0" x2="874" y2="462.0"/>
+<text class="tick" x="70" y="466.0" text-anchor="end">100 G</text>
+<line class="grid" x1="80" y1="372.5" x2="874" y2="372.5"/>
+<text class="tick" x="70" y="376.5" text-anchor="end">1 T</text>
+<line class="grid" x1="80" y1="283.0" x2="874" y2="283.0"/>
+<text class="tick" x="70" y="287.0" text-anchor="end">10 T</text>
+<line class="grid" x1="80" y1="193.5" x2="874" y2="193.5"/>
+<text class="tick" x="70" y="197.5" text-anchor="end">100 T</text>
+<line class="grid" x1="80" y1="104.1" x2="874" y2="104.1"/>
+<text class="tick" x="70" y="108.1" text-anchor="end">1 P</text>
+<path class="memroof" d="M 80.0 415.0 L 678.9 77.5"/>
+<text class="memlbl" transform="rotate(-31 349.8 263.0)" x="349.8" y="252.0">HBM roof — slope fixed by 3.35 TB/s</text>
+<path class="roofline r8" d="M 678.9 77.5 L 874 77.5"/>
+<text class="rooflbl r8" x="870" y="68.5" text-anchor="end">FP8 tensor · 1,979 T</text>
+<circle class="ridge" cx="678.9" cy="77.5" r="4.5"/>
+<text class="ridgelbl" x="687.9" y="47.5" text-anchor="start">ridge 591</text>
+<path class="roofline r16" d="M 631.1 104.5 L 874 104.5"/>
+<text class="rooflbl r16" x="870" y="95.5" text-anchor="end">BF16 tensor · 989 T</text>
+<circle class="ridge" cx="631.1" cy="104.5" r="4.5"/>
+<text class="ridgelbl" x="640.1" y="122.5" text-anchor="start">ridge 295</text>
+<path class="roofline r32" d="M 445.4 209.1 L 874 209.1"/>
+<text class="rooflbl r32" x="870" y="200.1" text-anchor="end">FP32 CUDA cores · 67 T</text>
+<circle class="ridge" cx="445.4" cy="209.1" r="4.5"/>
+<text class="ridgelbl" x="454.4" y="227.1" text-anchor="start">ridge 20</text>
+<text class="wedge" x="179.0" y="139.7">MEMORY-BOUND</text>
+<text class="wedge sub" x="179.0" y="161.2">ceiling = AI x 3.35 TB/s,</text>
+<text class="wedge sub" x="179.0" y="181.9">and nothing else</text>
+<text class="wedge" x="738.4" y="279.3" text-anchor="middle">COMPUTE-BOUND</text>
+<circle class="pt bad" cx="115.4" cy="395.0" r="9"/>
+<text class="ptnum" x="115.4" y="398.6" text-anchor="middle">1</text>
+<circle class="pt bad" cx="238.8" cy="325.5" r="9"/>
+<text class="ptnum" x="238.8" y="329.1" text-anchor="middle">2</text>
+<circle class="pt bad" cx="477.8" cy="190.8" r="9"/>
+<text class="ptnum" x="477.8" y="194.4" text-anchor="middle">3</text>
+<circle class="pt mid" cx="593.4" cy="125.7" r="9"/>
+<text class="ptnum" x="593.4" y="129.3" text-anchor="middle">4</text>
+<circle class="pt good" cx="764.6" cy="104.5" r="9"/>
+<text class="ptnum" x="764.6" y="108.1" text-anchor="middle">5</text>
+<circle class="pt good" cx="784.5" cy="113.7" r="9"/>
+<text class="ptnum" x="784.5" y="117.3" text-anchor="middle">6</text>
+<line class="axis" x1="80" y1="462" x2="874" y2="462"/>
+<line class="axis" x1="80" y1="28" x2="80" y2="462"/>
+<text class="axlbl" x="874" y="506" text-anchor="end">arithmetic intensity — FLOP / byte of HBM traffic</text>
+<text class="axlbl" x="22" y="36" transform="rotate(-90 22 36)" text-anchor="end">attainable FLOP/s</text>
+</svg>
+<div class="rlegend">
+<div class="ritem"><span class="rn bad">1</span><span class="rl">SAXPY / elementwise</span><span class="ra">AI = 1/6 = 0.167</span><span class="rs">0.56 T · 0.06% of roof</span></div>
+<div class="ritem"><span class="rn bad">2</span><span class="rl">decode, batch 1</span><span class="ra">AI = 1 = 1</span><span class="rs">3.35 T · 0.34% of roof</span></div>
+<div class="ritem"><span class="rn bad">3</span><span class="rl">attention prefill, unfused</span><span class="ra">AI = d/4 = 32</span><span class="rs">107 T · memory-bound</span></div>
+<div class="ritem"><span class="rn mid">4</span><span class="rl">GEMM N=512</span><span class="ra">AI = N/3 = 171</span><span class="rs">573 T · below the ridge</span></div>
+<div class="ritem"><span class="rn good">5</span><span class="rl">attention prefill, fused</span><span class="ra">AI = S/2 = 2048</span><span class="rs">989 T · at the roof</span></div>
+<div class="ritem"><span class="rn good">6</span><span class="rl">GEMM N=8192</span><span class="ra">AI = N/3 = 2731</span><span class="rs">780 T · 79% of roof</span></div>
+</div>
+  </div>
+  <p class="figcap">Log–log, both axes in decades. The slanted amber line is HBM bandwidth — its slope is fixed at 3.35 TB/s. Each compute roof has its own ridge point, because each divides a different <code>P</code> by the same <code>B</code>. Every point in the left-hand wedge has a ceiling of <code>AI × 3.35 TB/s</code> and nothing else can raise it.</p>
+
+  <div class="split">
+    <div class="pv">
+      <h5>Moving a point</h5>
+      <ul>
+        <li><b>→ right</b> = fuse kernels</li>
+        <li><b>→ right</b> = batch harder</li>
+        <li><b>→ right</b> = block/tile for reuse</li>
+        <li>all three shrink DRAM bytes per FLOP</li>
+      </ul>
+    </div>
+    <div class="sh">
+      <h5>Moving a roof</h5>
+      <ul>
+        <li><b>↑ up</b> = lower precision (BF16→FP8)</li>
+        <li><b>↑ up</b> = newer SKU</li>
+        <li><b>↗ tilt</b> = more bandwidth (H100→H200)</li>
+        <li>only helps if you can reach it</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="h">The lower roofs are a diagnostic ordering</span>
+    <p>A kernel that only uses FP32 CUDA cores is capped at 67 TFLOP/s no matter how high its AI — so its ridge sits at AI = 20. This is the original paper's <em>ceilings</em> idea: below the topmost roof are lower roofs for instruction mixes the kernel fails to exploit (2009: no SIMD, no FMA; 2026: no tensor cores, no FP8, no 2:4 sparsity).</p>
+    <p>Their value is <strong>ordering your work</strong>: if you are under the FP32 ceiling, switching to tensor cores is worth more than any bandwidth optimisation, and no amount of bandwidth will help you.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>derivations</span></div>
+  <h2>Six workloads you should reproduce cold</h2>
+
+  <div class="col">
+  <p>All figures assume FP16/BF16 — 2 bytes per element — unless stated.</p>
+  </div>
+
+  <h3>Dense GEMM — AI grows linearly with size</h3>
+  <figure class="term">
+    <div class="cmd"><span>C = A·B, A is M×K, B is K×N</span><span class="who">derivation</span></div>
+<pre>  FLOPs = 2 · M · N · K          <span class="dim">one multiply + one add per (m,n,k)</span>
+  Bytes = 2 · (M·K + K·N + M·N)  <span class="dim">read A, read B, write C</span>
+
+  square case M=N=K:   AI = 2N³ / (2 · 3N²) = <span class="hl">N/3</span>  FLOP/byte</pre>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th class="m">N</th><th class="m">AI</th><th>vs H100 BF16 ridge (295)</th></tr>
+    <tr><td class="m">512</td><td class="m">171</td><td class="no">below → memory-bound</td></tr>
+    <tr><td class="m">1,024</td><td class="m">341</td><td>just above</td></tr>
+    <tr><td class="m">4,096</td><td class="m">1,365</td><td class="yes">4.6× above → compute-bound</td></tr>
+    <tr><td class="m">8,192</td><td class="m">2,731</td><td class="yes">9.3× above → firmly compute-bound</td></tr>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The caveat that is the entire point of cuBLAS</span>
+    <p><code>N/3</code> assumes each matrix is read from DRAM <em>exactly once</em>, which requires blocking so tiles stay resident in shared memory and registers. A naive triple loop re-reads a row of A and a column of B for every output element, giving <code>AI ≈ 0.5 FLOP/byte</code>.</p>
+    <p><strong>Same mathematics, same FLOPs, 5,000× difference in arithmetic intensity at N=8192 — entirely from data reuse.</strong> This is why AI is a property of the implementation.</p>
+  </div>
+
+  <h3>Elementwise and SAXPY — the floor</h3>
+  <figure class="term">
+    <div class="cmd"><span>C = A + B  ·  y = a·x + y</span><span class="who">derivation</span></div>
+<pre>  elementwise add:   FLOPs = N        Bytes = 3N x 2B = 6N
+                     AI = N / 6N              = <span class="bad">0.167</span> FLOP/byte
+
+  SAXPY (FP32):      FLOPs = 2N       Bytes = 3N x 4B = 12N
+                     AI = 2N / 12N            = <span class="bad">0.167</span> FLOP/byte
+
+  attainable = 0.167 x 3.35e12 = 5.6e11 = <span class="bad">0.56 TFLOP/s</span>
+             = <span class="bad">0.057%</span> of the 989 TFLOP/s compute roof</pre>
+    <figcaption>Nothing is wrong with these kernels. <b>0.56 TFLOP/s <em>is</em> the ceiling at that arithmetic intensity.</b> A faster-compute GPU raises a roof they will never touch.</figcaption>
+  </figure>
+
+  <h3>Attention — the same maths, 64× apart</h3>
+  <figure class="term">
+    <div class="cmd"><span>prefill, one head, one layer, sequence S, head dim d</span><span class="who">derivation</span></div>
+<pre>  FLOPs:  Q·Kᵀ = 2·S²·d ,  P·V = 2·S²·d   →  total ≈ 4·S²·d
+
+  <span class="ok">FUSED (FlashAttention-style)</span> — the S×S score matrix never
+  touches HBM:
+      Bytes = (3·S·d read + 1·S·d written) x 2B = 8·S·d
+      AI    = 4S²d / 8Sd = <span class="hl">S/2</span>          S=4096 → <span class="ok">2,048</span> FLOP/byte
+
+  <span class="bad">UNFUSED</span> — the score matrix is written and read back:
+      Bytes ≈ 8·S·d + 16·S²
+              8·4096·128 =   4.2 MB
+              16·4096²   = <span class="bad">268 MB</span>   ← dominates completely
+      AI    ≈ 4S²d / 16S² = d/4 = <span class="bad">32</span> FLOP/byte</pre>
+    <figcaption>2,048 versus 32. Same attention, same FLOPs, a <b>64× difference</b> in arithmetic intensity — moving the kernel from firmly compute-bound to firmly memory-bound. That is the entire FlashAttention result stated as a movement along the x-axis. <b>Fusion is not a micro-optimisation; it is a change of which roof you are under.</b></figcaption>
+  </figure>
+
+  <div class="note calm">
+    <span class="h">The formal version of two things you already say</span>
+    <p><strong>"Prefill is compute-bound"</strong> = AI is <code>S/2</code>, which passes the ridge at S ≈ 590 and keeps climbing.</p>
+    <p><strong>"Decode is memory-bound"</strong> = AI is ≈1 FLOP/byte at batch 1, ~295× to the left of the ridge. That is the same arithmetic that pins <code>GPU_UTIL</code> at 100% in lesson 05.1.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part four</span><span>the trend</span></div>
+  <h2>The ridge point marches right</h2>
+
+  <div class="tw">
+  <table>
+    <tr><th>Machine</th><th>Peak (relevant precision)</th><th class="m">Bandwidth</th><th class="m">Ridge (FLOP/byte)</th></tr>
+    <tr><td>Opteron X2 2214 (2006, dual socket)</td><td>17.6 GFLOP/s FP64</td><td class="m">15 GB/s</td><td class="m">~1.0</td></tr>
+    <tr><td>Opteron X4 (2008)</td><td>—</td><td class="m">—</td><td class="m">4.4</td></tr>
+    <tr><td>V100 SXM2 (2017)</td><td>125 TFLOP/s FP16 tensor</td><td class="m">900 GB/s</td><td class="m">~139</td></tr>
+    <tr><td>A100 SXM 80GB</td><td>312 TFLOP/s BF16 dense</td><td class="m">2.039 TB/s</td><td class="m">153</td></tr>
+    <tr><td>H100 SXM5</td><td>989 TFLOP/s BF16 dense</td><td class="m">3.35 TB/s</td><td class="m">295</td></tr>
+    <tr><td>H200 SXM</td><td>989 TFLOP/s BF16 dense</td><td class="m">4.8 TB/s</td><td class="m"><span class="yes">206</span></td></tr>
+    <tr><td>B200 SXM</td><td>2,250 TFLOP/s BF16 dense</td><td class="m">7.7 TB/s</td><td class="m">292</td></tr>
+  </table>
+  </div>
+
+  <div class="col">
+  <p><strong>In twenty years the ridge point moved from 1 to ~300 FLOP/byte.</strong> That single trend is why "memory-bound" is the default condition of modern accelerated computing, and why so much of ML systems engineering is really data-movement engineering.</p>
+  <p>The H200 row is the interesting one: it is the only entry that moves the ridge point <em>left</em> relative to its predecessor, because NVIDIA raised bandwidth while holding compute fixed. A lower ridge point means <em>more</em> workloads land in the compute-bound region — i.e. more of them can actually use the FLOPs you are paying for.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>What is the H100's BF16 ridge point, and what does it physically mean?</summary>
+    <div class="ans">
+      <p>989e12 ÷ 3.35e12 ≈ <b>295 FLOP/byte</b>. It is the arithmetic intensity at which the chip's two capabilities are exactly matched.</p>
+      <p>Below it, the memory system is the binding constraint and no kernel — however well written — can reach the compute roof. Above it you <em>may</em> be compute-bound; a bad kernel still underperforms both roofs.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>A SAXPY kernel gets 0.56 TFLOP/s on an H100. Is it badly written?</summary>
+    <div class="ans">
+      <p>No — that is exactly its ceiling. AI = 0.167, so attainable = 0.167 × 3.35e12 = 5.6e11 FLOP/s. It is achieving 100% of what the roofline permits, which happens to be 0.057% of peak compute.</p>
+      <p>Buying a faster-compute GPU raises a roof this kernel never touches. Only more bandwidth, or a higher-AI formulation, helps.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does FlashAttention help so much, in roofline terms?</summary>
+    <div class="ans">
+      <p>It moves the point right, not up. Fused: AI = S/2 = 2,048 at S=4096. Unfused: AI = d/4 = 32, because the S×S score matrix round-trips to HBM and 16·S² (268 MB) dominates the 8·S·d (4.2 MB) of real data.</p>
+      <p>Identical FLOPs, 64× the arithmetic intensity — crossing from memory-bound to compute-bound.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Naive GEMM gets AI ≈ 0.5 instead of N/3. What changed?</summary>
+    <div class="ans">
+      <p>Only the denominator. A naive triple loop re-reads a row of A and a column of B from DRAM for every output element, so bytes scale as N³ rather than N². The numerator — 2N³ FLOPs — is unchanged.</p>
+      <p>At N=8192 that is a 5,000× difference in AI from data reuse alone. This is why arithmetic intensity is a property of the implementation, and why you should never quote an AI without saying whether it assumes blocking.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your kernel sits under the FP32 ceiling. What do you fix first?</summary>
+    <div class="ans">
+      <p>Use the tensor cores. Under the FP32 roof you are capped at 67 TFLOP/s regardless of arithmetic intensity, so <em>no</em> amount of bandwidth or fusion work will raise you above it.</p>
+      <p>That is what the lower roofs are for: they order your optimisation work rather than merely describing it.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why is the H200 an unusual row in the SKU table?</summary>
+    <div class="ans">
+      <p>It is the only one that moves the ridge point <em>left</em> — from 295 to 206 — because bandwidth rose (3.35 → 4.8 TB/s) while dense BF16 compute stayed at 989 TFLOP/s.</p>
+      <p>Practically: a lower ridge means more of your workloads land compute-bound, so more of the FLOPs you are renting are actually reachable.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 03.3–03.7 and 07</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">min(P, AI×B)</span><span class="v">The whole model. Compute and memory are simultaneous bounds, not alternatives.</span></li>
+    <li><span class="k">DRAM bytes only</span><span class="v">L1/L2 traffic does not count, so AI depends on the implementation and the cache — not the mathematics.</span></li>
+    <li><span class="k">Ridge = P/B</span><span class="v">H100 BF16 ≈ 295 FLOP/byte. The minimum intensity required to reach peak.</span></li>
+    <li><span class="k">GEMM is N/3</span><span class="v">Blocked. Naive is ~0.5. The gap is the reason cuBLAS exists.</span></li>
+    <li><span class="k">Prefill S/2, decode ≈1</span><span class="v">The formal statement of "prefill is compute-bound, decode is memory-bound."</span></li>
+    <li><span class="k">Fusion moves right</span><span class="v">FlashAttention is 32 → 2,048 FLOP/byte. A change of roof, not a micro-optimisation.</span></li>
+    <li><span class="k">Roofs order your work</span><span class="v">Under the FP32 ceiling, tensor cores beat any bandwidth work. Always.</span></li>
+    <li><span class="k">The ridge marches right</span><span class="v">1 → 295 in twenty years. Memory-bound is now the default condition.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/03-gpu-hardware/lessons/02-compute-vs-memory-bound-roofline.html">Back to lesson 03.2</a>
+  </footer>
+</div>
+
+</body>
+</html>

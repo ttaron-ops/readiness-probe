@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 09.1: the 9:1 drop from NVLink to NIC drawn as a ladder, what happens at each hop, and why scaling a ring all-reduce from 64 to 4,096 GPUs costs only 14%.">
+<meta name="color-scheme" content="light dark">
+<title>The Bandwidth Cliff · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.ladder{margin:26px 0 8px;padding:20px;background:var(--surface);border:1px solid var(--rule)}
+.lrow{display:flex;align-items:center;gap:14px;padding:9px 0;font-family:var(--f-mono);font-size:12.5px}
+.lrow+.lrow{border-top:1px solid var(--rule-soft)}
+.lrow .nm{width:190px;flex:none;color:var(--ink);font-weight:500}
+.lbar{height:20px;border-radius:2px;flex:none}
+.lrow .v{color:var(--ink-2);font-weight:600;white-space:nowrap}
+.lrow.top .lbar{background:var(--moss)} .lrow.mid .lbar{background:var(--amber)}
+.lrow.bot .lbar{background:var(--clay)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/09-networking-topology/lessons/01-intra-to-inter-handoff.html">Back to lesson 09.1</a>
+
+<header class="mast">
+  <p class="kicker">Module 09 · 09.1 · Networking and topology</p>
+  <h1>450 down to 50,<br>in one hop</h1>
+  <p class="standfirst">The ratio the whole module rolls downhill from — plus the reason the NIC binds by only 8%, and what that means when a PCIe link quietly trains down.</p>
+  <div class="mast-meta">
+    <span><b>The cliff</b> 9 : 1, per GPU per direction</span>
+    <span><b>Binding hop</b> min(450, 54, 50)</span>
+    <span><b>Scale cost</b> 64 → 4,096 GPUs = +14%</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>One number governs this whole module: a gradient byte leaving a GPU drops from 450 GB/s to 50 GB/s the moment it needs another node. <strong>Nine to one.</strong> Every design decision in modules 08 and 09 rolls downhill from that gradient.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the cliff</span></div>
+  <h2>The ladder, per GPU, per direction</h2>
+
+  <div class="note warn">
+    <span class="h">Units discipline, first — this is where bad answers come from</span>
+    <p>NVLink and PCIe are quoted in <strong>GB/s</strong> (bytes). NICs and switches in <strong>Gb/s</strong> (bits). Divide by 8 to compare: <code>400 Gb/s ÷ 8 = 50 GB/s</code>.</p>
+  </div>
+
+  <div class="ladder">
+    <div class="lrow top"><span class="nm">(a) NVLink 4</span>
+      <span class="lbar" style="width:min(72%,450px)"></span><span class="v">450 GB/s</span></div>
+    <div class="lrow mid"><span class="nm">(b) PCIe Gen5 x16</span>
+      <span class="lbar" style="width:min(10.1%,63px)"></span><span class="v">63 GB/s</span></div>
+    <div class="lrow mid"><span class="nm">&nbsp;&nbsp;&nbsp;&nbsp;…usable</span>
+      <span class="lbar" style="width:min(8.6%,54px)"></span><span class="v">~54 GB/s</span></div>
+    <div class="lrow bot"><span class="nm">(c) ConnectX-7 NDR 400G</span>
+      <span class="lbar" style="width:min(8%,50px)"></span><span class="v">50 GB/s</span></div>
+  </div>
+  <p class="figcap">Each hop is a ceiling; the transfer runs at <code>min(a, b, c) = 50 GB/s</code>. Ratio (a) : (c) = <strong>9 : 1</strong>.</p>
+
+  <div class="map">
+<pre>  ── NODE A (8x H100 SXM, HGX baseboard) ──────────────────────┐
+   GPU0 HBM3                                                   │
+     │ (a) NVLink 4: 18 links x 25 GB/s/dir = 450 GB/s          │
+     ▼     non-blocking to the other 7 GPUs via 4x NVSwitch     │
+   [ NVSwitch fabric ] ── aggregate 7.2 TB/s bidirectional ─────┤
+     │ (b) PCIe Gen5 x16 stub off the baseboard                 │
+     ▼     63.0 GB/s/dir theoretical, ~54 GB/s usable           │
+   [ PCIe switch on the CPU tray ]                              │
+     │     GPU0 and mlx5_0 are SIBLINGS under this switch       │
+     ▼     → crossbar routes GPUDirect RDMA, never reaching     │
+   [ ConnectX-7 HCA "mlx5_0" ]   the root complex  (this is PIX)│
+     │ (c) 400 Gb/s NDR = 50.0 GB/s/dir                         │
+  ───┼───── measured ceiling ~46-48 GB/s after protocol ────────┘
+     │ (d) OSFP cable — THE FABRIC BEGINS HERE
+     ▼
+   [ LEAF / rail switch 0 ]   ~100-130 ns per IB switch hop
+     │ (e) uplinks to spine
+     ▼
+   [ SPINE ] ─▶ [ LEAF 0, other pod ] ─▶ NIC ─▶ PCIe ─▶ GPU0 (node B)</pre>
+  </div>
+
+  <ol class="play">
+    <li>
+      <span class="what">The NIC binds — but only just</span>
+      <p><code>min(450, 54, 50) = 50</code>. The PCIe link sits only <strong>8% above</strong> the NIC. A link that has quietly trained down moves the bottleneck from the wire to the bus without a single fabric setting changing — and a Gen5 <b>x8</b> link (31.5 GB/s) caps a 400G NIC at 63% of line rate, with nothing in the NIC's own counters explaining why.</p>
+    </li>
+    <li>
+      <span class="what">Next generation, the constraint moves</span>
+      <p>ConnectX-8 is 800 Gb/s = <strong>100 GB/s</strong> per direction, which a PCIe Gen5 x16 host link cannot feed — 63 GB/s is 37% below line rate. That is exactly why ConnectX-8 is a native <strong>PCIe Gen6 x16</strong> device: the NIC generation and the PCIe generation had to move together.</p>
+      <p>A build sheet pairing an 800G NIC with a Gen5 host link is a <em>real finding</em>: you paid for 800G optics to get about 500G.</p>
+    </li>
+    <li>
+      <span class="what">The cliff is why the rest of module 09 exists</span>
+      <p>Rail-optimised cabling exists to spend your 50 GB/s on one switch hop instead of three. Oversubscription exists because cliff-crossing traffic is a small, predictable fraction. SHARP exists to reduce how many bytes cross at all.</p>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the mechanism</span></div>
+  <h2>What actually happens at each hop</h2>
+
+  <div class="tw">
+  <table>
+    <tr><th class="m">#</th><th>Step</th><th>Where it can go wrong</th></tr>
+    <tr><td class="m">1</td><td><b>NCCL decides.</b> It has built a topology graph of the node — the same PCIe and NVLink topology <code>topo -m</code> renders — and chosen per channel which GPU sends to which peer over which transport.</td><td>A misread topology picks a worse transport silently.</td></tr>
+    <tr><td class="m">2</td><td><b>A work request is posted.</b> The process writes a work-queue entry and rings a doorbell — a write to a memory-mapped NIC register. <b>No syscall.</b></td><td>—</td></tr>
+    <tr><td class="m">3</td><td><b>The NIC DMAs the payload.</b> With GPUDirect RDMA the source addresses are GPU HBM exposed through a BAR, so reads are peer-to-peer under one PCIe switch.</td><td class="no">Without it — different root complexes — the driver stages through pinned host DRAM: <b>doubling PCIe traffic</b> and adding latency and jitter.</td></tr>
+    <tr><td class="m">4</td><td><b>Segmentation to path MTU.</b> IB path MTU is one of 256/512/1024/2048/4096 bytes; RoCEv2 typically runs 4 KB inside jumbo frames.</td><td>MTU mismatch silently halves efficiency.</td></tr>
+    <tr><td class="m">5</td><td><b>Bits hit the cable.</b> 400G NDR is 4 lanes at 100 Gb/s effective. The definitional start of “the fabric”.</td><td>—</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the cost</span></div>
+  <h2>What the cliff costs a job spanning M nodes</h2>
+
+  <div class="col">
+  <p>A hierarchical rail-aware all-reduce — what NCCL actually runs on a multi-node HGX cluster — in three phases. <em>M</em> nodes × 8 GPUs, each holding <em>S</em> bytes of gradient.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>derivation, bandwidth-bound (latency terms negligible at bucket sizes)</span><span class="who">arithmetic</span></div>
+<pre>  PHASE 1 — intra-node reduce-scatter, over NVLink
+      each GPU sends (7/8)·S     t1 = (7/8)·S / B_nvl
+
+  PHASE 2 — inter-node all-reduce of the shard, over the RAIL
+      ring over M ranks moves 2·(M-1)/M · (message size)
+      each GPU sends 2·(M-1)/M · (S/8) over its NIC
+                                 t2 = 2·(M-1)/M · (S/8) / B_nic
+
+  PHASE 3 — intra-node all-gather, over NVLink   t3 = t1
+
+  TOTAL  T = <span class="ok">2·(7/8)·S/B_nvl</span> + <span class="bad">2·(M-1)/M·(S/8)/B_nic</span>
+             └── NVLink term ──┘   └────── NIC term ──────┘</pre>
+  </figure>
+
+  <figure class="term">
+    <div class="cmd"><span>S = 1 GB, B_nvl = 450 GB/s, B_nic = 50 GB/s</span><span class="who">result</span></div>
+<pre>  NVLink term — <b>independent of M</b>:
+      2 x 0.875 x 1 GB / 450 GB/s          = <span class="ok">3.89 ms</span>
+
+  NIC term:
+      M = 8    (64 GPUs)   2x(7/8)  =1.750 → <span class="bad">4.38 ms</span>
+      M = 64   (512 GPUs)  2x(63/64)=1.969 → <span class="bad">4.92 ms</span>
+      M = 512  (4096 GPUs) 2x(511/512)=1.996→ <span class="bad">4.99 ms</span></pre>
+    <figcaption>Read the NIC column: it barely moves. <b>Going from 64 to 4,096 GPUs costs 14% more collective time</b>, because <code>2(M−1)/M</code> converges to 2. The ring all-reduce is asymptotically size-independent — what changes at scale is the probability that <em>some</em> link is degraded, not the arithmetic.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>How much slower is inter-node than intra-node, and which hop binds?</summary>
+    <div class="ans">
+      <p>9:1 — 450 GB/s NVLink against 50 GB/s for a 400G NIC, both per direction. The NIC binds, at <code>min(450, 54, 50)</code>.</p>
+      <p>But only by 8%: usable PCIe Gen5 x16 is ~54 GB/s, so a degraded link moves the bottleneck to the bus.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>A build sheet pairs an 800G ConnectX-8 with a PCIe Gen5 x16 host link. Problem?</summary>
+    <div class="ans">
+      <p>Yes, a real one. ConnectX-8 puts 100 GB/s per direction on the wire; Gen5 x16 tops out at 63 GB/s theoretical — <b>37% below line rate</b>.</p>
+      <p>ConnectX-8 is specified as a native PCIe Gen6 x16 device precisely because the two generations had to move together. You would be paying for 800G optics to get about 500G.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>GPU and NIC are on different root complexes. What does that cost?</summary>
+    <div class="ans">
+      <p>GPUDirect RDMA stops applying, so the driver stages through pinned host DRAM: GPU → DRAM at PCIe speed, then DRAM → NIC. That <b>doubles PCIe traffic</b> and adds latency and jitter.</p>
+      <p><code>topo -m</code> shows this as <code>SYS</code> rather than <code>PIX</code>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Does an all-reduce get much slower going from 64 to 4,096 GPUs?</summary>
+    <div class="ans">
+      <p>No — about 14%. The NIC term is <code>2(M−1)/M · (S/8) / B_nic</code>, and <code>2(M−1)/M</code> converges to 2: 1.750 at M=8 versus 1.996 at M=512.</p>
+      <p>A ring all-reduce is asymptotically size-independent. What grows at scale is the chance that some link is degraded, not the arithmetic.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does 400 Gb/s become 50 GB/s?</summary>
+    <div class="ans">
+      <p>Bits versus bytes: ÷8. NICs and switches are quoted in Gb/s, NVLink and PCIe in GB/s. Measured ceiling lands nearer 46–48 GB/s after protocol overhead.</p>
+      <p>Getting this wrong in either direction is the single most common arithmetic error in fabric discussions.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 09.2–09.7</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">9:1</span><span class="v">450 GB/s NVLink to 50 GB/s NIC. The gradient every module-09 decision rolls down.</span></li>
+    <li><span class="k">Divide by 8</span><span class="v">Gb/s for NICs and switches, GB/s for NVLink and PCIe.</span></li>
+    <li><span class="k">min(a,b,c)</span><span class="v">The NIC binds by only 8% over usable PCIe. A trained-down link silently rebinds it.</span></li>
+    <li><span class="k">NIC gen and PCIe gen move together</span><span class="v">800G needs Gen6. Pairing it with Gen5 buys optics you cannot fill.</span></li>
+    <li><span class="k">PIX vs SYS</span><span class="v">Same-switch siblings get GPUDirect. Cross-root staging doubles PCIe traffic.</span></li>
+    <li><span class="k">Ring is scale-flat</span><span class="v">2(M−1)/M → 2. 64 to 4,096 GPUs is +14%, not +64×.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/09-networking-topology/lessons/01-intra-to-inter-handoff.html">Back to lesson 09.1</a>
+  </footer>
+</div>
+
+</body>
+</html>

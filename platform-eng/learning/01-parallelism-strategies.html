@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 08.1: the 16-bytes-per-parameter training budget derived from the Adam update rule, and all six parallelism axes drawn on one 32-GPU grid with what each splits, replicates and costs.">
+<meta name="color-scheme" content="light dark">
+<title>Parallelism Axes · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.stack{margin:26px 0 8px;padding:20px;background:var(--surface);border:1px solid var(--rule)}
+.sbar{display:flex;height:44px;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+.sbar span{display:grid;place-items:center;font-family:var(--f-mono);font-size:11px;font-weight:600;
+  color:var(--paper);padding:0 3px;text-align:center;line-height:1.2;min-width:0}
+.s1{background:var(--ink-2)}.s2{background:var(--ink-3)}
+.s3{background:var(--amber)}.s4{background:var(--amber);opacity:.78}.s5{background:var(--amber);opacity:.58}
+.slbl{font-family:var(--f-mono);font-size:11px;color:var(--ink-3);margin-top:10px;display:block}
+.slbl b{color:var(--amber)}
+.sizes{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:18px}
+.sizes div{border-left:3px solid var(--clay);padding:10px 14px;background:var(--clay-bg)}
+.sizes .n{font-family:var(--f-head);font-weight:700;font-size:22px;color:var(--ink);display:block}
+.sizes .m{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-2);display:block;margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/08-distributed-training/lessons/01-parallelism-strategies.html">Back to lesson 08.1</a>
+
+<header class="mast">
+  <p class="kicker">Module 08 · 08.1 · Distributed training</p>
+  <h1>Every axis buys<br>memory with<br>network traffic</h1>
+  <p class="standfirst">Training holds sixteen bytes per parameter, so a 7B model does not fit on an 80 GB card. Six ways to cut it up, and what each one costs on the wire.</p>
+  <div class="mast-meta">
+    <span><b>Budget</b> 16Ψ — derived, not quoted</span>
+    <span><b>Grid</b> tp=4 × pp=2 × dp=4 = 32 GPUs</span>
+    <span><b>Hard constraint</b> TP inside one NVLink domain</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Inference holds weights and a KV cache. Training holds <strong>four</strong> things, three of them invisible on a model card — and once you can total them, every parallelism strategy reads as an answer to the same arithmetic problem.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the budget</span></div>
+  <h2>Sixteen bytes per parameter, derived</h2>
+
+  <div class="col">
+  <p>Walk one mixed-precision Adam step and each term is forced on you:</p>
+  </div>
+
+  <ol class="play">
+    <li><span class="what">bf16 parameters — 2 B/param</span>
+      <p>Forward and backward run in 16-bit; that is the whole point of mixed precision, since tensor cores are 2× faster at 16-bit.</p></li>
+    <li><span class="what">Gradients — 2 B/param (or 4)</span>
+      <p>PyTorch DDP accumulates in the parameter dtype. Megatron-LM accumulates into an <b>fp32</b> main-gradient buffer, because summing thousands of small bf16 gradients loses bits to rounding.</p></li>
+    <li><span class="what">fp32 master parameters — 4 B/param</span>
+      <p>The optimizer step <em>cannot</em> run in 16-bit. At step 100,000 a typical update changes a weight by a relative ~1e-7; bf16 has ~3 decimal digits of mantissa, so <code>w + Δ</code> rounds straight back to <code>w</code> and <b>training silently stops learning</b>.</p></li>
+    <li><span class="what">Adam moments m and v — 4 + 4 B/param</span>
+      <p>Exponential moving averages of the gradient and the squared gradient, both fp32.</p></li>
+  </ol>
+
+  <div class="stack">
+    <div class="sbar">
+      <span class="s1" style="flex:2">P<br>2B</span>
+      <span class="s2" style="flex:2">G<br>2B</span>
+      <span class="s3" style="flex:4">master fp32<br>4B</span>
+      <span class="s4" style="flex:4">Adam m<br>4B</span>
+      <span class="s5" style="flex:4">Adam v<br>4B</span>
+    </div>
+    <span class="slbl"><b>16 Ψ bytes of model state</b> — and the amber 12 bytes are what ZeRO calls “optimizer states” (K = 12 in the paper's notation)</span>
+    <span class="slbl">DeepSpeed pins this with a measurement: a 1.5B GPT-2 consumes 18 GB of Adam state. 18 GB ÷ 1.5e9 = <b>exactly 12 bytes per parameter</b>.</span>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Param / grad dtypes</th><th class="m">Non-distributed</th><th class="m">Distributed (ZeRO-1)</th></tr>
+    <tr><td>fp16 params, fp16 grads</td><td class="m">20 B/param</td><td class="m">4 + 16/d</td></tr>
+    <tr><td><b>bf16 params, fp32 grads</b> — the modern default</td><td class="m"><b>18 B/param</b></td><td class="m">6 + 12/d</td></tr>
+    <tr><td>fp32 params, fp32 grads</td><td class="m">16 B/param</td><td class="m">8 + 8/d</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">Use 16Ψ for napkin maths, cite the framework table when it has to be right</span>
+    <p>The middle row: 2 (bf16 param) + 4 (fp32 main grad) + 4 (fp32 master) + 4 (<code>m</code>) + 4 (<code>v</code>) = 18. The distributed column shows what stays replicated (6) and what shards (12). <strong>The difference between 16 and 18 is 12% of your memory budget — which is the difference between fitting and not.</strong></p>
+  </div>
+
+  <div class="sizes">
+    <div><span class="n">112 GB</span><span class="m">7B model state<br>already exceeds one H100</span></div>
+    <div><span class="n">1,120 GB</span><span class="m">70B model state<br>= 14 H100s, before activations</span></div>
+    <div><span class="n">6,480 GB</span><span class="m">405B model state<br>= 81 H100s, before activations</span></div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">Read those three numbers and the whole field makes sense</span>
+    <p><strong>A 7B model does not fit on an 80 GB GPU for training</strong>, even though it fits four times over for inference. Everything that follows is a scheme for cutting <code>16Ψ</code> down or splitting the compute — and every scheme buys memory with network traffic.</p>
+  </div>
+
+  <div class="col">
+  <p>The fourth consumer is <strong>activations</strong> — intermediates saved during forward because backward needs them. Unlike the first three, activation memory does not scale with parameter count. It scales with <em>batch size, sequence length and depth</em>, which is why a job can pass its startup allocation and then OOM at step 3 on its first long sequence.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the axes</span></div>
+  <h2>Four ways to cut, on one grid</h2>
+
+  <div class="map">
+<pre>  THE PARALLELISM AXES ON ONE 32-GPU GRID  (tp=4, pp=2, dp=4 → 32)
+  ══════════════════════════════════════════════════════════════════════
+
+              ── TENSOR PARALLEL (tp=4) ──▶ splits each WEIGHT MATRIX
+                 stays inside one NVLink domain
+                 all-reduce INSIDE every layer
+      ┌──────────┬──────────┬──────────┬──────────┐
+  │   │  GPU 0   │  GPU 1   │  GPU 2   │  GPU 3   │ ← layers 1..40,
+  │ P │  L1-40   │  L1-40   │  L1-40   │  L1-40   │   weight cols 0..3
+  │ I │  cols 0  │  cols 1  │  cols 2  │  cols 3  │
+  │ P ├──────────┼──────────┼──────────┼──────────┤
+  │ E │  GPU 4   │  GPU 5   │  GPU 6   │  GPU 7   │ ← layers 41..80
+  │   │  L41-80  │  L41-80  │  L41-80  │  L41-80  │
+  │pp2│  cols 0  │  cols 1  │  cols 2  │  cols 3  │
+  ▼   └──────────┴──────────┴──────────┴──────────┘
+      splits LAYERS by depth ▲   point-to-point activation sends at
+                                 stage boundaries — NOT a collective
+
+      ═════ that whole 8-GPU block is ONE model replica ═════
+
+  DATA PARALLEL (dp=4): four IDENTICAL copies of the block above,
+  each fed a different slice of the global batch.
+
+    replica 0      replica 1      replica 2      replica 3
+  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+  │ GPU 0..7 │   │ GPU 8..15│   │GPU 16..23│   │GPU 24..31│
+  └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘
+       └──────────────┴──────────────┴──────────────┘
+          ALL-REDUCE the gradients once per step, over the
+          inter-node fabric.
+          DDP      : state REPLICATED (16Ψ on every GPU)
+          FSDP/Z3  : state SHARDED (16Ψ/dp) and re-gathered per layer
+
+  EXPERT PARALLEL (ep, MoE only): replaces the split INSIDE the MoE
+  feed-forward block. Each GPU owns disjoint experts. Communication is
+  ALL-TO-ALL — twice per MoE layer, and NOT an all-reduce.
+
+  CONTEXT PARALLEL (cp): splits the SEQUENCE dimension of activations.
+  Weights replicated; only activations and attention split.
+  Communication is point-to-point ring exchange of K/V blocks.</pre>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Axis</th><th>Splits</th><th>Replicates</th><th>Collective per step</th><th>Primary link</th><th>Memory saved</th></tr>
+    <tr><td><b>DP (DDP)</b></td><td>the batch</td><td><em>everything</em> — 16Ψ per GPU</td><td>1 × all-reduce of grads</td><td>inter-node fabric</td><td class="no">none</td></tr>
+    <tr><td><b>ZeRO-1</b></td><td>optimizer states</td><td>params, grads</td><td>reduce-scatter + all-gather</td><td>fabric</td><td>12Ψ·(1−1/N)</td></tr>
+    <tr><td><b>ZeRO-2</b></td><td>+ gradients</td><td>params</td><td>reduce-scatter + all-gather</td><td>fabric</td><td>14Ψ·(1−1/N)</td></tr>
+    <tr><td><b>ZeRO-3 / FSDP</b></td><td>+ parameters</td><td class="yes">nothing</td><td>~2 all-gather + 1 reduce-scatter <em>per unit</em></td><td>fabric or NVLink</td><td>16Ψ·(1−1/N)</td></tr>
+    <tr><td><b>TP</b></td><td>every weight matrix</td><td>the batch, the layer list</td><td>~2 all-reduce <em>per block</em> fwd + 2 bwd</td><td class="no"><b>NVLink domain only</b></td><td>state ÷ tp</td></tr>
+    <tr><td><b>PP</b></td><td>the layer list</td><td>the batch, each layer's weights</td><td class="yes">point-to-point sends only</td><td>inter-node, small</td><td>state ÷ pp</td></tr>
+    <tr><td><b>EP</b></td><td>MoE experts</td><td>attention + dense layers</td><td>2 × all-to-all <em>per MoE layer</em></td><td>NVLink then fabric</td><td>expert state ÷ ep</td></tr>
+    <tr><td><b>CP</b></td><td>the sequence</td><td>all weights</td><td>ring P2P exchange of K/V</td><td>NVLink preferred</td><td>activations ÷ cp</td></tr>
+  </table>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Read a config against that table and you have predicted its footprint</span>
+    <p>The axes are <strong>orthogonal</strong> — apply all of them at once and the degrees multiply to the world size. <code>tp=4, pp=2, dp=4</code> is 32 GPUs.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The one row that constrains your hardware</span>
+    <p><strong>TP must stay inside one NVLink domain.</strong> It all-reduces roughly twice per transformer block in forward and twice in backward — that is dozens of collectives per step, each on the critical path. At 450 GB/s over NVLink that is tolerable; over a 50 GB/s NIC it is not.</p>
+    <p>This is the direct link back to lesson 02b.4: <code>tp_size ≤ 8</code> on an HGX baseboard is not a convention, it is the width of the non-blocking domain.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>choosing</span></div>
+  <h2>Which axis, in what order</h2>
+
+  <ol class="play">
+    <li><span class="what">Fill the NVLink domain with TP first</span>
+      <p>It has the heaviest per-step traffic and the tightest latency requirement, so give it the fastest link you own. Then stop at the domain boundary.</p></li>
+    <li><span class="what">Use PP to cross node boundaries</span>
+      <p>Point-to-point activation sends at stage boundaries only — the cheapest inter-node traffic of any axis. The cost is the pipeline bubble, not bandwidth.</p></li>
+    <li><span class="what">Use ZeRO/FSDP to shard what is left</span>
+      <p>ZeRO-1 is nearly free (12Ψ saved, one reduce-scatter replacing one all-reduce). ZeRO-3 saves the most and costs the most: an all-gather per unit, in both passes.</p></li>
+    <li><span class="what">Use DP for throughput once it fits</span>
+      <p>One all-reduce per step over the fabric. This is the axis you scale for speed, after the others have made it fit.</p></li>
+    <li><span class="what">Reach for CP only when sequence length is the problem</span>
+      <p>It splits activations, not weights — so it does nothing for a model-state OOM and everything for a long-context one.</p></li>
+  </ol>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Why does a 7B model fit for inference but not for training on an 80 GB GPU?</summary>
+    <div class="ans">
+      <p>Inference holds bf16 weights: 14 GB. Training holds 16 bytes per parameter — bf16 params, gradients, an fp32 master copy, and Adam's two fp32 moments — which is <b>112 GB</b>, before a single activation.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why can't the optimizer step run in bf16?</summary>
+    <div class="ans">
+      <p>At step 100,000 a typical update changes a weight by a relative amount of order 1e-7. bf16 carries roughly 3 decimal digits of mantissa, so <code>w + Δ</code> rounds straight back to <code>w</code>.</p>
+      <p>Training does not crash — it <em>silently stops learning</em>, which is far worse. Hence the fp32 master copy.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why must tensor parallelism stay inside one node?</summary>
+    <div class="ans">
+      <p>It all-reduces about twice per transformer block in forward and twice in backward — dozens of collectives per step, every one on the critical path. That is tolerable at NVLink's 450 GB/s per direction and ruinous over a 50 GB/s NIC.</p>
+      <p><code>tp_size ≤ 8</code> is the width of the NVSwitch non-blocking domain, not a convention.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You OOM at step 3, having started fine. Which term grew?</summary>
+    <div class="ans">
+      <p>Activations. Model state (16Ψ) is fixed the moment Ψ is fixed and is allocated up front. Activations scale with batch size, sequence length and depth — so the first long sequence in your data is what tips it.</p>
+      <p>Fixes are activation checkpointing, or context/sequence parallelism. Sharding the optimizer will not help.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>ZeRO-1 vs ZeRO-3: what does each buy and cost?</summary>
+    <div class="ans">
+      <p>ZeRO-1 shards optimizer states only — saves 12Ψ·(1−1/N), and replaces one all-reduce with a reduce-scatter plus all-gather. Nearly free.</p>
+      <p>ZeRO-3 additionally shards gradients and parameters — saves the full 16Ψ·(1−1/N), but needs roughly two all-gathers and a reduce-scatter <em>per unit</em>, so the traffic scales with depth rather than being once per step.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Which axis uses all-to-all, and why is that different?</summary>
+    <div class="ans">
+      <p>Expert parallelism, twice per MoE layer — route tokens to their expert, route results back. It is not an all-reduce, so it has a different congestion profile: every rank talks to every other with a distinct payload rather than a symmetric reduction.</p>
+      <p>That makes it far more sensitive to fabric imbalance than an all-reduce is.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 08.2–08.8</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">16Ψ bytes</span><span class="v">2 param + 2 grad + 4 master + 4 m + 4 v. 18 for the bf16/fp32 default. The 12 amber bytes are what ZeRO shards.</span></li>
+    <li><span class="k">7B does not fit</span><span class="v">112 GB of training state on an 80 GB card. Every strategy below is a response to that line.</span></li>
+    <li><span class="k">Activations are separate</span><span class="v">They scale with batch, sequence and depth — not with Ψ. That is the step-3 OOM.</span></li>
+    <li><span class="k">Memory is bought with traffic</span><span class="v">Every axis trades one for the other. There is no free sharding.</span></li>
+    <li><span class="k">TP inside NVLink only</span><span class="v">Two all-reduces per block per pass. <code>tp_size ≤ 8</code> is the domain width, not a style choice.</span></li>
+    <li><span class="k">PP is P2P</span><span class="v">Activation sends at stage boundaries, no collective. Cheapest inter-node axis; you pay in bubble.</span></li>
+    <li><span class="k">The axes multiply</span><span class="v">tp × pp × dp = world size. Read a config against the table and predict the footprint.</span></li>
+    <li><span class="k">CP is for sequences</span><span class="v">Splits activations, not weights. Useless for a model-state OOM.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/08-distributed-training/lessons/01-parallelism-strategies.html">Back to lesson 08.1</a>
+  </footer>
+</div>
+
+</body>
+</html>

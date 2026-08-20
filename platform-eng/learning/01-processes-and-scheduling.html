@@ -370,6 +370,21 @@ footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
   font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
 ul.plain{padding-left:20px}
 ul.plain li{margin-bottom:8px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
 </style>
 <style>
 .backlink{
