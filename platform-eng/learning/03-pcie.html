@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 02b.3: the PCIe generation table with code efficiency, the four lspci lines that diagnose a link, and the exact signature that separates a fault from topology.">
+<meta name="color-scheme" content="light dark">
+<title>LnkCap vs LnkSta · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/02b-host-topology/lessons/03-pcie.html">Back to lesson 02b.3</a>
+
+<header class="mast">
+  <p class="kicker">Module 02b · 02b.3 · Host topology</p>
+  <h1>The link that<br>trained low and<br>told nobody</h1>
+  <p class="standfirst">A degraded PCIe link keeps working at a fraction of spec, and no GPU or NIC counter mentions it. Four lines of lspci separate a real fault from the topology you built.</p>
+  <div class="mast-meta">
+    <span><b>Fault signature</b> LnkSta &lt; LnkCap, same device</span>
+    <span><b>Most-missed case</b> LnkCtl2 target set by software</span>
+    <span><b>Why it matters</b> it rebinds 09.1&#39;s bottleneck</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>A PCIe link can silently train to a lower generation or width, and the GPU still works — at a fraction of spec, with nothing in the GPU's own counters explaining why. Lesson 09.1 showed the NIC binds by only 8% over usable PCIe, so <strong>a degraded link moves the bottleneck without any config changing</strong>. This is how you catch it.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the numbers</span></div>
+  <h2>Rate, lanes, and the code tax</h2>
+
+  <div class="col">
+  <p>Bandwidth is <code>per-lane rate × lanes</code>, quoted <strong>per direction</strong>. The per-lane rate is the signalling rate times the line code's efficiency — and line coding exists because the receiver recovers its clock from the data stream, so the encoding must guarantee transitions.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Gen</th><th class="m">Raw/lane</th><th>Signalling</th><th>Line code</th><th class="m">Efficiency</th><th class="m">GB/s/lane/dir</th><th class="m">x8</th><th class="m">x16</th></tr>
+    <tr><td>1.0</td><td class="m">2.5 GT/s</td><td>NRZ</td><td>8b/10b</td><td class="m">80.0%</td><td class="m">0.250</td><td class="m">2.0</td><td class="m">4.0</td></tr>
+    <tr><td>2.0</td><td class="m">5.0 GT/s</td><td>NRZ</td><td>8b/10b</td><td class="m">80.0%</td><td class="m">0.500</td><td class="m">4.0</td><td class="m">8.0</td></tr>
+    <tr><td>3.0</td><td class="m">8.0 GT/s</td><td>NRZ</td><td>128b/130b</td><td class="m">98.46%</td><td class="m">0.985</td><td class="m">7.88</td><td class="m">15.75</td></tr>
+    <tr><td>4.0</td><td class="m">16.0 GT/s</td><td>NRZ</td><td>128b/130b</td><td class="m">98.46%</td><td class="m">1.969</td><td class="m">15.75</td><td class="m">31.51</td></tr>
+    <tr><td><b>5.0</b></td><td class="m">32.0 GT/s</td><td>NRZ</td><td>128b/130b</td><td class="m">98.46%</td><td class="m">3.938</td><td class="m">31.51</td><td class="m"><b>63.02</b></td></tr>
+    <tr><td>6.0</td><td class="m">64.0 GT/s</td><td>PAM4</td><td>1b/1b + FLIT</td><td class="m">94.5%</td><td class="m">7.563</td><td class="m">60.50</td><td class="m">121.0</td></tr>
+    <tr><td>7.0</td><td class="m">128.0 GT/s</td><td>PAM4</td><td>1b/1b + FLIT</td><td class="m">94.5%</td><td class="m">15.125</td><td class="m">121.0</td><td class="m">242.0</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">Two facts to state instantly</span>
+    <p><strong>Each generation doubles the per-lane rate; halving the width halves bandwidth.</strong> So Gen5 x16 vs Gen3 x16 is 4×, and Gen5 x16 vs Gen3 x8 is <strong>8×</strong>.</p>
+    <p><strong>The <code>LnkSta</code> speed field is raw GT/s, not the generation.</strong> <code>2.5</code>=Gen1, <code>5</code>=Gen2, <code>8</code>=Gen3, <code>16</code>=Gen4, <code>32</code>=Gen5, <code>64</code>=Gen6. Train yourself to read GT/s and map it, because that is what the tool prints.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the Gen6 FLIT accounting — the first structural change in fifteen years</span><span class="who">arithmetic</span></div>
+<pre>  Gen6 sends fixed 256-byte flow-control units regardless of TLP
+  boundaries. Each FLIT carries:
+      242 bytes payload space · 8 bytes CRC · 6 bytes FEC
+      of the 242, 6 are data-link info → <b>236 for TLP content</b>
+
+  raw byte rate per lane   = 64 GT/s / 8            = 8.000 GB/s
+  after FLIT CRC + FEC     = 8.000 x (242/256)      = <span class="hl">7.563 GB/s</span>
+  after the in-FLIT DLP    = 8.000 x (236/256)      = 7.375 GB/s</pre>
+    <figcaption>Gen6 <em>loses</em> 5.5% to FEC and CRC that Gen3–5 never paid, but <em>gains</em> by eliminating 128b/130b sync headers and absorbing DLLPs into the flit rather than interleaving them. For small transfers it is substantially more efficient than the naive rate ratio suggests.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the core skill</span></div>
+  <h2>LnkCap versus LnkSta</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>sudo lspci -vvv -s 0000:1b:00.0 — a healthy H100</span><span class="who">the four lines</span></div>
+<pre>LnkCap:  Port #0, <span class="ok">Speed 32GT/s, Width x16</span>, ASPM not supported
+LnkCtl:  ASPM Disabled; RCB 64 bytes, Disabled- CommClk+
+LnkSta:  <span class="ok">Speed 32GT/s, Width x16</span>
+LnkCap2: Supported Link Speeds: <span class="hl">2.5-32GT/s</span>, Retimer+ 2Retimers+
+LnkCtl2: <span class="hl">Target Link Speed: 32GT/s</span></pre>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Line</th><th>What it tells you</th></tr>
+    <tr><td class="m">LnkCap</td><td><b>This device's own advertised maximum.</b> It is <em>not</em> the negotiated minimum of both ends — each end advertises independently. To find which hop caps a chain you must read <code>LnkCap</code> at <b>every</b> hop.</td></tr>
+    <tr><td class="m">LnkSta</td><td>What actually trained. Compare against <code>LnkCap</code> <em>at both ends</em>.</td></tr>
+    <tr><td class="m">LnkCap2</td><td>The full speed vector. If this reads <code>2.5-16GT/s</code> on a card you believe is Gen5, <b>the device is the cap</b>, not the channel.</td></tr>
+    <tr><td class="m">LnkCtl2</td><td>The ceiling <em>software</em> requested. Reading <code>16GT/s</code> while <code>LnkCap2</code> supports 32 means <b>something set it</b> — firmware, a driver, a manual <code>setpci</code>. A configuration fault, not a hardware one, and the case people misdiagnose most often.</td></tr>
+  </table>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>a degraded link</span><span class="who">the alarm</span></div>
+<pre>LnkCap: Port #0, Speed 32GT/s, Width x16
+LnkSta: <span class="bad">Speed 16GT/s (downgraded)</span>, <span class="bad">Width x8 (downgraded)</span></pre>
+    <figcaption><code>lspci</code> prints <b>(downgraded)</b> when <code>LnkSta</code> is below <code>LnkCap</code> — but do not depend on it. Some pciutils versions omit the word, and a link can be full width with wrong speed or vice versa. <b>Always compare the four numbers yourself.</b></figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">The two cases that produce false positives and false negatives</span>
+    <p><strong>ASPM idle downtraining is not a fault.</strong> With power management enabled an idle link may drop to a low-power state and retrain on exit. A <code>2.5GT/s</code> reading on an idle card can be entirely benign — re-check under real load, or confirm <code>LnkCtl: ASPM Disabled</code>, which is what most server GPUs ship with.</p>
+    <p><strong>A reduced <code>LnkCap</code> is a configuration fact; <code>LnkSta</code> below a full <code>LnkCap</code> is a fault.</strong> A Gen5 GPU behind a Gen4-only switch trains to Gen4 with <em>no</em> <code>(downgraded)</code> marker, because neither end was capable of more on that segment. That is topology, not defect. Same for a bifurcated root port advertising <code>Width x8</code>.</p>
+  </div>
+
+  <div class="note">
+    <span class="h">The fault signature, stated exactly</span>
+    <p><code>LnkSta &lt; LnkCap</code> <strong>on the same device</strong>. Anything else is either the topology you built or the configuration someone applied.</p>
+    <p>And <code>lspci -vvv</code> needs root to read the capability block — without it these lines are blank or <code>&lt;access denied&gt;</code>, which is not the same as healthy.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>what it costs</span></div>
+  <h2>Why this matters two lessons later</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>the ladder from lesson 09.1, with a degraded link</span><span class="who">consequence</span></div>
+<pre>  HEALTHY                            DEGRADED to Gen5 x8
+  NVLink 4      450 GB/s             NVLink 4      450 GB/s
+  PCIe Gen5 x16  63 GB/s             PCIe Gen5 x8  <span class="bad">31.5 GB/s</span>
+     usable      ~54 GB/s               usable     <span class="bad">~27 GB/s</span>
+  ConnectX-7     50 GB/s             ConnectX-7     50 GB/s
+  ─────────────────────────          ─────────────────────────
+  binds at <span class="ok">50 GB/s</span> (the NIC)      binds at <span class="bad">~27 GB/s</span> (the BUS)
+                                     = <span class="bad">54% of line rate</span>
+
+  Nothing in the NIC's counters will tell you why.
+  Nothing in nvidia-smi will tell you why.
+  Only LnkSta vs LnkCap will.</pre>
+    <figcaption>A Gen5 x8 link caps a 400G NIC at roughly 63% of line rate; the usable-throughput figure is worse. This is why the PCIe check belongs in node validation, not in incident response.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary><code>LnkSta: Speed 16GT/s</code> on a Gen5 GPU. Fault or not?</summary>
+    <div class="ans">
+      <p>Depends entirely on <code>LnkCap</code> at both ends. If the GPU's own <code>LnkCap</code> says <code>32GT/s</code>, that is a fault. If it sits behind a Gen4-only switch whose downstream port advertises <code>16GT/s</code>, the link is doing exactly what the topology permits and there is no <code>(downgraded)</code> marker.</p>
+      <p>The fault signature is specifically <code>LnkSta &lt; LnkCap</code> <em>on the same device</em>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary><code>LnkCap2</code> supports 2.5–32GT/s but <code>LnkCtl2</code> says Target 16GT/s. What happened?</summary>
+    <div class="ans">
+      <p><b>Something set it</b> — firmware, a driver, or a manual <code>setpci</code>. The hardware is capable; software requested a lower ceiling.</p>
+      <p>This is a configuration fault, not a hardware one, and it is the case people misdiagnose most often — because the link looks "trained correctly" against the target it was told to hit.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>An idle GPU shows 2.5GT/s. Raise an RMA?</summary>
+    <div class="ans">
+      <p>No — re-check under load first. With ASPM enabled an idle link legitimately drops to a low-power state and retrains on exit.</p>
+      <p>Confirm with <code>LnkCtl: ASPM Disabled</code>, which is what most server GPUs ship with; if ASPM really is disabled and it still reads 2.5GT/s under load, then it is real.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>How much faster is Gen5 x16 than Gen3 x8?</summary>
+    <div class="ans">
+      <p><b>8×.</b> Two generation doublings (Gen3→4→5) is 4×, and doubling the width from x8 to x16 is another 2×.</p>
+      <p>63.02 vs 7.88 GB/s per direction.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does Gen6 lose 5.5% to overhead that Gen5 never paid?</summary>
+    <div class="ans">
+      <p>PAM4 signalling needs FEC. Each 256-byte FLIT carries 8 bytes CRC and 6 bytes FEC, so payload efficiency is 242/256 = 94.5% against Gen5's 128b/130b at 98.46%.</p>
+      <p>It gains elsewhere: no sync headers, and DLLPs absorbed into the flit rather than interleaved as separate packets — so for small transfers it beats the naive rate ratio.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your 400G NIC delivers ~27 GB/s and its own counters look clean. Where do you look?</summary>
+    <div class="ans">
+      <p><code>lspci -vvv</code> on the NIC and on every hop up to the root port. A Gen5 x8 link gives ~27 GB/s usable, which caps a 50 GB/s NIC at just over half.</p>
+      <p>Nothing in the NIC's counters or <code>nvidia-smi</code> reports this — the bottleneck moved from the wire to the bus, and only <code>LnkSta</code> vs <code>LnkCap</code> shows it.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 02b.5, 09.1, 10.6</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Read GT/s, map to gen</span><span class="v">32 = Gen5, 16 = Gen4, 8 = Gen3. The tool prints the raw rate, never the generation.</span></li>
+    <li><span class="k">LnkSta &lt; LnkCap</span><span class="v">The fault signature, on the same device. Everything else is topology or configuration.</span></li>
+    <li><span class="k">Every hop advertises separately</span><span class="v">To find the cap in a chain, read <code>LnkCap</code> at each hop, not just the endpoint.</span></li>
+    <li><span class="k">LnkCtl2 is software</span><span class="v">A lowered target speed is a config fault. The most-missed case.</span></li>
+    <li><span class="k">ASPM idles legitimately</span><span class="v">Re-check under load before calling a low idle speed a defect.</span></li>
+    <li><span class="k">Halved width, halved bandwidth</span><span class="v">x8 instead of x16 is a silent 50%, with no error anywhere.</span></li>
+    <li><span class="k">It rebinds the bottleneck</span><span class="v">Usable PCIe sits only 8% above a 400G NIC. Degradation moves the constraint to the bus.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/02b-host-topology/lessons/03-pcie.html">Back to lesson 02b.3</a>
+  </footer>
+</div>
+
+</body>
+</html>

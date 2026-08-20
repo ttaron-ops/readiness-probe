@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 01b.2: namespace membership as a clone-flag bitmask, the three syscalls, the PID 1 signal rule behind slow container shutdown, and a container built in nine steps.">
+<meta name="color-scheme" content="light dark">
+<title>The Eight Namespaces · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/01b-linux-internals/lessons/02-namespaces.html">Back to lesson 01b.2</a>
+
+<header class="mast">
+  <p class="kicker">Module 01b · 01b.2 · Linux internals</p>
+  <h1>A container is<br>one clone3() call<br>with eight bits set</h1>
+  <p class="standfirst">The eight things nsproxy points at, the three syscalls that create, move and join them, and the nine steps runc runs between "start a container" and your entrypoint.</p>
+  <div class="mast-meta">
+    <span><b>Opens up</b> the nsproxy pointer from 01b.1</span>
+    <span><b>Corrects</b> “the cgroup namespace controls resources”</span>
+    <span><b>Explains</b> why your container ignores docker stop</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Lesson 01b.1 ended with a claim: <strong>a container is a set of ordinary <code>task_struct</code>s whose <code>nsproxy</code> pointer happens to point somewhere private.</strong> This is the lesson that opens up <code>nsproxy</code> and shows you the eight things it points at — and the single <code>clone3()</code> call that makes all of them private at once.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the eight</span></div>
+  <h2>One flag word, eight independent switches</h2>
+
+  <div class="col">
+  <p>The namespace flags are <code>clone()</code> flags — bits in one integer, OR'd together. Which is the same shape as <code>__state</code> from lesson 01b.1, and it means <strong>"which namespaces does this container have?" is literally a bitmask question.</strong></p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Namespace</th><th class="m">Flag</th><th class="m">Value</th><th>Isolates</th><th class="m">Since</th></tr>
+    <tr><td><b>Mount</b></td><td class="m">CLONE_NEWNS</td><td class="m">0x00020000</td><td>the mount table</td><td class="m">2.4.19</td></tr>
+    <tr><td><b>UTS</b></td><td class="m">CLONE_NEWUTS</td><td class="m">0x04000000</td><td><code>struct utsname</code> — hostname + NIS domain</td><td class="m">2.6.19</td></tr>
+    <tr><td><b>IPC</b></td><td class="m">CLONE_NEWIPC</td><td class="m">0x08000000</td><td>System V IPC, POSIX message queues</td><td class="m">2.6.19</td></tr>
+    <tr><td><b>PID</b></td><td class="m">CLONE_NEWPID</td><td class="m">0x20000000</td><td>the process-ID number space</td><td class="m">2.6.24</td></tr>
+    <tr><td><b>Network</b></td><td class="m">CLONE_NEWNET</td><td class="m">0x40000000</td><td>interfaces, routes, nftables, sockets, <b>ports</b></td><td class="m">2.6.29</td></tr>
+    <tr><td><b>User</b></td><td class="m">CLONE_NEWUSER</td><td class="m">0x10000000</td><td>UID/GID number space and capability sets</td><td class="m">3.8</td></tr>
+    <tr><td><b>Cgroup</b></td><td class="m">CLONE_NEWCGROUP</td><td class="m">0x02000000</td><td>the cgroup <em>root directory</em> as reported in /proc</td><td class="m">4.6</td></tr>
+    <tr><td><b>Time</b></td><td class="m">CLONE_NEWTIME</td><td class="m">0x00000080</td><td><code>CLOCK_MONOTONIC</code> / <code>CLOCK_BOOTTIME</code> offsets</td><td class="m">5.6</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">Two naming accidents worth knowing</span>
+    <p>Mount's flag is <code>CLONE_NEWNS</code>, not <code>CLONE_NEWMNT</code>, because it was <strong>first</strong> — there was no need to say which "NS" you meant.</p>
+    <p><code>CLONE_NEWTIME</code>'s tiny value (<code>0x80</code>) collides with legacy <code>clone(2)</code>'s exit-signal field, so it is only usable via <code>clone3(2)</code> or <code>unshare(2)</code>.</p>
+  </div>
+
+  <h3>The three that get misread</h3>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">“The cgroup namespace controls resources”</div>
+      <p>It does not. It virtualises the cgroup <b>root directory</b> as reported in <code>/proc/&lt;pid&gt;/cgroup</code>. Path cosmetics and information hiding — your limits are unchanged, your parent can still see and set them.</p>
+    </div>
+    <div class="add">
+      <div class="tag">Where resource control actually lives</div>
+      <p>Lesson 01b.3. Nothing about <code>cpu.max</code> or <code>memory.max</code> moves when you create a cgroup namespace. It is the most commonly confused namespace purely because the word “cgroup” is in it.</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The IPC namespace does not isolate /dev/shm — and this bites GPU nodes specifically</span>
+    <p>IPC covers System V objects (what <code>ipcs</code> lists) and POSIX message queues. <code>/dev/shm</code> is a <strong>tmpfs mount</strong>, so it is isolated by the <em>mount</em> namespace and sized by that mount's <code>size=</code> option.</p>
+    <p>PyTorch <code>DataLoader</code> with <code>num_workers &gt; 0</code> passes tensors between workers through <code>/dev/shm</code>. The default 64 MiB in many images produces <code>Bus error</code> or <code>DataLoader worker killed</code>. Fix it with <code>--shm-size</code> or an <code>emptyDir: {medium: Memory}</code> at <code>/dev/shm</code> — <strong>not</strong> with anything IPC-namespace-shaped.</p>
+  </div>
+
+  <div class="note">
+    <span class="h">UTS isolates less than people assume</span>
+    <p>Exactly <code>struct utsname</code>: hostname and NIS domain. Nothing else. It does <em>not</em> usefully isolate the kernel release string — the container still reports the host kernel, <strong>which is the entire point of containers versus VMs</strong>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>PID 1</span></div>
+  <h2>A task genuinely has several PIDs</h2>
+
+  <div class="col">
+  <p>The PID namespace is hierarchical. The first process in a new one is <strong>PID 1 there</strong> and simultaneously has a larger PID in every ancestor namespace — a single task really does hold multiple PIDs, stored in <code>struct pid</code>'s <code>numbers[]</code> array.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>grep NSpid /proc/88231/status</span><span class="who">the double identity</span></div>
+<pre>NSpid:  <span class="hl">88231</span>   <span class="ok">1</span>
+        │       └── PID 1 <b>inside</b> its own namespace
+        └────────── PID 88231 as seen from the <b>host</b></pre>
+    <figcaption>Nesting is capped at 32 levels. A parent namespace can see and signal a child's processes under translated PIDs; the reverse is impossible, because a child namespace has no name for anything above it.</figcaption>
+  </figure>
+
+  <h3>Three special rules for PID 1 — and the production bug each causes</h3>
+
+  <ol class="play">
+    <li>
+      <span class="what">Signals without an installed handler are not delivered to PID 1</span>
+      <p>Not even from a privileged process, not even from an ancestor namespace. Deliberate protection against killing a namespace's init. <code>SIGKILL</code> and <code>SIGSTOP</code> <em>from an ancestor</em> are the exception — those are forcibly delivered.</p>
+      <p><strong>This is the mechanism behind "my container ignores <code>docker stop</code>."</strong> The runtime sends <code>SIGTERM</code> to PID 1 — your <code>python train.py</code>, which installed no handler — and the kernel drops it. The runtime waits out <code>terminationGracePeriodSeconds</code> (default 30) and then sends <code>SIGKILL</code>, which cannot be ignored.</p>
+      <p>The fix is a real init as PID 1 (<code>tini</code>, <code>docker run --init</code>) or handling the signal in your app. <em>Not</em> a longer timeout.</p>
+    </li>
+    <li>
+      <span class="what">PID 1 is the reaper of last resort</span>
+      <p>Any orphaned process in the namespace reparents to PID 1, which must <code>wait()</code> for it or leave a zombie. An app that never reaps accumulates <code>Z</code> entries holding PIDs forever — the zombie mechanic from lesson 01b.1, now with a namespace-scoped owner.</p>
+    </li>
+    <li>
+      <span class="what">When PID 1 exits, the kernel SIGKILLs every process in the namespace</span>
+      <p>Afterwards <code>fork()</code> into that namespace fails with <code>ENOMEM</code>. The namespace is dead even if something still holds it open.</p>
+    </li>
+  </ol>
+
+  <div class="note calm">
+    <span class="h">And the network namespace explains the pod model in one line</span>
+    <p>A net namespace is a complete independent stack — interfaces, routes, nftables, <code>/proc/net</code>, socket tables, and <strong>the port number space</strong>. A fresh one contains exactly one interface: a <code>lo</code> that is administratively <em>down</em>.</p>
+    <p>Two containers sharing a net namespace share one IP and one port space. That is precisely why two containers in a Kubernetes pod cannot both bind <code>:8080</code>, and <em>can</em> reach each other over <code>127.0.0.1</code>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the syscalls</span></div>
+  <h2>Create, move, join</h2>
+
+  <div class="map">
+<pre>  ┌────────────────────────────────────────────────────────────────────┐
+  │  clone(2) / clone3(2)  —  CREATE a process INTO new namespaces     │
+  │     new task_struct, new nsproxy with the flagged fields replaced  │
+  │     ▸ this is what runc/crun call                                  │
+  │     ▸ clone3 also has CLONE_INTO_CGROUP — born directly into a     │
+  │       target cgroup, no post-hoc write to cgroup.procs             │
+  ├────────────────────────────────────────────────────────────────────┤
+  │  unshare(2)            —  MOVE MYSELF into new namespaces          │
+  │     no fork; my nsproxy is replaced in place                       │
+  │     ▸ EXCEPT CLONE_NEWPID, which only sets pid_ns_for_children     │
+  │     ▸ CLONE_NEWUSER is applied FIRST, so one call can gain the     │
+  │       privilege it needs to create the others                      │
+  ├────────────────────────────────────────────────────────────────────┤
+  │  setns(2)              —  JOIN an EXISTING namespace               │
+  │     takes an fd on /proc/&lt;pid&gt;/ns/&lt;type&gt;                           │
+  │     creates NOTHING; just repoints my nsproxy field                │
+  │     ▸ this is what nsenter(1), docker exec, kubectl exec do        │
+  └────────────────────────────────────────────────────────────────────┘</pre>
+  </div>
+
+  <div class="note warn">
+    <span class="h">Two ordering rules that explain otherwise baffling behaviour</span>
+    <p><code>unshare(CLONE_NEWUSER | CLONE_NEWNET)</code> works unprivileged; <code>unshare(CLONE_NEWNET)</code> alone does not. The kernel applies the user namespace <em>first</em>, so by the time it creates the net namespace you already hold <code>CAP_SYS_ADMIN</code> in the new user namespace. <strong>This is exactly the primitive that turns "unprivileged user" into "root over a fresh copy of half the kernel's subsystems"</strong> — and the reason this area keeps producing CVEs.</p>
+    <p><code>unshare(CLONE_NEWPID)</code> <strong>does not move you</strong>. It sets <code>pid_ns_for_children</code>. <code>unshare(1)</code> papers over this with <code>--fork</code>. Without it your shell stays put and its children land in a namespace whose init is nothing — so the first child to exit takes the namespace down.</p>
+  </div>
+
+  <div class="note calm">
+    <span class="h">What kubectl exec actually does — and what it proves</span>
+    <p>It opens <code>/proc/&lt;pid&gt;/ns/{mnt,net,uts,ipc,pid}</code> for a process already in the container, calls <code>setns()</code> on each fd, forks (needed for the PID namespace to take effect), and <code>execve()</code>s your command. Nothing is created, no container started, no image pulled.</p>
+    <p>So: <strong>an exec that "works" proves the namespaces are intact. It proves nothing about the application.</strong> When you are debugging a wedged pod, exec succeeding tells you the runtime and kernel are fine and the problem is above them.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>ls -l /proc/self/ns/ — identity is an inode number</span><span class="who">live</span></div>
+<pre>cgroup -> 'cgroup:[4026531835]'
+ipc    -> 'ipc:[4026531839]'
+mnt    -> 'mnt:[4026531840]'
+net    -> 'net:[4026531969]'
+pid    -> 'pid:[4026531836]'
+pid_for_children -> 'pid:[4026531836]'
+time   -> 'time:[4026531834]'</pre>
+    <figcaption>Two processes are in the same namespace iff these inode numbers match — which is the cheapest possible membership test, and the one to reach for when you want to know whether two pods really share a network namespace.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part four</span><span>construction</span></div>
+  <h2>A container, in nine steps</h2>
+
+  <div class="col">
+  <p><strong>A container is namespaces + a cgroup + a rootfs. Nothing else.</strong> Here is what <code>runc</code> does between "containerd asked for a container" and "your entrypoint is running":</p>
+  </div>
+
+  <div class="map">
+<pre>  t0  runc reads config.json (the OCI runtime spec)
+      │
+  t1  clone3(CLONE_NEWNS|CLONE_NEWUTS|CLONE_NEWIPC|CLONE_NEWPID|CLONE_NEWNET
+             [|CLONE_NEWUSER][|CLONE_NEWCGROUP], CLONE_INTO_CGROUP=&lt;fd&gt;)
+      │      └── child born into fresh namespaces AND its cgroup, one syscall
+      ▼
+  t2  [child] write uid_map/gid_map if a user namespace was created
+      │        (write-once; before the child drops privilege)
+      ▼
+  t3  [child] mount the rootfs; make the tree MS_PRIVATE/MS_SLAVE so our
+      │        mounts do not escape          ← the propagation reset
+      ▼
+  t4  [child] bind-mount devices, volumes, /proc, /sys, /dev/shm (tmpfs),
+      │        the GPU device nodes and driver libraries
+      ▼
+  t5  [child] pivot_root(new_root, put_old); umount the old root
+      │        ← the ROOTFS half. No namespace involved — just a
+      │          mount-namespace-local root swap
+      ▼
+  t6  [child] set hostname (UTS ns), sysctls, rlimits
+      ▼
+  t7  [child] attach BPF_PROG_TYPE_CGROUP_DEVICE → device allowlist;
+      │        seccomp filter; AppArmor/SELinux label
+      ▼
+  t8  [child] drop capabilities to the configured bounding/effective set
+      ▼
+  t9  [child] execve(entrypoint)            ← PID 1 in its namespace</pre>
+  </div>
+
+  <div class="note">
+    <span class="h">Note what is <em>not</em> in that list</span>
+    <p>No hypervisor. No VM exit. No special CPU mode. <strong>No kernel object named "container."</strong></p>
+    <p>Everything Docker, containerd and Kubernetes add above this — image distribution, CNI, lifecycle, scheduling — is orchestration around those nine steps.</p>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Which closes the loop from lesson 01b.1</span>
+    <p>Step t1 is the whole answer to "is a container a single schedulable entity?" It is <em>one <code>clone3()</code> call</em> that produces <em>one</em> task — and every descendant inherits the same <code>nsproxy</code> by reference count. The container is the <strong>set</strong> that grows from there, and no step in this sequence ever tells the scheduler anything.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Your container ignores <code>docker stop</code> and takes 30 seconds to die. Why?</summary>
+    <div class="ans">
+      <p>PID 1 does not receive signals it has no handler for — a deliberate kernel rule protecting a namespace's init. Your entrypoint is <code>python train.py</code> with no <code>SIGTERM</code> handler, so the kernel drops it. The runtime waits out the grace period and then sends <code>SIGKILL</code>, which cannot be ignored.</p>
+      <p>Fix: a real init as PID 1 (<code>tini</code>, <code>--init</code>) or handle the signal. Raising the timeout just makes you wait longer for the same <code>SIGKILL</code>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your DataLoader dies with <code>Bus error</code>. Which namespace do you reach for?</summary>
+    <div class="ans">
+      <p><b>The mount namespace</b>, not IPC. <code>/dev/shm</code> is a tmpfs <em>mount</em>, sized by that mount's <code>size=</code> option — the IPC namespace covers System V objects and POSIX message queues, neither of which PyTorch uses here.</p>
+      <p>Fix with <code>--shm-size</code> or an <code>emptyDir: {medium: Memory}</code> at <code>/dev/shm</code>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does <code>unshare(CLONE_NEWNET)</code> fail unprivileged, but <code>unshare(CLONE_NEWUSER|CLONE_NEWNET)</code> succeed?</summary>
+    <div class="ans">
+      <p>Creating a user namespace has required no privilege since Linux 3.8, and the kernel applies <code>CLONE_NEWUSER</code> <em>first</em>. By the time it creates the net namespace you already hold <code>CAP_SYS_ADMIN</code> within the new user namespace.</p>
+      <p>That single ordering rule is what makes rootless containers possible — and is the root of a recurring class of local privilege-escalation CVEs.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary><code>kubectl exec</code> into a wedged pod works fine. What have you learned?</summary>
+    <div class="ans">
+      <p>That the namespaces are intact and the runtime and kernel are healthy. <code>exec</code> only calls <code>setns()</code> on existing namespace fds, forks, and <code>execve()</code>s — it creates nothing.</p>
+      <p>So it proves the problem is <em>above</em> the runtime, in your application. It says nothing about whether the app is functioning.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Does creating a cgroup namespace change what a container is allowed to use?</summary>
+    <div class="ans">
+      <p>No. It virtualises the cgroup <em>root directory</em> as reported in <code>/proc/&lt;pid&gt;/cgroup</code> and <code>mountinfo</code> — path cosmetics and information hiding.</p>
+      <p>Limits are unchanged and the parent can still see and set them. Actual resource control is lesson 01b.3.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Two pods claim to share a network namespace. How do you check?</summary>
+    <div class="ans">
+      <p>Compare the inode numbers behind <code>/proc/&lt;pid&gt;/ns/net</code> for a process in each. Same inode means the same namespace — that is the identity, and the cheapest possible membership test.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 01b.3, 04, 09</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Eight bits, one word</span><span class="v">Namespace membership is a clone-flag bitmask — the same shape as <code>__state</code>.</span></li>
+    <li><span class="k">Create / move / join</span><span class="v"><code>clone</code> makes a process into new ones, <code>unshare</code> moves you, <code>setns</code> joins existing ones and creates nothing.</span></li>
+    <li><span class="k">Identity is an inode</span><span class="v">Same number behind <code>/proc/&lt;pid&gt;/ns/&lt;type&gt;</code> means same namespace.</span></li>
+    <li><span class="k">PID 1 drops unhandled signals</span><span class="v">The mechanism behind slow container shutdown. Fix the init, not the timeout.</span></li>
+    <li><span class="k">cgroup ns ≠ cgroup</span><span class="v">Path cosmetics. Resource control is a different subsystem entirely.</span></li>
+    <li><span class="k">IPC ns ≠ /dev/shm</span><span class="v">That is a tmpfs mount, so it belongs to the mount namespace. The DataLoader bug lives here.</span></li>
+    <li><span class="k">User ns first</span><span class="v">Unprivileged since 3.8, applied before the others, and the source of the CVE class.</span></li>
+    <li><span class="k">Nine steps, no container object</span><span class="v">Namespaces + cgroup + rootfs. Everything above is orchestration.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/01b-linux-internals/lessons/02-namespaces.html">Back to lesson 01b.2</a>
+  </footer>
+</div>
+
+</body>
+</html>
