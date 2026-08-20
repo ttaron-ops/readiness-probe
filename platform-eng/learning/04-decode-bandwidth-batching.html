@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 03.4: the single-stream decode ceiling derived without FLOPS, and the throughput-versus-batch curve plotted so the point where KV reads overtake the shared weight read is visible.">
+<meta name="color-scheme" content="light dark">
+<title>Bandwidth Over Bytes · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.decwrap{margin:26px 0 8px;padding:18px 16px 8px;background:var(--surface);border:1px solid var(--rule);overflow-x:auto}
+svg.dec{display:block;min-width:660px;width:100%;height:auto;font-family:var(--f-mono)}
+svg.dec .grid{stroke:var(--rule-soft)} svg.dec .axis{stroke:var(--ink-3);stroke-width:1.2}
+svg.dec .tick,svg.dec .axlbl{fill:var(--ink-3);font-size:11px}
+svg.dec .axlbl{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase}
+svg.dec .ser{fill:none;stroke-width:2.5}
+svg.dec .c1{stroke:var(--moss)} svg.dec .c2{stroke:var(--amber)} svg.dec .c3{stroke:var(--clay)}
+svg.dec .serlbl{font-size:11.5px;font-weight:600}
+svg.dec .serlbl.c1{fill:var(--moss)} svg.dec .serlbl.c2{fill:var(--amber)} svg.dec .serlbl.c3{fill:var(--clay)}
+svg.dec .ideal{fill:none;stroke:var(--ink-3);stroke-width:1.6;stroke-dasharray:6 4}
+svg.dec .ideallbl{fill:var(--ink-3);font-size:11px;font-style:italic}
+.figcap{font-size:14.5px;color:var(--ink-3);margin:12px 0 30px;padding-left:14px;
+  border-left:2px solid var(--amber);font-style:italic;max-width:70ch}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/03-gpu-hardware/lessons/04-decode-bandwidth-batching.html">Back to lesson 03.4</a>
+
+<header class="mast">
+  <p class="kicker">Module 03 · 03.4 · GPU hardware</p>
+  <h1>FLOPS do not<br>appear in this<br>expression</h1>
+  <p class="standfirst">Decode tok/s is HBM bandwidth divided by model bytes. Batching amortises the shared weight read — until per-sequence KV reads overtake it, which happens sooner than you would guess.</p>
+  <div class="mast-meta">
+    <span><b>Ceiling</b> HBM bandwidth ÷ model bytes</span>
+    <span><b>Plotted</b> throughput vs batch, three contexts</span>
+    <span><b>Bites first</b> the rate limit, not capacity</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Lesson 03.2 put decode 295× to the left of the ridge point. This is the consequence stated as a number you can quote: <strong>decode tok/s ≈ HBM bandwidth ÷ model bytes</strong>, and <strong>FLOPS do not appear in it.</strong></p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the ceiling</span></div>
+  <h2>Bandwidth ÷ bytes, and nothing else</h2>
+
+  <div class="col">
+  <p>Each forward pass must read essentially <em>every weight</em> from HBM exactly once — every layer is used, and no weight is reused within a single-token pass. The arithmetic per weight is one multiply and one add.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>per forward pass, batch = 1</span><span class="who">derivation</span></div>
+<pre>  FLOPs = 2 · N_params            <span class="dim">forward only</span>
+  Bytes = e · N_params            <span class="dim">e = bytes/param: 2 BF16, 1 FP8</span>
+  AI    = 2N / (e·N) = <span class="hl">2/e</span>       = 1 FLOP/byte BF16, 2 at FP8
+
+  H100 ridge points: 295 (BF16), 591 (FP8)
+  → decode sits <span class="bad">295x below</span> the ridge in either precision.
+    Not marginally memory-bound. Memory-bound by 2.5 orders of magnitude.
+
+  t_token  >=  model_bytes / HBM_bandwidth
+  <span class="hl">tok/s    <=  HBM_bandwidth / model_bytes</span>
+
+  <b>FLOPS do not appear. That is the whole result.</b></pre>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Model / precision</th><th class="m">model_bytes</th><th class="m">A100 2.039 TB/s</th><th class="m">H100 3.35</th><th class="m">H200 4.8</th><th class="m">B200 7.7</th></tr>
+    <tr><td>8B FP16</td><td class="m">16 GB</td><td class="m">127</td><td class="m">209</td><td class="m">300</td><td class="m">481</td></tr>
+    <tr><td>70B FP16</td><td class="m">140 GB</td><td class="m">14.6</td><td class="m"><b>23.9</b></td><td class="m">34.3</td><td class="m">55.0</td></tr>
+    <tr><td>70B FP8</td><td class="m">70 GB</td><td class="m">n/a</td><td class="m"><b>47.9</b></td><td class="m">68.6</td><td class="m">110</td></tr>
+    <tr><td>405B FP8</td><td class="m">405 GB</td><td class="m">—</td><td class="m">8.3</td><td class="m">11.9</td><td class="m">19.0</td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">Quantisation is a throughput lever, not just a capacity lever</span>
+    <p>Halving bytes per parameter halves bytes read per token and therefore <strong>doubles the ceiling</strong>: 23.9 → 47.9 tok/s on the same H100, with no hardware change.</p>
+    <p>That framing is worth carrying into a procurement conversation, where quantisation usually gets discussed only as "does it fit."</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the lever</span></div>
+  <h2>Why batching works, and where it stops</h2>
+
+  <div class="col">
+  <p>The weight read is a <strong>fixed cost paid once per forward pass</strong>. Run a batch of B sequences and you read the weights once but emit B tokens — the matrix-vector products become matrix-matrix products.</p>
+  <p><strong>But the KV read is not shared.</strong> Every sequence has its own cache, and every cache must be read in full. So one decode step is:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the model that predicts the whole curve</span><span class="who">formula</span></div>
+<pre>  t_step(B) = max(  <span class="hl">[ W + B·S·k ] / BW</span>  ,  <span class="ok">[ B·(2N + a·S) ] / P</span>  )
+                    └── MEMORY TERM ──┘      └── COMPUTE TERM ──┘
+
+    W     = weight bytes            <span class="dim">SHARED across the batch</span>
+    B·S·k = KV bytes                <span class="bad">NOT shared — scales with B</span>
+    2N    = weight-GEMM FLOPs/token <span class="dim">scales with B</span>
+    a·S   = attention FLOPs/token   <span class="dim">scales with B and context</span>
+
+  aggregate throughput = B / t_step(B)</pre>
+  </figure>
+
+  <div class="decwrap">
+<svg viewBox="0 0 900 440" role="img" aria-label="Aggregate decode throughput against batch size for three context lengths, showing the curve bending as KV reads overtake the shared weight read" class="dec">
+<title>Decode throughput versus batch size</title>
+<line class="grid" x1="76" y1="386.0" x2="780" y2="386.0"/>
+<text class="tick" x="67" y="390.0" text-anchor="end">0</text>
+<line class="grid" x1="76" y1="326.0" x2="780" y2="326.0"/>
+<text class="tick" x="67" y="330.0" text-anchor="end">1,500</text>
+<line class="grid" x1="76" y1="266.0" x2="780" y2="266.0"/>
+<text class="tick" x="67" y="270.0" text-anchor="end">3,000</text>
+<line class="grid" x1="76" y1="206.0" x2="780" y2="206.0"/>
+<text class="tick" x="67" y="210.0" text-anchor="end">4,500</text>
+<line class="grid" x1="76" y1="146.0" x2="780" y2="146.0"/>
+<text class="tick" x="67" y="150.0" text-anchor="end">6,000</text>
+<line class="grid" x1="76" y1="86.0" x2="780" y2="86.0"/>
+<text class="tick" x="67" y="90.0" text-anchor="end">7,500</text>
+<line class="grid" x1="76" y1="26.0" x2="780" y2="26.0"/>
+<text class="tick" x="67" y="30.0" text-anchor="end">9,000</text>
+<line class="grid" x1="76.0" y1="26" x2="76.0" y2="386"/>
+<text class="tick" x="76.0" y="406" text-anchor="middle">1</text>
+<line class="grid" x1="176.6" y1="26" x2="176.6" y2="386"/>
+<text class="tick" x="176.6" y="406" text-anchor="middle">2</text>
+<line class="grid" x1="277.1" y1="26" x2="277.1" y2="386"/>
+<text class="tick" x="277.1" y="406" text-anchor="middle">4</text>
+<line class="grid" x1="377.7" y1="26" x2="377.7" y2="386"/>
+<text class="tick" x="377.7" y="406" text-anchor="middle">8</text>
+<line class="grid" x1="478.3" y1="26" x2="478.3" y2="386"/>
+<text class="tick" x="478.3" y="406" text-anchor="middle">16</text>
+<line class="grid" x1="578.9" y1="26" x2="578.9" y2="386"/>
+<text class="tick" x="578.9" y="406" text-anchor="middle">32</text>
+<line class="grid" x1="679.4" y1="26" x2="679.4" y2="386"/>
+<text class="tick" x="679.4" y="406" text-anchor="middle">64</text>
+<line class="grid" x1="780.0" y1="26" x2="780.0" y2="386"/>
+<text class="tick" x="780.0" y="406" text-anchor="middle">128</text>
+<polyline class="ser c1" points="76.0,383.3 88.5,383.0 101.0,382.8 113.5,382.5 126.0,382.1 138.5,381.8 151.0,381.4 163.5,381.0 176.0,380.6 188.5,380.1 201.0,379.5 213.5,379.0 226.0,378.3 238.6,377.7 251.1,376.9 263.6,376.1 276.1,375.2 288.6,374.3 301.1,373.2 313.6,372.1 326.1,370.8 338.6,369.5 351.1,368.0 363.6,366.4 376.1,364.7 388.6,362.8 401.1,360.8 413.6,358.6 426.1,356.2 438.6,353.6 451.1,350.7 463.6,347.7 476.1,344.3 488.6,340.7 501.1,336.8 513.6,332.6 526.1,328.1 538.6,323.1 551.1,317.8 563.7,312.1 576.2,305.9 588.7,299.2 601.2,292.0 613.7,284.3 626.2,276.1 638.7,267.2 651.2,257.7 663.7,247.6 676.2,236.7 688.7,225.2 701.2,212.9 713.7,199.9 726.2,186.0 738.7,171.4 751.2,156.0 763.7,139.7 776.2,122.7"/>
+<text class="serlbl c1" x="788" y="121.3">S = 1,024</text>
+<polyline class="ser c2" points="76.0,383.3 88.5,383.0 101.0,382.8 113.5,382.5 126.0,382.2 138.5,381.8 151.0,381.5 163.5,381.1 176.0,380.6 188.5,380.2 201.0,379.7 213.5,379.1 226.0,378.5 238.6,377.8 251.1,377.1 263.6,376.3 276.1,375.5 288.6,374.6 301.1,373.6 313.6,372.6 326.1,371.4 338.6,370.2 351.1,368.8 363.6,367.4 376.1,365.8 388.6,364.2 401.1,362.4 413.6,360.4 426.1,358.3 438.6,356.1 451.1,353.7 463.6,351.2 476.1,348.4 488.6,345.5 501.1,342.4 513.6,339.2 526.1,335.7 538.6,332.0 551.1,328.1 563.7,324.1 576.2,319.8 588.7,315.3 601.2,310.6 613.7,305.7 626.2,300.7 638.7,295.4 651.2,290.0 663.7,284.4 676.2,278.7 688.7,272.9 701.2,266.9 713.7,260.9 726.2,254.8 738.7,248.7 751.2,242.5 763.7,236.3 776.2,230.2"/>
+<text class="serlbl c2" x="788" y="232.4">S = 4,096</text>
+<polyline class="ser c3" points="76.0,383.4 88.5,383.1 101.0,382.9 113.5,382.6 126.0,382.3 138.5,382.0 151.0,381.7 163.5,381.3 176.0,380.9 188.5,380.5 201.0,380.0 213.5,379.6 226.0,379.0 238.6,378.5 251.1,377.9 263.6,377.2 276.1,376.5 288.6,375.8 301.1,375.0 313.6,374.2 326.1,373.3 338.6,372.4 351.1,371.5 363.6,370.4 376.1,369.4 388.6,368.2 401.1,367.0 413.6,365.8 426.1,364.6 438.6,363.2 451.1,361.9 463.6,360.5 476.1,359.1 488.6,357.6 501.1,356.1 513.6,354.6 526.1,353.1 538.6,351.5 551.1,350.0 563.7,348.5 576.2,346.9 588.7,345.4 601.2,343.9 613.7,342.4 626.2,341.0 638.7,339.5 651.2,338.2 663.7,336.8 676.2,335.5 688.7,334.3 701.2,333.0 713.7,331.9 726.2,330.8 738.7,329.7 751.2,328.7 763.7,327.8 776.2,326.8"/>
+<text class="serlbl c3" x="788" y="330.6">S = 16,384</text>
+<polyline class="ideal" points="76.0,383.3 176.6,380.5 277.1,375.0 377.7,364.1 478.3,342.1 578.9,298.2 679.4,210.5 780.0,34.9"/>
+<text class="ideallbl" x="323.3" y="142.0">ideal — if KV were free</text>
+<line class="axis" x1="76" y1="386" x2="780" y2="386"/>
+<line class="axis" x1="76" y1="26" x2="76" y2="386"/>
+<text class="axlbl" x="780" y="426" text-anchor="end">batch size B (log)</text>
+<text class="axlbl" x="22" y="32" transform="rotate(-90 22 32)" text-anchor="end">aggregate tok/s</text>
+</svg>
+  </div>
+  <p class="figcap">Llama-3-70B, FP8 weights and FP8 KV, one H200 (4.8 TB/s, 1,979 TFLOP/s dense FP8). The dashed line is what batching would give if KV were free — pure amortisation of the shared weight read. <strong>The gap between each curve and that line is the KV cache.</strong> Long contexts leave the ideal almost immediately; short ones track it far longer.</p>
+
+  <figure class="term">
+    <div class="cmd"><span>why the long-context curve bends so early</span><span class="who">arithmetic</span></div>
+<pre>  S = 8,192, one additional sequence:
+
+    per-sequence KV bytes     = 8,192 x 163,840 B       = 1.342 GB
+    per-sequence KV READ time = 1.342e9 / 4.8e12        = <span class="bad">280 us</span>
+    per-sequence COMPUTE time = (1.40e11 + 2.15e10)/1.979e15 = <span class="ok">81.6 us</span>
+
+  Adding one sequence costs <b>280 us of memory</b> against 81.6 us of compute.
+  The memory term dominates and keeps dominating — so throughput per
+  added sequence falls rather than staying flat.</pre>
+    <figcaption>This is the mechanism behind the lesson 07.2 statement that KV cache is what stops you batching forever — here it is as a rate, not just as a capacity ceiling.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">Two separate limits, often confused</span>
+    <p><strong>Capacity</strong> — you run out of VRAM for KV, so you cannot admit more sequences. That is 07.2's concurrency cap.</p>
+    <p><strong>Rate</strong> — you can still admit them, but each one adds more KV read time than it adds throughput. <em>That</em> is this lesson, and it bites before the capacity limit at long context.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the regimes</span></div>
+  <h2>When decode becomes compute-bound</h2>
+
+  <div class="col">
+  <p>Read the <code>max()</code> again: the compute term scales with <code>B</code> while the shared part of the memory term does not. So at large enough batch and short enough context, <strong>the compute term wins and decode stops being memory-bound</strong> — the regime change the roofline predicts when you push arithmetic intensity right by batching.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Regime</th><th>Binding term</th><th>What raises throughput</th></tr>
+    <tr><td><b>Small batch, any context</b></td><td class="m">W / BW dominates</td><td class="yes">Batch harder — the weight read is being amortised across too few tokens</td></tr>
+    <tr><td><b>Large batch, long context</b></td><td class="m">B·S·k / BW dominates</td><td>Shrink KV: fp8 cache, GQA, shorter context. More batch will not help.</td></tr>
+    <tr><td><b>Large batch, short context</b></td><td class="m">B·(2N + a·S) / P dominates</td><td>Now you are genuinely compute-bound. Lower precision, better kernels, more FLOPS.</td></tr>
+  </table>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Which is why "prefill is compute-bound, decode is memory-bound" needs a caveat</span>
+    <p>It is true at the batch sizes people usually mean. But decode at batch 256 with a 512-token context is a different regime from decode at batch 4 with 32k — and they want opposite fixes.</p>
+    <p>Always state the batch and the context alongside the claim.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Estimate single-stream decode for a 70B FP16 model on an H100.</summary>
+    <div class="ans">
+      <p>3.35 TB/s ÷ 140 GB ≈ <b>23.9 tok/s</b>. No FLOPS involved — every weight must cross HBM once per token, and that read is the floor.</p>
+      <p>Quantise to FP8 and model_bytes halves to 70 GB, doubling the ceiling to 47.9 tok/s on the same card.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does batching raise throughput at all?</summary>
+    <div class="ans">
+      <p>The weight read <code>W</code> is a fixed cost paid once per forward pass and <b>shared across the batch</b>. Emitting B tokens per pass amortises it B ways, turning matrix-vector products into matrix-matrix.</p>
+      <p>The KV read is not shared, which is exactly what limits the gain.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>At S=8,192 on an H200, does adding one more sequence pay?</summary>
+    <div class="ans">
+      <p>Barely. It costs 1.342 GB of KV read = <b>280 µs</b> against only 81.6 µs of added compute, so the memory term dominates and keeps dominating.</p>
+      <p>Throughput per added sequence falls rather than staying flat — the curve bends almost immediately at long context.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Distinguish the capacity limit from the rate limit on batching.</summary>
+    <div class="ans">
+      <p><b>Capacity</b>: you run out of VRAM for KV and cannot admit more sequences — lesson 07.2's concurrency cap.</p>
+      <p><b>Rate</b>: you can still admit them, but each adds more KV read time than throughput. At long context the rate limit bites <em>first</em>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your batch is 256 and context is 512. Is decode still memory-bound?</summary>
+    <div class="ans">
+      <p>Possibly not. The compute term scales with B while the shared weight read does not, so at large batch and short context <code>B·(2N + a·S)/P</code> can exceed the memory term.</p>
+      <p>That is the regime change the roofline predicts — batching pushes arithmetic intensity right, and eventually past the ridge. It wants lower precision and better kernels, not less KV.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Someone proposes a faster-compute GPU to fix single-stream latency. Response?</summary>
+    <div class="ans">
+      <p>It will not help. Single-stream decode is <code>HBM_bandwidth ÷ model_bytes</code> — FLOPS do not appear. A card with more compute and the same bandwidth gives the same tok/s.</p>
+      <p>The levers are bandwidth (H100→H200 is 3.35→4.8 TB/s) or fewer bytes (quantisation).</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 03.5, 07.2, 07.5</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">BW ÷ bytes</span><span class="v">Single-stream decode ceiling. FLOPS are absent from the expression.</span></li>
+    <li><span class="k">AI = 2/e</span><span class="v">1 FLOP/byte at BF16, 2 at FP8 — roughly 295× left of the H100 ridge.</span></li>
+    <li><span class="k">Quantisation doubles throughput</span><span class="v">Not just a capacity lever. Half the bytes, half the read time, twice the ceiling.</span></li>
+    <li><span class="k">W is shared, KV is not</span><span class="v">The whole reason batching works and the whole reason it stops working.</span></li>
+    <li><span class="k">max(memory, compute)</span><span class="v">One expression predicts the entire curve, including where it bends.</span></li>
+    <li><span class="k">Rate ≠ capacity</span><span class="v">At long context the marginal-sequence cost bites before VRAM runs out.</span></li>
+    <li><span class="k">Regimes need caveats</span><span class="v">“Decode is memory-bound” is batch- and context-dependent. State both.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/03-gpu-hardware/lessons/04-decode-bandwidth-batching.html">Back to lesson 03.4</a>
+  </footer>
+</div>
+
+</body>
+</html>

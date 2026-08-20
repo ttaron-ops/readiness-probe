@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A warm-up for module 02b: socket/core/thread, the cache hierarchy measured live, DIMM channels, NUMA as physical arrangement, PCIe vocabulary and rack power — the on-prem picture the module assumes.">
+<meta name="color-scheme" content="light dark">
+<title>The Physical Picture · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.latwrap{margin:26px 0 8px;padding:18px 16px 8px;background:var(--surface);border:1px solid var(--rule);overflow-x:auto}
+svg.lat{display:block;min-width:660px;width:100%;height:auto;font-family:var(--f-mono)}
+svg.lat .grid{stroke:var(--rule-soft)} svg.lat .axis{stroke:var(--ink-3);stroke-width:1.2}
+svg.lat .tick,svg.lat .axlbl{fill:var(--ink-3);font-size:11px}
+svg.lat .axlbl{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase}
+svg.lat .band{opacity:.5}
+svg.lat .b1{fill:var(--moss-bg)} svg.lat .b2{fill:var(--amber-bg)} svg.lat .b3{fill:var(--clay-bg)}
+svg.lat .bandlbl{fill:var(--ink-3);font-size:10.5px;letter-spacing:.06em}
+svg.lat .line{fill:none;stroke:var(--amber);stroke-width:2.5}
+svg.lat .dot{fill:var(--amber);stroke:var(--surface);stroke-width:2}
+svg.lat .ann{fill:var(--ink);font-size:11px;font-weight:600}
+svg.lat .big{fill:var(--clay);font-size:30px;font-weight:700;text-anchor:middle}
+svg.lat .bigsub{fill:var(--ink-3);font-size:11px;text-anchor:middle}
+.vocab{display:grid;grid-template-columns:150px 1fr;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);margin:24px 0 30px}
+.vocab>div{background:var(--surface);padding:12px 16px}
+.vocab .t{font-family:var(--f-mono);font-size:12.5px;font-weight:600;color:var(--amber)}
+.vocab .d{font-size:15px;color:var(--ink-2);line-height:1.5}
+.vocab .d b{color:var(--ink)}
+@media(max-width:640px){.vocab{grid-template-columns:1fr}.vocab .t{padding-bottom:0}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/02b-host-topology/lessons/01-host-topology-tree.html">Back to lesson warm-up</a>
+
+<header class="mast">
+  <p class="kicker">Module 02b · warm-up · Host hardware and topology</p>
+  <h1>The on-prem picture<br>this module<br>assumes you have</h1>
+  <p class="standfirst">Module 02b skips “what-is-a-CPU/RAM/cache, rack 101, PCIe history” and opens on a seven-level placement tree. This is the floor underneath it — with the memory hierarchy measured rather than quoted.</p>
+  <div class="mast-meta">
+    <span><b>Not a lesson companion</b> the prerequisite under module 02b</span>
+    <span><b>Measured live</b> 1.78 ns to 150.65 ns — 85×</span>
+    <span><b>Ends where</b> lesson 02b.1 begins</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>This is a warm-up, not a companion. Module 02b's calibration says it skips <em>“what-is-a-CPU/RAM/cache, datacenter/rack 101, PCIe history”</em> and assumes you <em>“already hold the on-prem physical picture — sockets, DIMMs, expansion slots.”</em> Lesson 02b.1 then opens on a seven-level placement tree and ACPI SRAT/SLIT tables.</p>
+<p>Here is that physical picture, with the parts that actually matter for accelerators. The measurements are real, run on this machine.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>One</span><span>the vocabulary</span></div>
+  <h2>Socket, die, core, thread</h2>
+
+  <div class="vocab">
+<div class="t">socket</div><div class="d">A physical <b>slot on the motherboard</b> holding one processor package. Two sockets means two packages, two sets of memory controllers, and a link between them. This is the level on-prem intuition usually stops at.</div><div class="t">package</div><div class="d">What goes in the socket. On modern AMD parts it contains <b>several chiplets</b> plus an I/O die; on Intel it may be one monolithic die or several tiles. One package, many dies.</div><div class="t">die / CCD / tile</div><div class="d">A single piece of silicon inside the package. It matters because <b>cores on one die share an L3 slice and a path to memory</b> that cores on another die do not.</div><div class="t">core</div><div class="d">An independent execution engine with its own L1 and L2. This is the unit the scheduler places a task on.</div><div class="t">thread / SMT</div><div class="d">Two <b>hardware threads sharing one core's execution units</b> and caches. Doubles the CPU count Linux reports without doubling throughput — and on latency-critical GPU host threads it is often disabled precisely because sharing an L1 with a neighbour adds jitter.</div><div class="t">memory controller</div><div class="d">Lives on the package and owns a set of DDR channels. <b>This is what makes NUMA physical</b>: memory hangs off a controller, the controller belongs to a package, so some memory is nearer than other memory.</div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>lscpu — how the four map on a real machine</span><span class="who">live · this box</span></div>
+<pre>Architecture:            x86_64
+CPU(s):                  <span class="hl">4</span>          <span class="dim">← what Linux schedules on</span>
+Thread(s) per core:      <span class="hl">1</span>          <span class="dim">← SMT off here; 2 on most servers</span>
+Core(s) per socket:      <span class="hl">4</span>
+Socket(s):               <span class="hl">1</span>
+NUMA node(s):            1
+
+  CPU(s) = sockets x cores/socket x threads/core
+         =    1    x      4       x      1        = 4</pre>
+    <figcaption>Read that identity in both directions. A box reporting 256 CPUs is typically 2 sockets × 64 cores × 2 threads — and knowing which factor is which decides whether “pin to 8 CPUs” means 8 cores or 4 cores' worth of execution units.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Two</span><span>why cache exists</span></div>
+  <h2>The gap, measured on this machine</h2>
+
+  <div class="col">
+  <p>Cache is not an optimisation someone bolted on. It exists because <strong>DRAM latency has barely improved for two decades while clock speeds did</strong>, so a core that waits for memory wastes hundreds of cycles. Here is the size of the problem, measured with a pointer chase that defeats the prefetcher, so every access is a genuine dependent load:</p>
+  </div>
+
+  <div class="latwrap">
+<svg viewBox="0 0 900 420" role="img" aria-label="Measured memory access latency against working set size on log-log axes, showing plateaus at each cache level and cliffs between them" class="lat">
+<title>Measured memory hierarchy latency</title>
+<rect class="band b1" x="76.0" y="40" width="79.7" height="326"/>
+<text class="bandlbl" x="115.9" y="28" text-anchor="middle">L1d · 48 KiB/core</text>
+<rect class="band b2" x="155.7" y="40" width="272.3" height="326"/>
+<text class="bandlbl" x="291.9" y="28" text-anchor="middle">L2 · 2 MiB/core</text>
+<rect class="band b3" x="428.0" y="40" width="352.0" height="326"/>
+<text class="bandlbl" x="604.0" y="28" text-anchor="middle">L3 · 260 MiB shared</text>
+<line class="grid" x1="76" y1="334.0" x2="780" y2="334.0"/>
+<text class="tick" x="67" y="338.0" text-anchor="end">2</text>
+<line class="grid" x1="76" y1="276.7" x2="780" y2="276.7"/>
+<text class="tick" x="67" y="280.7" text-anchor="end">5</text>
+<line class="grid" x1="76" y1="233.4" x2="780" y2="233.4"/>
+<text class="tick" x="67" y="237.4" text-anchor="end">10</text>
+<line class="grid" x1="76" y1="190.0" x2="780" y2="190.0"/>
+<text class="tick" x="67" y="194.0" text-anchor="end">20</text>
+<line class="grid" x1="76" y1="132.7" x2="780" y2="132.7"/>
+<text class="tick" x="67" y="136.7" text-anchor="end">50</text>
+<line class="grid" x1="76" y1="89.3" x2="780" y2="89.3"/>
+<text class="tick" x="67" y="93.3" text-anchor="end">100</text>
+<line class="grid" x1="76" y1="46.0" x2="780" y2="46.0"/>
+<text class="tick" x="67" y="50.0" text-anchor="end">200</text>
+<text class="tick" x="76.0" y="386" text-anchor="middle">16K</text>
+<text class="tick" x="176.6" y="386" text-anchor="middle">64K</text>
+<text class="tick" x="277.1" y="386" text-anchor="middle">256K</text>
+<text class="tick" x="377.7" y="386" text-anchor="middle">1M</text>
+<text class="tick" x="478.3" y="386" text-anchor="middle">4M</text>
+<text class="tick" x="578.9" y="386" text-anchor="middle">16M</text>
+<text class="tick" x="679.4" y="386" text-anchor="middle">64M</text>
+<text class="tick" x="780.0" y="386" text-anchor="middle">256M</text>
+<polyline class="line" points="76.0,341.3 126.3,340.3 176.6,308.3 277.1,275.9 377.7,253.7 478.3,175.7 578.9,143.2 679.4,90.0 780.0,63.7"/>
+<circle class="dot" cx="76.0" cy="341.3" r="4"/>
+<circle class="dot" cx="126.3" cy="340.3" r="4"/>
+<circle class="dot" cx="176.6" cy="308.3" r="4"/>
+<circle class="dot" cx="277.1" cy="275.9" r="4"/>
+<circle class="dot" cx="377.7" cy="253.7" r="4"/>
+<circle class="dot" cx="478.3" cy="175.7" r="4"/>
+<circle class="dot" cx="578.9" cy="143.2" r="4"/>
+<circle class="dot" cx="679.4" cy="90.0" r="4"/>
+<circle class="dot" cx="780.0" cy="63.7" r="4"/>
+<text class="ann" x="82.0" y="330.3">1.78 ns</text>
+<text class="ann" x="780.0" y="51.7" text-anchor="end">150.65 ns</text>
+<text class="big" x="350.1" y="95.9">85x</text>
+<text class="bigsub" x="350.1" y="121.3">across the hierarchy</text>
+<line class="axis" x1="76" y1="366" x2="780" y2="366"/>
+<line class="axis" x1="76" y1="40" x2="76" y2="366"/>
+<text class="axlbl" x="780" y="406" text-anchor="end">working set (log)</text>
+<text class="axlbl" x="26" y="46" transform="rotate(-90 26 46)" text-anchor="end">ns per access (log)</text>
+</svg>
+  </div>
+  <p class="figcap">Measured live on this box — a small VM, so the absolute numbers are a VM's and the L3 band is unusually large. The <em>shape</em> is what transfers: <strong>flat plateaus while the working set fits a level, and a cliff each time it stops fitting.</strong></p>
+
+  <figure class="term">
+    <div class="cmd"><span>go run cache.go — the raw measurements</span><span class="who">live</span></div>
+<pre>  working set     ns/access   where it lives
+  ───────────     ─────────   ──────────────
+  16 KiB             <span class="ok">1.78</span>     L1d  (48K/core)
+  32 KiB             <span class="ok">1.81</span>     L1d
+  64 KiB             3.02     L2   (2M/core)
+  256 KiB            5.07     L2
+  1 MiB              7.22     L2
+  4 MiB             <span class="hl">25.14</span>     L3   (260M shared)
+  16 MiB            42.28     L3
+  64 MiB            98.89     L3
+  256 MiB          <span class="bad">150.65</span>     L3 / DRAM</pre>
+    <figcaption>1.78 ns to 150.65 ns is <b>85×</b>. The same instruction stream, the same code — only the working set changed. This is why “the algorithm is O(n) either way” can still be two orders of magnitude apart in practice.</figcaption>
+  </figure>
+
+  <h3>Two facts that come up constantly downstream</h3>
+
+  <figure class="term">
+    <div class="cmd"><span>/sys/devices/system/cpu/cpu0/cache/index*</span><span class="who">live</span></div>
+<pre>  L1 Data         size=48K     line=<span class="hl">64</span>   shared_with=<span class="ok">0</span>
+  L1 Instruction  size=32K     line=<span class="hl">64</span>   shared_with=<span class="ok">0</span>
+  L2 Unified      size=2048K   line=<span class="hl">64</span>   shared_with=<span class="ok">0</span>
+  L3 Unified      size=266240K line=<span class="hl">64</span>   shared_with=<span class="bad">0-3</span></pre>
+    <figcaption>Read the last column, not just the sizes.</figcaption>
+  </figure>
+
+  <div class="split">
+    <div class="pv">
+      <h5>Line = 64 bytes</h5>
+      <ul>
+        <li>the <b>unit of transfer</b>, always</li>
+        <li>touch 1 byte, move 64</li>
+        <li>why struct field order matters</li>
+        <li>why two cores writing adjacent<br>fields fight — <b>false sharing</b></li>
+      </ul>
+    </div>
+    <div class="sh">
+      <h5>shared_cpu_list</h5>
+      <ul>
+        <li>L1 and L2 are <b>per core</b></li>
+        <li>L3 is <b>shared across the socket</b></li>
+        <li>so a noisy neighbour cannot evict<br>your L1 — but absolutely can<br>evict your L3</li>
+        <li>this is the mechanism behind<br>“cache-hostile co-tenant”</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Where this lands in the module</span>
+    <p>Lesson 02b.2 measures the <em>bandwidth</em> side of the same hierarchy and compares DDR against HBM. This page is the latency side, because the two are different quantities and the module assumes you already separate them.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Three</span><span>DRAM</span></div>
+  <h2>DIMMs, channels, and the purchase-order mistake</h2>
+
+  <div class="vocab">
+<div class="t">DIMM</div><div class="d">A physical memory stick. Capacity lives here; <b>bandwidth does not</b>.</div><div class="t">channel</div><div class="d">An independent path between the memory controller and DIMMs. <b>Bandwidth scales with channels</b>, and this is the number that matters.</div><div class="t">rank</div><div class="d">A set of DRAM chips on a DIMM addressed together. Two ranks per channel let the controller overlap operations; more ranks can slightly <em>lower</em> the achievable clock.</div><div class="t">DDR5-4800</div><div class="d">The transfer rate — 4,800 mega-transfers per second per channel. Multiply by 8 bytes per transfer for per-channel bandwidth.</div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>where a server's memory bandwidth number comes from</span><span class="who">arithmetic</span></div>
+<pre>  per-channel = transfers/s x 8 bytes
+              = 4.8e9 x 8            = 38.4 GB/s
+
+  8-channel socket = 8 x 38.4         = <span class="hl">307 GB/s</span>
+  two sockets      = 2 x 307          = 614 GB/s aggregate
+                                        <span class="dim">but NOT to one process — see part four</span>
+
+  <span class="bad">the mistake:</span> buy 4 DIMMs instead of 8 for the same capacity
+      4 channels populated x 38.4      = <span class="bad">154 GB/s</span>
+      same GB of RAM. <b>half the bandwidth.</b> forever.</pre>
+    <figcaption>This is the one hardware decision on this page that is <em>irreversible without a maintenance window</em>, and it is made by whoever fills in the order form. Lesson 02b.2 §4 is titled "the bandwidth you can lose with a purchase order" for exactly this reason.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Four</span><span>NUMA, physically</span></div>
+  <h2>Why some memory is further away</h2>
+
+  <div class="col">
+  <p>The kernel mechanics — first-touch allocation, <code>numa_balancing</code>, page migration — are lesson 01b's. <strong>This is the physical arrangement they operate on</strong>, which the module assumes you can already picture.</p>
+  </div>
+
+  <div class="map">
+<pre>   ┌──────────── SOCKET 0 ────────────┐  ┌──────────── SOCKET 1 ────────────┐
+   │  cores ── L3 (shared) ── memory  │  │  memory ── L3 (shared) ── cores  │
+   │                       controller │  │ controller                       │
+   └───────────────────────────┬──────┘  └──────┬───────────────────────────┘
+        │                      │                │                      │
+   8 DDR channels         ┌────┴────────────────┴────┐         8 DDR channels
+   307 GB/s LOCAL         │  UPI / Infinity Fabric   │         307 GB/s LOCAL
+                          │      ~38 GB/s/link       │
+                          └──────────────────────────┘
+                                 the narrow bit
+
+   a core on socket 0 reading socket 1's memory:
+       goes out over the inter-socket link
+       ~1.5-2.2x the latency, and a fraction of the bandwidth
+
+   AND — the part on-prem intuition usually misses —
+   <b>a PCIe device also belongs to exactly one socket.</b>
+   A GPU in a socket-1 slot reading a buffer in socket-0 memory
+   crosses that same link, on every transfer.</pre>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The one sentence to carry into 02b.1</span>
+    <p>NUMA is not only about where <em>memory</em> is. On a GPU host, <strong>the accelerator, the NIC and the NVMe each have a home socket too</strong>, fixed in silicon when the board was seated. Lesson 02b.1 calls this "a PCIe device has a home NUMA node the same way a page does — but fixed at boot, not decided by first touch."</p>
+  </div>
+
+  <div class="note">
+    <span class="h">And node count is not socket count</span>
+    <p>AMD's NPS and Intel's Sub-NUMA Clustering both split <em>one</em> socket into several NUMA domains, so a 2-socket box can report 2, 4 or 8 nodes. That is lesson 02b.1 §6 — just know now that <code>NUMA node(s): 8</code> does not mean eight processors.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Five</span><span>PCIe</span></div>
+  <h2>Enough to read the tree</h2>
+
+  <div class="vocab">
+<div class="t">lane</div><div class="d">One differential pair each way. Bandwidth is <b>per-lane rate × lane count</b>, so x16 is four times x4.</div><div class="t">root complex</div><div class="d">The CPU's entry point to PCIe. It is <b>part of the package</b> — which is precisely why an endpoint has a home socket.</div><div class="t">root port</div><div class="d">One downstream port on the root complex. A slot usually hangs off one root port.</div><div class="t">switch</div><div class="d">A fan-out chip: one upstream port, several downstream. Devices under the same switch can talk <b>peer-to-peer through its crossbar without touching the CPU</b> — the entire basis of GPUDirect.</div><div class="t">endpoint</div><div class="d">The device itself — GPU, NIC, NVMe.</div><div class="t">BDF</div><div class="d"><b>Bus:Device.Function</b>, e.g. <code>0000:1b:00.0</code>. The address the OS uses. Same bus number usually means same branch, which is a <em>heuristic</em> for locality, not a guarantee.</div>
+  </div>
+
+  <div class="map">
+<pre>   CPU package
+     └── root complex          ← belongs to ONE socket
+          ├── root port ──── PCIe switch ──┬── GPU0      ┐ same switch:
+          │                                ├── NIC0      │ peer-to-peer
+          │                                └── NVMe0     ┘ via the crossbar
+          └── root port ──── GPU1                          (GPUDirect works)
+
+   GPU0 → NIC0   : one switch hop, never reaches the CPU       <b>PIX</b>
+   GPU0 → GPU1   : up to the root complex and back down        <b>PXB / PHB</b>
+   GPU0 → socket1: across the inter-socket link                <b>SYS</b>
+
+   Those three letters are what nvidia-smi topo -m prints.
+   Lesson 02b.1 §10 decodes the full matrix.</pre>
+  </div>
+
+  <div class="note calm">
+    <span class="h">The "PCIe history" the module skips, in one line</span>
+    <p>Each generation doubles the per-lane rate — Gen3 ≈ 1 GB/s per lane per direction, Gen4 ≈ 2, Gen5 ≈ 4, Gen6 ≈ 7.6. That is the whole history you need. Lesson 02b.3 does the encoding, the loss budget, and how to spot a link that trained low.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Six</span><span>the rack</span></div>
+  <h2>Datacenter vocabulary, briefly</h2>
+
+  <div class="vocab">
+<div class="t">U / RU</div><div class="d">Rack unit, 1.75 inches. A rack is typically 42U. <b>An 8-GPU server is usually 6–10U</b>, so you fit four to six per rack — before power.</div><div class="t">ToR</div><div class="d">Top-of-rack switch. Every server in the rack cables to it; the ToR cables up to the fabric. <b>This is the “leaf” in lesson 09's fat tree.</b></div><div class="t">PDU</div><div class="d">Power distribution unit — the rack's power strip, and the thing that actually runs out.</div><div class="t">hot / cold aisle</div><div class="d">Racks face each other so cold air is drawn in the front and exhausted out the back into a shared hot aisle. Determines how much heat a rack may produce.</div><div class="t">PUE</div><div class="d">Power Usage Effectiveness — total facility power ÷ IT power. 1.2 means 20% overhead for cooling and losses. <b>It multiplies every watt in your cost model.</b></div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>why GPU racks look empty</span><span class="who">arithmetic</span></div>
+<pre>  one 8x H100 SXM node    ≈ 10 kW under load
+  a conventional rack     ≈ 10-15 kW of provisioned power
+
+  → <span class="bad">ONE node fills a traditional rack's power budget</span>
+    while occupying 8U of 42U.
+
+  high-density GPU halls provision 40-100+ kW per rack, which is
+  why they need liquid cooling and a different facility design.
+  <b>The constraint is watts and heat, not rack units.</b></pre>
+    <figcaption>Worth internalising before lesson 02b.7 (power and thermals) and lesson 10.8 (capex vs cloud), both of which treat power as the binding constraint rather than an afterthought.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Check yourself</span><span>before 02b.1</span></div>
+  <h2>Drills</h2>
+
+  <details class="drill">
+    <summary><code>lscpu</code> reports 256 CPUs. What is the machine?</summary>
+    <div class="ans">
+      <p>Almost certainly 2 sockets × 64 cores × 2 SMT threads. The identity is <code>CPUs = sockets × cores/socket × threads/core</code>, and all three factors are printed.</p>
+      <p>It matters because "pin to 8 CPUs" means 4 physical cores if SMT is on — half the execution resources you might have assumed.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does the same loop run 85× slower on a bigger array?</summary>
+    <div class="ans">
+      <p>The working set stopped fitting in a cache level. Measured here: 1.78 ns at 16 KiB (L1), 7.22 ns at 1 MiB (L2), 150.65 ns at 256 MiB.</p>
+      <p>Flat while it fits, a cliff each time it stops fitting. Same instructions, same complexity class — only the data size changed.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>A co-tenant is thrashing cache. Which of your caches can it actually evict?</summary>
+    <div class="ans">
+      <p><b>L3 only</b> — <code>shared_cpu_list</code> shows L1 and L2 are per-core while L3 spans the socket.</p>
+      <p>So a neighbour on a different core cannot touch your L1 or L2, but can absolutely evict your L3 working set. That is the mechanism behind "cache-hostile co-tenant," and it is why <code>cpuset</code> pinning helps less than people expect.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Same capacity, 4 DIMMs or 8. Does it matter?</summary>
+    <div class="ans">
+      <p>Enormously. Bandwidth scales with <b>populated channels</b>, not with gigabytes. Eight channels of DDR5-4800 is ~307 GB/s; four is ~154 GB/s.</p>
+      <p>Same RAM, half the bandwidth, and unfixable without opening the box. This is decided on a purchase order.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Does a GPU have a NUMA node?</summary>
+    <div class="ans">
+      <p>Yes. The root complex is part of a CPU package, so every PCIe endpoint hangs off exactly one socket — fixed in silicon when the board was seated, not chosen at runtime.</p>
+      <p>A GPU reading a buffer in the other socket's memory crosses the inter-socket link on every transfer.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Two devices under the same PCIe switch. Why does that matter?</summary>
+    <div class="ans">
+      <p>They can transfer peer-to-peer through the switch crossbar without the data reaching the CPU or host memory. That is what makes GPUDirect RDMA and GPUDirect Storage fast paths.</p>
+      <p><code>nvidia-smi topo -m</code> prints this as <code>PIX</code>. If they are on different root ports you get <code>PXB</code>/<code>PHB</code>; different sockets gives <code>SYS</code>, and the fast path is gone.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>How many 8-GPU nodes fit in a 42U rack?</summary>
+    <div class="ans">
+      <p>By rack units, four to six. <b>By power, often one.</b> An 8×H100 node draws roughly 10 kW and a conventional rack is provisioned for 10–15 kW.</p>
+      <p>High-density GPU halls provision 40–100+ kW per rack with liquid cooling. The binding constraint is watts and heat, not space.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Now start</span><span>module 02b</span></div>
+  <h2>What to carry into lesson 02b.1</h2>
+  <ul class="keeps">
+    <li><span class="k">CPUs = S × C × T</span><span class="v">Sockets, cores, threads. Know which factor you are pinning against.</span></li>
+    <li><span class="k">64-byte line</span><span class="v">The unit of transfer everywhere. Touch a byte, move a line.</span></li>
+    <li><span class="k">L1/L2 private, L3 shared</span><span class="v">Decides exactly what a noisy neighbour can and cannot evict.</span></li>
+    <li><span class="k">Plateaus and cliffs</span><span class="v">Latency is flat while the working set fits and jumps when it does not. 85× here.</span></li>
+    <li><span class="k">Channels, not DIMMs</span><span class="v">Bandwidth scales with populated channels. Half-populating halves it, permanently.</span></li>
+    <li><span class="k">Devices have a home socket</span><span class="v">The root complex is in the package, so every endpoint is NUMA-local to one side.</span></li>
+    <li><span class="k">Same switch = peer-to-peer</span><span class="v">The crossbar routes device-to-device without the CPU. This is <code>PIX</code>, and it is the fast path.</span></li>
+    <li><span class="k">Power is the rack limit</span><span class="v">One 8-GPU node can consume a conventional rack's entire budget in 8U.</span></li>
+  </ul>
+
+  <div class="note calm" style="margin-top:26px">
+    <span class="h">Then go to lesson 02b.1</span>
+    <p>It picks up exactly here and formalises it: the host as a seven-level placement tree, who builds that tree at boot, why firmware's ACPI tables are trusted and can be wrong, and how to read <code>nvidia-smi topo -m</code> against it.</p>
+  </div>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/02b-host-topology/lessons/01-host-topology-tree.html">Back to lesson warm-up</a>
+  </footer>
+</div>
+
+</body>
+</html>

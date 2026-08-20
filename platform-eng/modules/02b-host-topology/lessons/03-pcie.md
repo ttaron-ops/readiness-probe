@@ -15,6 +15,8 @@ sources: 12
 > **Concept.** A PCIe link silently trains to a lower generation or width and the GPU still "works" — at a fraction of spec. Learn to read the trained-vs-max link, the secondary error signals that precede it, and catch it before it costs a training run.
 >
 > Module: [🧬 02b — Host hardware and topology](../README.md) · Deliverable: [Topology Teardown](../practice/topology-teardown/README.md)
+>
+> **Advanced Learning** — [LnkCap vs LnkSta](../../../learning/03-pcie.html): the generation table with code efficiency, and the exact signature that separates a degraded link from the topology you built. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

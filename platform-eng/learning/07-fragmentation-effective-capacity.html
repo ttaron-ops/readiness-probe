@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 06.7: why an allocated fleet is not a usable fleet, the binomial closed form for placeable capacity, and the collapse plotted against utilisation.">
+<meta name="color-scheme" content="light dark">
+<title>Placeable Capacity · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.fragwrap{margin:26px 0 8px;padding:18px 16px 8px;background:var(--surface);border:1px solid var(--rule);overflow-x:auto}
+svg.frag{display:block;min-width:680px;width:100%;height:auto;font-family:var(--f-mono)}
+svg.frag .grid{stroke:var(--rule-soft);stroke-width:1}
+svg.frag .axis{stroke:var(--ink-3);stroke-width:1.2}
+svg.frag .tick,svg.frag .axlbl{fill:var(--ink-3);font-size:11px}
+svg.frag .axlbl{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase}
+svg.frag .ser{fill:none;stroke-width:2.5}
+svg.frag .s1{stroke:var(--ink-3)} svg.frag .s2{stroke:var(--moss)}
+svg.frag .s4{stroke:var(--amber)} svg.frag .s8{stroke:var(--clay)}
+svg.frag .serlbl{font-size:11.5px;font-weight:600}
+svg.frag .serlbl.s1{fill:var(--ink-3)} svg.frag .serlbl.s2{fill:var(--moss)}
+svg.frag .serlbl.s4{fill:var(--amber)} svg.frag .serlbl.s8{fill:var(--clay)}
+svg.frag .naive{fill:none;stroke:var(--ink-3);stroke-width:1.8;stroke-dasharray:6 4}
+svg.frag .naivelbl{fill:var(--ink-3);font-size:11px;font-style:italic}
+svg.frag .mark{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:2 3}
+svg.frag .marklbl{fill:var(--ink-2);font-size:10.5px;letter-spacing:.06em}
+svg.frag .dot{stroke:var(--surface);stroke-width:2}
+svg.frag .dot.s1{fill:var(--ink-3)} svg.frag .dot.s2{fill:var(--moss)}
+svg.frag .dot.s4{fill:var(--amber)} svg.frag .dot.s8{fill:var(--clay)}
+.figcap{font-size:14.5px;color:var(--ink-3);margin:12px 0 30px;padding-left:14px;
+  border-left:2px solid var(--amber);font-style:italic;max-width:70ch}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/06-scheduling-capacity/lessons/07-fragmentation-effective-capacity.html">Back to lesson 06.7</a>
+
+<header class="mast">
+  <p class="kicker">Module 06 · 06.7 · Scheduling and capacity</p>
+  <h1>40% free,<br>and nothing<br>will fit</h1>
+  <p class="standfirst">A job is a block, not a quantity — so free GPUs scattered across nodes place nothing. The gap has a closed form, and it collapses faster than anyone expects.</p>
+  <div class="mast-meta">
+    <span><b>Closed form</b> (1−u)^(G−1)</span>
+    <span><b>At 60% utilisation</b> ~0.0017 of the naive estimate</span>
+    <span><b>Always report</b> the table, never one number</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>An allocated fleet is not a usable fleet. The gap is not waste in the ordinary sense — the GPUs are free, powered, and idle — they simply <strong>cannot form a whole job</strong>. This page is about computing that gap instead of assuming it away.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>three numbers</span></div>
+  <h2>Only one of them pays your bills</h2>
+
+  <div class="tw">
+  <table>
+    <tr><th>Name</th><th>Definition</th><th>Where you see it</th></tr>
+    <tr><td><b>Raw capacity</b></td><td>GPUs the fleet physically owns</td><td>the invoice, <code>Σ node.status.capacity</code></td></tr>
+    <tr><td><b>Allocated / free</b></td><td>GPUs currently handed to a pod, or not</td><td>every dashboard</td></tr>
+    <tr><td class="yes"><b>Placeable</b> (effective, usable)</td><td>GPUs that can still form a <b>new whole job</b> of a given shape</td><td class="no"><b>nowhere, unless you compute it</b></td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">The whole lesson in one sentence</span>
+    <p>The first two are scalars over a fungible pool. <strong>The third is not, because the thing you are placing is not a scalar.</strong></p>
+  </div>
+
+  <div class="col">
+  <p>A distributed job needs <code>k</code> GPUs that are simultaneously present (the collective barrier means N−1 ranks make zero progress), atomically admitted, and co-located in a topology domain. So the request is not "k GPUs from the fleet" — it is <strong>a contiguous block of <code>k</code> GPUs from one node or domain, all free at the same instant</strong>.</p>
+  <p>You cannot run six of it here and two there. That is bin-packing: an item that fits in no single bin does not run, however much total free space exists.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the two formulas</span><span class="who">accounting</span></div>
+<pre>  <span class="bad">WRONG</span> — treats GPUs as a fungible liquid
+      placeable_naive(k) = floor( total_free_GPUs / k )
+
+  <span class="ok">RIGHT</span> — respects node (or domain) boundaries
+      placeable_real(k)  = Σ over nodes i of  floor( free_i / k )</pre>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the closed form</span></div>
+  <h2>Why spread placement collapses</h2>
+
+  <div class="col">
+  <p>Model it. Nodes have <code>G</code> GPUs; each GPU is independently occupied with probability <code>u</code>; jobs need <code>k</code> co-located GPUs. <strong>Independence is the "no packing logic at all" case</strong> — what you get from placement that ignores node fullness — so it is a <em>lower bound</em> on what a real scheduler achieves.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>free GPUs per node follow F ~ Binomial(G, 1−u)</span><span class="who">derivation</span></div>
+<pre>  E[placeable_real(k)] = N x Σ C(G,f)(1-u)^f u^(G-f) x floor(f/k)
+  placeable_naive(k)   = N x G x (1-u) / k
+
+  for the case that matters most — a job needing a WHOLE NODE, k = G —
+  floor(f/G) is 1 only when f = G, so it collapses to one term:
+
+      E[placeable_real(G)] = N x <span class="hl">(1-u)^G</span>
+      placeable_naive(G)   = N x (1-u)
+      ─────────────────────────────────────────
+      ratio = <span class="hl">(1-u)^(G-1)</span></pre>
+    <figcaption><b>That is the whole phenomenon in one expression.</b> On 8-GPU nodes the fraction of naive whole-node capacity that survives random placement is <code>(1−u)<sup>7</sup></code>.</figcaption>
+  </figure>
+
+  <div class="fragwrap">
+<svg viewBox="0 0 900 470" role="img" aria-label="Placeable jobs per node against fleet utilisation, for job sizes 1, 2, 4 and 8 GPUs, with the naive fungible estimate for comparison" class="frag">
+<title>Placeable capacity collapse</title>
+<line class="grid" x1="74" y1="416.0" x2="750" y2="416.0"/>
+<text class="tick" x="65" y="420.0" text-anchor="end">0</text>
+<line class="grid" x1="74" y1="318.5" x2="750" y2="318.5"/>
+<text class="tick" x="65" y="322.5" text-anchor="end">2</text>
+<line class="grid" x1="74" y1="221.0" x2="750" y2="221.0"/>
+<text class="tick" x="65" y="225.0" text-anchor="end">4</text>
+<line class="grid" x1="74" y1="123.5" x2="750" y2="123.5"/>
+<text class="tick" x="65" y="127.5" text-anchor="end">6</text>
+<line class="grid" x1="74" y1="26.0" x2="750" y2="26.0"/>
+<text class="tick" x="65" y="30.0" text-anchor="end">8</text>
+<line class="grid" x1="74.0" y1="26" x2="74.0" y2="416"/>
+<text class="tick" x="74.0" y="436" text-anchor="middle">0%</text>
+<line class="grid" x1="209.2" y1="26" x2="209.2" y2="416"/>
+<text class="tick" x="209.2" y="436" text-anchor="middle">20%</text>
+<line class="grid" x1="344.4" y1="26" x2="344.4" y2="416"/>
+<text class="tick" x="344.4" y="436" text-anchor="middle">40%</text>
+<line class="grid" x1="479.6" y1="26" x2="479.6" y2="416"/>
+<text class="tick" x="479.6" y="436" text-anchor="middle">60%</text>
+<line class="grid" x1="614.8" y1="26" x2="614.8" y2="416"/>
+<text class="tick" x="614.8" y="436" text-anchor="middle">80%</text>
+<line class="grid" x1="750.0" y1="26" x2="750.0" y2="416"/>
+<text class="tick" x="750.0" y="436" text-anchor="middle">100%</text>
+<polyline class="naive" points="74.0,367.2 80.8,367.7 87.5,368.2 94.3,368.7 101.0,369.2 107.8,369.7 114.6,370.2 121.3,370.7 128.1,371.1 134.8,371.6 141.6,372.1 148.4,372.6 155.1,373.1 161.9,373.6 168.6,374.1 175.4,374.6 182.2,375.1 188.9,375.5 195.7,376.0 202.4,376.5 209.2,377.0 216.0,377.5 222.7,378.0 229.5,378.5 236.2,378.9 243.0,379.4 249.8,379.9 256.5,380.4 263.3,380.9 270.0,381.4 276.8,381.9 283.6,382.4 290.3,382.9 297.1,383.3 303.8,383.8 310.6,384.3 317.4,384.8 324.1,385.3 330.9,385.8 337.6,386.3 344.4,386.8 351.2,387.2 357.9,387.7 364.7,388.2 371.4,388.7 378.2,389.2 385.0,389.7 391.7,390.2 398.5,390.7 405.2,391.1 412.0,391.6 418.8,392.1 425.5,392.6 432.3,393.1 439.0,393.6 445.8,394.1 452.6,394.6 459.3,395.0 466.1,395.5 472.8,396.0 479.6,396.5 486.4,397.0 493.1,397.5 499.9,398.0 506.6,398.4 513.4,398.9 520.2,399.4 526.9,399.9 533.7,400.4 540.4,400.9 547.2,401.4 554.0,401.9 560.7,402.3 567.5,402.8 574.2,403.3 581.0,403.8 587.8,404.3 594.5,404.8 601.3,405.3 608.0,405.8 614.8,406.2 621.6,406.7 628.3,407.2 635.1,407.7 641.8,408.2 648.6,408.7 655.4,409.2 662.1,409.7 668.9,410.1 675.6,410.6 682.4,411.1 689.2,411.6 695.9,412.1 702.7,412.6 709.4,413.1 716.2,413.6 723.0,414.1 729.7,414.5 736.5,415.0 743.2,415.5 750.0,416.0"/>
+<text class="naivelbl" x="344.4" y="403.8">naive k=8 — GPUs as a fungible liquid</text>
+<polyline class="ser s1" points="74.0,26.0 80.8,29.9 87.5,33.8 94.3,37.7 101.0,41.6 107.8,45.5 114.6,49.4 121.3,53.3 128.1,57.2 134.8,61.1 141.6,65.0 148.4,68.9 155.1,72.8 161.9,76.7 168.6,80.6 175.4,84.5 182.2,88.4 188.9,92.3 195.7,96.2 202.4,100.1 209.2,104.0 216.0,107.9 222.7,111.8 229.5,115.7 236.2,119.6 243.0,123.5 249.8,127.4 256.5,131.3 263.3,135.2 270.0,139.1 276.8,143.0 283.6,146.9 290.3,150.8 297.1,154.7 303.8,158.6 310.6,162.5 317.4,166.4 324.1,170.3 330.9,174.2 337.6,178.1 344.4,182.0 351.2,185.9 357.9,189.8 364.7,193.7 371.4,197.6 378.2,201.5 385.0,205.4 391.7,209.3 398.5,213.2 405.2,217.1 412.0,221.0 418.8,224.9 425.5,228.8 432.3,232.7 439.0,236.6 445.8,240.5 452.6,244.4 459.3,248.3 466.1,252.2 472.8,256.1 479.6,260.0 486.4,263.9 493.1,267.8 499.9,271.7 506.6,275.6 513.4,279.5 520.2,283.4 526.9,287.3 533.7,291.2 540.4,295.1 547.2,299.0 554.0,302.9 560.7,306.8 567.5,310.7 574.2,314.6 581.0,318.5 587.8,322.4 594.5,326.3 601.3,330.2 608.0,334.1 614.8,338.0 621.6,341.9 628.3,345.8 635.1,349.7 641.8,353.6 648.6,357.5 655.4,361.4 662.1,365.3 668.9,369.2 675.6,373.1 682.4,377.0 689.2,380.9 695.9,384.8 702.7,388.7 709.4,392.6 716.2,396.5 723.0,400.4 729.7,404.3 736.5,408.2 743.2,412.1 750.0,416.0"/>
+<text class="serlbl s1" x="758" y="37.8">k = 1</text>
+<polyline class="ser s2" points="74.0,221.0 80.8,224.8 87.5,228.3 94.3,231.6 101.0,234.7 107.8,237.7 114.6,240.5 121.3,243.2 128.1,245.8 134.8,248.2 141.6,250.6 148.4,253.0 155.1,255.2 161.9,257.4 168.6,259.6 175.4,261.7 182.2,263.8 188.9,265.9 195.7,267.9 202.4,270.0 209.2,272.0 216.0,274.0 222.7,276.0 229.5,277.9 236.2,279.9 243.0,281.9 249.8,283.9 256.5,285.8 263.3,287.8 270.0,289.7 276.8,291.7 283.6,293.6 290.3,295.6 297.1,297.5 303.8,299.5 310.6,301.4 317.4,303.4 324.1,305.3 330.9,307.3 337.6,309.2 344.4,311.2 351.2,313.1 357.9,315.1 364.7,317.0 371.4,319.0 378.2,320.9 385.0,322.9 391.7,324.8 398.5,326.8 405.2,328.7 412.0,330.7 418.8,332.6 425.5,334.6 432.3,336.5 439.0,338.5 445.8,340.4 452.6,342.4 459.3,344.3 466.1,346.3 472.8,348.2 479.6,350.2 486.4,352.1 493.1,354.1 499.9,356.0 506.6,358.0 513.4,359.9 520.2,361.9 526.9,363.8 533.7,365.8 540.4,367.7 547.2,369.7 554.0,371.6 560.7,373.6 567.5,375.5 574.2,377.5 581.0,379.4 587.8,381.3 594.5,383.2 601.3,385.2 608.0,387.1 614.8,389.0 621.6,390.9 628.3,392.7 635.1,394.6 641.8,396.4 648.6,398.2 655.4,400.0 662.1,401.7 668.9,403.4 675.6,405.1 682.4,406.6 689.2,408.1 695.9,409.6 702.7,410.9 709.4,412.1 716.2,413.2 723.0,414.1 729.7,414.9 736.5,415.5 743.2,415.9 750.0,416.0"/>
+<text class="serlbl s2" x="758" y="232.3">k = 2</text>
+<polyline class="ser s4" points="74.0,318.5 80.8,322.3 87.5,325.8 94.3,329.0 101.0,332.1 107.8,334.9 114.6,337.5 121.3,340.0 128.1,342.2 134.8,344.3 141.6,346.3 148.4,348.1 155.1,349.8 161.9,351.3 168.6,352.8 175.4,354.1 182.2,355.4 188.9,356.5 195.7,357.6 202.4,358.6 209.2,359.6 216.0,360.5 222.7,361.3 229.5,362.2 236.2,362.9 243.0,363.7 249.8,364.4 256.5,365.2 263.3,365.9 270.0,366.6 276.8,367.3 283.6,368.0 290.3,368.7 297.1,369.4 303.8,370.1 310.6,370.9 317.4,371.6 324.1,372.4 330.9,373.2 337.6,374.0 344.4,374.9 351.2,375.8 357.9,376.7 364.7,377.6 371.4,378.6 378.2,379.5 385.0,380.5 391.7,381.6 398.5,382.6 405.2,383.7 412.0,384.8 418.8,385.9 425.5,387.0 432.3,388.1 439.0,389.3 445.8,390.4 452.6,391.6 459.3,392.7 466.1,393.9 472.8,395.0 479.6,396.2 486.4,397.3 493.1,398.4 499.9,399.5 506.6,400.6 513.4,401.7 520.2,402.7 526.9,403.7 533.7,404.7 540.4,405.6 547.2,406.5 554.0,407.4 560.7,408.2 567.5,409.0 574.2,409.8 581.0,410.5 587.8,411.1 594.5,411.7 601.3,412.3 608.0,412.8 614.8,413.3 621.6,413.7 628.3,414.1 635.1,414.4 641.8,414.7 648.6,415.0 655.4,415.2 662.1,415.4 668.9,415.5 675.6,415.7 682.4,415.8 689.2,415.8 695.9,415.9 702.7,415.9 709.4,416.0 716.2,416.0 723.0,416.0 729.7,416.0 736.5,416.0 743.2,416.0 750.0,416.0"/>
+<text class="serlbl s4" x="758" y="329.8">k = 4</text>
+<polyline class="ser s8" points="74.0,367.2 80.8,371.0 87.5,374.5 94.3,377.8 101.0,380.8 107.8,383.7 114.6,386.3 121.3,388.7 128.1,391.0 134.8,393.1 141.6,395.0 148.4,396.8 155.1,398.5 161.9,400.0 168.6,401.4 175.4,402.7 182.2,403.9 188.9,405.0 195.7,406.0 202.4,407.0 209.2,407.8 216.0,408.6 222.7,409.3 229.5,410.0 236.2,410.6 243.0,411.1 249.8,411.6 256.5,412.1 263.3,412.5 270.0,412.9 276.8,413.2 283.6,413.5 290.3,413.8 297.1,414.0 303.8,414.2 310.6,414.4 317.4,414.6 324.1,414.8 330.9,414.9 337.6,415.1 344.4,415.2 351.2,415.3 357.9,415.4 364.7,415.5 371.4,415.5 378.2,415.6 385.0,415.6 391.7,415.7 398.5,415.7 405.2,415.8 412.0,415.8 418.8,415.8 425.5,415.9 432.3,415.9 439.0,415.9 445.8,415.9 452.6,415.9 459.3,415.9 466.1,416.0 472.8,416.0 479.6,416.0 486.4,416.0 493.1,416.0 499.9,416.0 506.6,416.0 513.4,416.0 520.2,416.0 526.9,416.0 533.7,416.0 540.4,416.0 547.2,416.0 554.0,416.0 560.7,416.0 567.5,416.0 574.2,416.0 581.0,416.0 587.8,416.0 594.5,416.0 601.3,416.0 608.0,416.0 614.8,416.0 621.6,416.0 628.3,416.0 635.1,416.0 641.8,416.0 648.6,416.0 655.4,416.0 662.1,416.0 668.9,416.0 675.6,416.0 682.4,416.0 689.2,416.0 695.9,416.0 702.7,416.0 709.4,416.0 716.2,416.0 723.0,416.0 729.7,416.0 736.5,416.0 743.2,416.0 750.0,416.0"/>
+<text class="serlbl s8" x="758" y="378.5">k = 8</text>
+<line class="mark" x1="479.6" y1="26" x2="479.6" y2="416"/>
+<text class="marklbl" x="486.6" y="42.0">at 60% utilisation</text>
+<circle class="dot s1" cx="479.6" cy="260.0" r="4.5"/>
+<circle class="dot s2" cx="479.6" cy="350.2" r="4.5"/>
+<circle class="dot s4" cx="479.6" cy="396.2" r="4.5"/>
+<circle class="dot s8" cx="479.6" cy="416.0" r="4.5"/>
+<text class="marklbl" x="486.6" y="58.0">k=8 → 0.001 vs naive 0.40</text>
+<line class="axis" x1="74" y1="416" x2="750" y2="416"/>
+<line class="axis" x1="74" y1="26" x2="74" y2="416"/>
+<text class="axlbl" x="750" y="456" text-anchor="end">fleet utilisation u</text>
+<text class="axlbl" x="22" y="32" transform="rotate(-90 22 32)" text-anchor="end">placeable jobs per node</text>
+</svg>
+  </div>
+  <p class="figcap">G = 8 GPUs per node. Solid lines are the honest expectation for each job size; the dashed line is the naive fungible estimate for a whole-node job. Small jobs track the naive line closely — <strong>fragmentation is a large-job problem</strong>, which is exactly why it shows up when you start training rather than when you start serving.</p>
+
+  <div class="tw">
+  <table>
+    <tr><th class="m">u</th><th class="m">free GPUs/node</th><th class="m">k=1</th><th class="m">k=2</th><th class="m">k=4</th><th class="m">k=8</th><th class="m">naive k=8</th><th class="m">ratio (1−u)⁷</th></tr>
+<tr><td class="m">20%</td><td class="m">6.4</td><td class="m">6.400</td><td class="m">2.954</td><td class="m">1.157</td><td class="m">0.168</td><td class="m">0.80</td><td class="m"><b>0.2097</b></td></tr><tr><td class="m">40%</td><td class="m">4.8</td><td class="m">4.800</td><td class="m">2.150</td><td class="m">0.843</td><td class="m">0.017</td><td class="m">0.60</td><td class="m"><b>0.0280</b></td></tr><tr><td class="m">50%</td><td class="m">4.0</td><td class="m">4.000</td><td class="m">1.750</td><td class="m">0.641</td><td class="m">0.004</td><td class="m">0.50</td><td class="m"><b>0.0078</b></td></tr><tr><td class="m">60%</td><td class="m">3.2</td><td class="m">3.200</td><td class="m">1.350</td><td class="m">0.407</td><td class="m">0.001</td><td class="m">0.40</td><td class="m"><b>0.0016</b></td></tr><tr><td class="m">70%</td><td class="m">2.4</td><td class="m">2.400</td><td class="m">0.950</td><td class="m">0.194</td><td class="m">0.000</td><td class="m">0.30</td><td class="m"><b>0.0002</b></td></tr><tr><td class="m">80%</td><td class="m">1.6</td><td class="m">1.600</td><td class="m">0.554</td><td class="m">0.056</td><td class="m">0.000</td><td class="m">0.20</td><td class="m"><b>0.0000</b></td></tr><tr><td class="m">90%</td><td class="m">0.8</td><td class="m">0.800</td><td class="m">0.192</td><td class="m">0.005</td><td class="m">0.000</td><td class="m">0.10</td><td class="m"><b>0.0000</b></td></tr>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="h">Read the 60% row</span>
+    <p>At a utilisation most platform teams would call comfortable, a fleet has 3.2 free GPUs per node on average — and can place <strong>0.0007 whole-node jobs per node</strong> against a naive estimate of 0.40. That is a ratio of about <strong>0.0017</strong>.</p>
+    <p>Your dashboard says 40% free. Your 8-GPU job says Pending. Both are correct.</p>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Always report the table, never a single number</span>
+    <p>Fragmentation is <strong>job-size dependent</strong>. "The fleet is 12% fragmented" is meaningless without saying which job shape you measured. The same inventory is nearly perfect for k=1 and nearly useless for k=8.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the lever</span></div>
+  <h2>Spread versus bin-pack</h2>
+
+  <div class="split">
+    <div class="del" style="border:1px solid var(--rule);background:var(--surface);padding:18px 20px">
+      <h5 style="font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 12px;color:var(--clay)">Spread placement</h5>
+      <ul style="margin:0;padding-left:18px;font-size:15px;color:var(--ink-2);line-height:1.6">
+        <li>Default scoring leans this way — balance load across nodes</li>
+        <li>Every node ends up partly full</li>
+        <li>Free GPUs scatter into unusable singletons</li>
+        <li><b>The model above is this case</b></li>
+      </ul>
+    </div>
+    <div class="add" style="border:1px solid var(--rule);background:var(--surface);padding:18px 20px">
+      <h5 style="font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 12px;color:var(--moss)">Bin-pack placement</h5>
+      <ul style="margin:0;padding-left:18px;font-size:15px;color:var(--ink-2);line-height:1.6">
+        <li>Fill nodes before starting new ones</li>
+        <li>Keeps whole nodes empty and placeable</li>
+        <li>Costs you blast-radius concentration</li>
+        <li><b>Recovers most of the gap</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="h">Which is a Score, not a Filter</span>
+    <p>Straight back to lesson 02.9: packing preference belongs in the <code>Score</code> stage. Written as a <code>Filter</code>, a fleet with no perfectly-packed node available would leave jobs Pending rather than placing them imperfectly.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Your dashboard says 40% of GPUs are free. How many 8-GPU jobs can you place?</summary>
+    <div class="ans">
+      <p>Unanswerable from that number alone — and if you compute it naively you get 0.40 per node, which is wrong by roughly 500×.</p>
+      <p>With 8-GPU nodes at 60% utilisation and spread placement, the expectation is <code>(1−u)<sup>8</sup></code> ≈ <b>0.00066 whole-node jobs per node</b>. You need <code>Σ floor(free_i / k)</code> over actual nodes, not a fleet total.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Give the closed form for whole-node jobs and explain the exponent.</summary>
+    <div class="ans">
+      <p><code>E[placeable(G)] = N(1−u)<sup>G</sup></code>, versus a naive <code>N(1−u)</code>, so the surviving fraction is <code>(1−u)<sup>G−1</sup></code>.</p>
+      <p>The exponent is G because <code>floor(f/G)</code> is 1 only when <em>all</em> G GPUs on the node are free — every one of them must independently be free, and those probabilities multiply.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Someone reports "the fleet is 12% fragmented." What do you ask?</summary>
+    <div class="ans">
+      <p>"For which job size?" Fragmentation is job-size dependent — the same inventory is nearly perfect for k=1 and nearly useless for k=8.</p>
+      <p>Always report the table across job shapes, never a single scalar.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why is the independence assumption a lower bound rather than an estimate?</summary>
+    <div class="ans">
+      <p>Because independent occupancy is the "no packing logic at all" case. Any scheduler that biases toward filling partly-used nodes does better than random, so the model floors your expectation rather than predicting it.</p>
+      <p>That makes it useful for arguing a change is needed, and useless for promising a specific post-change number.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does fragmentation appear when you add training, not when you add inference?</summary>
+    <div class="ans">
+      <p>Because it is a large-<code>k</code> phenomenon. Single-GPU inference pods track the naive estimate closely; an 8-GPU gang needs every GPU on a node free simultaneously.</p>
+      <p>The fleet did not change — the job shape did.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Bin-packing recovers the capacity. Why not just always bin-pack?</summary>
+    <div class="ans">
+      <p>It concentrates blast radius: a node failure takes down more co-located work, and a noisy neighbour has more neighbours. It also fights spread-based availability goals.</p>
+      <p>And per lesson 02.9 it belongs in <code>Score</code>, not <code>Filter</code> — as a preference, so a fleet with no well-packed node still places the job.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 06.8, 11.4</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Three numbers</span><span class="v">Raw, allocated, placeable. Only the third predicts whether a job runs, and nothing reports it.</span></li>
+    <li><span class="k">A job is a block</span><span class="v">Simultaneously present, atomically admitted, co-located. Not a quantity.</span></li>
+    <li><span class="k">Σ floor(free_i / k)</span><span class="v">Per node. The fleet-total version is the error this lesson exists to prevent.</span></li>
+    <li><span class="k">(1−u)^(G−1)</span><span class="v">The surviving fraction for whole-node jobs. Every GPU must be free independently, so probabilities multiply.</span></li>
+    <li><span class="k">Report the table</span><span class="v">Fragmentation is job-size dependent. A single percentage is meaningless.</span></li>
+    <li><span class="k">A lower bound</span><span class="v">Independence models zero packing logic, so it floors rather than predicts.</span></li>
+    <li><span class="k">Large-k problem</span><span class="v">Appears when you add training, not inference. The fleet did not change; the job shape did.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/06-scheduling-capacity/lessons/07-fragmentation-effective-capacity.html">Back to lesson 06.7</a>
+  </footer>
+</div>
+
+</body>
+</html>

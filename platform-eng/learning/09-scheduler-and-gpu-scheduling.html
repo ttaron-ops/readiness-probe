@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 02.9: one GPU Pod traced through every scheduler extension point, why Permit being empty causes partial placement, and what a single int64 forecloses.">
+<meta name="color-scheme" content="light dark">
+<title>Extension Points · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.stages{margin:26px 0 30px;border-left:2px solid var(--rule);padding-left:0}
+.stg{display:grid;grid-template-columns:132px 1fr;gap:0 18px;padding:0 0 20px 18px;position:relative}
+.stg::before{content:"";position:absolute;left:-6px;top:6px;width:10px;height:10px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--rule)}
+.stg.key::before{background:var(--amber);border-color:var(--amber)}
+.stg .nm{font-family:var(--f-mono);font-size:12.5px;font-weight:600;color:var(--ink)}
+.stg.key .nm{color:var(--amber)}
+.stg .d{font-size:15px;color:var(--ink-2);line-height:1.5}
+.stg .d b{color:var(--ink)}
+.stg .fate{display:block;margin-top:7px;font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);border-left:2px solid var(--amber);padding-left:10px}
+.cyc{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--sunk);padding:8px 14px;margin:0 0 18px -20px;
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+@media(max-width:640px){.stg{grid-template-columns:1fr;gap:4px}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/02-kubernetes-controllers/lessons/09-scheduler-and-gpu-scheduling.html">Back to lesson 02.9</a>
+
+<header class="mast">
+  <p class="kicker">Module 02 · 02.9 · Kubernetes controllers</p>
+  <h1>The scheduler picks<br>a node. The kubelet<br>picks the cards.</h1>
+  <p class="standfirst">One GPU Pod through fourteen extension points — and the two stages whose absence, not whose behaviour, causes the problems you actually hit.</p>
+  <div class="mast-meta">
+    <span><b>Shape</b> a pipeline, like the informer chain</span>
+    <span><b>Partial placement</b> Permit is empty by default</span>
+    <span><b>The model</b> map[ResourceName]int64, and nothing else</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>The scheduler is not an algorithm, it is a <strong>pipeline of pluggable extension points</strong> — the same shape as the informer pipeline from 02.4, and with the same property that each stage has its own distinct failure mode. Tracing one GPU Pod through it explains both why gang scheduling needs a plugin and why the scheduler cannot see your NVLink topology.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the pipeline</span></div>
+  <h2>One GPU Pod, every extension point</h2>
+
+  <div class="col">
+  <p>Following one replica of a training job requesting <code>nvidia.com/gpu: 4</code>, on a 200-node cluster of which 24 have GPUs.</p>
+  </div>
+
+<div class="stages"><div class="cyc">Scheduling cycle — serial, one Pod at a time, no blocking I/O</div><div class="stg"><span class="nm">PreEnqueue</span><span class="d">Runs before the Pod is admitted to <code>activeQ</code>. Default: <b>SchedulingGates</b> — a Pod with non-empty <code>schedulingGates</code> never enters the queue and gets <b>no Unschedulable condition</b>.<span class="fate">GPU fate: where Kueue-style gating <em>could</em> live. Kueue instead suspends the Job, so no Pod exists at all.</span></span></div><div class="stg"><span class="nm">QueueSort</span><span class="d">Exactly <b>one</b> plugin cluster-wide (PrioritySort). Orders <code>activeQ</code>.<span class="fate">GPU fate: a high-priority training job jumps ahead of inference.</span></span></div><div class="stg"><span class="nm">PreFilter</span><span class="d">Compute Pod-level facts <b>once</b> instead of per node. NodeResourcesFit sums scalar requests here into a state shared by every Filter call.<span class="fate">GPU fate: the “4” becomes an <code>int64</code> in a map. Nothing about card model, memory, or NVLink topology is present.</span></span></div><div class="stg key"><span class="nm">Filter</span><span class="d"><b>The predicate stage.</b> Per node, boolean, across <code>parallelism</code> goroutines (default 16). Any plugin returning Unschedulable removes the node.<span class="fate">GPU fate: 176 CPU-only nodes fail with “Insufficient nvidia.com/gpu”. Of 24 GPU nodes, 17 have ≥4 free. <b>Feasible set = 17.</b></span></span></div><div class="stg"><span class="nm">PostFilter</span><span class="d"><b>Only runs when the feasible set is empty.</b> Default: DefaultPreemption — pick victims whose eviction makes one node feasible, set <code>nominatedNodeName</code>, delete them, requeue.<span class="fate">GPU fate: skipped here. If it ran: <b>DRA resources are not preemptible</b> — the scheduler will not evict a Pod to free a ResourceClaim.</span></span></div><div class="stg"><span class="nm">PreScore</span><span class="d">Precompute shared state for scoring. Errors abort the cycle.</span></div><div class="stg key"><span class="nm">Score</span><span class="d"><b>The priority stage.</b> Every surviving node gets an <code>int64</code> from every Score plugin. MinScore=0, MaxScore=100.<span class="fate">GPU fate: the <b>only</b> place a soft preference lives — “prefer the cheaper card, but take the expensive one if that is what is free.”</span></span></div><div class="stg"><span class="nm">NormalizeScore</span><span class="d">A plugin rescales its own raw scores into [0,100], then each is multiplied by its weight and summed. Highest total wins; ties broken by <b>reservoir sampling</b>, so equal nodes are chosen uniformly.</span></div><div class="stg"><span class="nm">Reserve</span><span class="d">Mark resources claimed in the scheduler's <b>in-memory cache, before any API write</b>, so the next Pod in the serial cycle sees them consumed. Paired with Unreserve, which runs in <b>reverse</b> plugin order on failure.<span class="fate">GPU fate: DRA tentatively allocates a specific device here. Without DRA there is no per-device state — only the integer count.</span></span></div><div class="stg key"><span class="nm">Permit</span><span class="d"><code>approve</code> | <code>deny</code> | <code>WAIT(timeout)</code>. “Wait” parks the Pod <b>without releasing its Reserve</b>.<span class="fate">GPU fate: the hook gang scheduling uses — hold Pod 1 of 32 until the other 31 reach Permit, then release together. <b>The default profile has no plugin here, which is exactly why partial placement happens out of the box.</b></span></span></div><div class="cyc">Binding cycle — asynchronous, concurrent across Pods</div><div class="stg"><span class="nm">PreBind</span><span class="d">Work that must succeed before binding, and may do I/O. VolumeBinding provisions PVCs here. Failure → Unreserve everything and requeue.<span class="fate">GPU fate: the DRA plugin writes the finalized allocation into <code>ResourceClaim.status</code> — the first time the device decision leaves the scheduler's memory.</span></span></div><div class="stg"><span class="nm">Bind</span><span class="d">Writes the Binding object, setting <code>.spec.nodeName</code>. First Bind plugin to handle it wins.</span></div><div class="stg"><span class="nm">PostBind</span><span class="d">Informational cleanup. Cannot fail the scheduling.</span></div><div class="stg key"><span class="nm">kubelet</span><span class="d">Notices a Pod carrying its <code>nodeName</code> — and <b>now</b> the device-plugin machinery decides <b>which physical cards</b> this Pod gets.<span class="fate">GPU fate: the scheduler never knew and never will.</span></span></div></div>
+
+  <div class="note warn">
+    <span class="h">The single most important line in the lesson</span>
+    <p><strong>The scheduler picks a node; the kubelet picks the devices.</strong></p>
+    <p>Without DRA, no component that made the placement decision knows which physical GPU the container ended up with, which NUMA node it hangs off, or whether the four cards it got are NVLink-connected peers or four strangers on different PCIe roots.</p>
+  </div>
+
+  <div class="note">
+    <span class="h">Two stages worth memorising for their absences</span>
+    <p><strong>PostFilter only runs when the feasible set is empty.</strong> If even one node fits, preemption never happens — which is why a cluster with one spare small node will never preempt to make room for a big job.</p>
+    <p><strong>The default profile has no Permit plugin.</strong> That absence <em>is</em> the partial-placement problem: nothing holds Pod 1 of 32 while the rest catch up, so a gang binds piecemeal and strands GPUs.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the model</span></div>
+  <h2>What an int64 forecloses</h2>
+
+  <div class="col">
+  <p>The scheduler's entire model of a GPU is <code>map[v1.ResourceName]int64</code>. <code>NodeResourcesFit</code> sums the scalar requests in PreFilter and checks each against <code>allocatable − requested</code> in Filter. That is the whole thing — and four hard rules follow, <strong>enforced by the API server, not by convention</strong>:</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Rule</th><th>Consequence</th></tr>
+    <tr><td><b>Integers only</b></td><td><code>nvidia.com/gpu: 0.5</code> is rejected at admission. There is no millicore equivalent — which is why every sharing mode in module 04 has to fake it with replicas or slices.</td></tr>
+    <tr><td><b>Requests must equal limits</b></td><td>If both are set for an extended resource they must match; setting only <code>limits</code> copies it to <code>requests</code>. So the requests-vs-limits distinction from lesson 01b.3 <em>does not exist</em> for GPUs.</td></tr>
+    <tr><td><b>No overcommit</b></td><td>Unlike CPU, the scheduler will never place a Pod whose extended-resource request exceeds what remains.</td></tr>
+    <tr><td><b>Not shareable between containers</b></td><td>Two containers in one Pod each requesting <code>nvidia.com/gpu: 1</code> consume <b>two cards</b>.</td></tr>
+  </table>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Which is the whole motivation for the rest of the stack</span>
+    <p>An integer cannot express “four cards that share an NVSwitch,” “a card with 80 GB rather than 40,” or “half a card.” Everything built on top — MIG's distinct resource names, time-slicing's replicas, DRA's attribute-based claims, Kueue's admission layer — exists to route around that one <code>int64</code>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>filter vs score</span></div>
+  <h2>Why cost is a Score, never a Filter</h2>
+
+  <div class="split">
+    <div class="pv">
+      <h5>Filter — the predicate</h5>
+      <ul>
+        <li>boolean, per node</li>
+        <li>removes nodes from consideration</li>
+        <li>a wrong Filter means <b>Pending forever</b></li>
+        <li>use for <b>hard requirements</b></li>
+      </ul>
+    </div>
+    <div class="sh">
+      <h5>Score — the preference</h5>
+      <ul>
+        <li>int64 0–100, weighted and summed</li>
+        <li>ranks the survivors</li>
+        <li>a wrong Score means <b>suboptimal, still runs</b></li>
+        <li>use for <b>soft preferences</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The judgement this forces</span>
+    <p>“Prefer the cheaper GPU” must be a <strong>Score</strong>. Written as a Filter, a cluster with no cheap cards free leaves the Pod Pending indefinitely rather than running it on an expensive card.</p>
+    <p>The general rule: <strong>if the answer to “would you rather it not run at all?” is no, it is a Score.</strong></p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Why does a distributed job get partially placed by default?</summary>
+    <div class="ans">
+      <p>Because the default scheduler profile has <b>no Permit plugin</b>. The scheduling cycle is serial and one Pod at a time, so Pods 1..k bind as nodes are found and Pods k+1..32 stay Pending — holding GPUs the bound Pods cannot use.</p>
+      <p>Gang scheduling fixes it by adding a Permit plugin that returns <code>WAIT</code> until <code>minMember</code> Pods reach that point, then releases them together.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You want to prefer cheaper GPUs. Filter or Score?</summary>
+    <div class="ans">
+      <p><b>Score.</b> A Filter is a hard predicate — implemented that way, a cluster with no cheap cards free leaves the Pod Pending forever rather than running it somewhere more expensive.</p>
+      <p>Rule of thumb: if you would not rather the Pod didn't run at all, it belongs in Score.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Which component decides which physical GPU your container gets?</summary>
+    <div class="ans">
+      <p>The <b>kubelet</b>, via the device plugin, after binding. The scheduler only chose a node.</p>
+      <p>So without DRA nothing in the placement path knows whether your four cards are NVLink peers or four strangers on different PCIe roots — which is exactly why topology-aware placement needs machinery outside the default scheduler.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your cluster has one small free node and a big job stays Pending. Why no preemption?</summary>
+    <div class="ans">
+      <p><b>PostFilter only runs when the feasible set is empty.</b> If any node passes Filter — even one that will never be chosen — preemption never triggers.</p>
+      <p>Note also that DRA-allocated resources are not preemptible at all: the scheduler will not evict a Pod to free a ResourceClaim.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Two containers in one Pod each request <code>nvidia.com/gpu: 1</code>. How many cards?</summary>
+    <div class="ans">
+      <p><b>Two.</b> Extended resources are not shareable between containers, even inside one Pod. Nor can you request 0.5 — integers only, enforced at admission.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Does the requests-vs-limits distinction mean anything for GPUs?</summary>
+    <div class="ans">
+      <p>No. For extended resources, if both are set they must be equal, and setting only <code>limits</code> copies the value to <code>requests</code>.</p>
+      <p>So the entire weight-versus-cap mechanism from lesson 01b.3 — <code>cpu.weight</code> vs <code>cpu.max</code> — has no GPU analogue at this layer.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 04, 06</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">A pipeline, not an algorithm</span><span class="v">Pluggable extension points in a fixed order, each with its own failure mode.</span></li>
+    <li><span class="k">Filter is fatal, Score is not</span><span class="v">A wrong predicate means Pending forever; a wrong preference means merely suboptimal.</span></li>
+    <li><span class="k">PostFilter needs an empty set</span><span class="v">One feasible node anywhere means preemption never fires.</span></li>
+    <li><span class="k">Permit is empty by default</span><span class="v">That absence is the partial-placement problem, and the hook gang scheduling fills.</span></li>
+    <li><span class="k">Reserve is in-memory</span><span class="v">Before any API write, so the next Pod in the serial cycle sees the consumption.</span></li>
+    <li><span class="k">Node vs devices</span><span class="v">The scheduler picks a node; the kubelet picks the cards. Without DRA, nobody in the placement path knows which.</span></li>
+    <li><span class="k">One int64</span><span class="v">No fractions, no overcommit, no sharing, requests ≡ limits. Everything in module 04 routes around it.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/02-kubernetes-controllers/lessons/09-scheduler-and-gpu-scheduling.html">Back to lesson 02.9</a>
+  </footer>
+</div>
+
+</body>
+</html>

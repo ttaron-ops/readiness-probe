@@ -16,6 +16,8 @@ sources: 12
 > **Concept.** A GPU host is a tree — sockets → NUMA domains → PCIe root complexes → endpoints — and every GPU, NIC, and NVMe hangs off exactly one branch, fixed at board-design and boot time.
 >
 > Module: [🧬 02b — Host hardware and topology](../README.md) · Deliverable: [Topology Teardown](../practice/topology-teardown/README.md)
+>
+> **Warm-up** — want the physical picture first? [The Physical Picture](../../../learning/00-hardware-warm-up.html) covers what this module's skip-list assumes — socket/core/thread, the cache hierarchy measured live, DIMM channels, NUMA as a physical arrangement, PCIe vocabulary and rack power. Skip it if on-prem hardware is already familiar.
 
 ## Where this fits
 

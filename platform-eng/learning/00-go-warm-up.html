@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A warm-up for module 01: the mental-model shifts Go assumes you have made, with both sides of every comparison run live on Python 3.11 and go1.24.7.">
+<meta name="color-scheme" content="light dark">
+<title>Python to Go · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.xlate{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);margin:26px 0 30px;overflow-x:auto}
+.xlate>div{background:var(--surface);padding:13px 16px;min-width:0}
+.xlate .h{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk)}
+.xlate .py,.xlate .go{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);line-height:1.6}
+.xlate .go{color:var(--ink)}
+.xlate .br{font-size:14.5px;color:var(--ink-2);line-height:1.5}
+.xlate .br b{color:var(--clay)}
+@media(max-width:760px){.xlate{grid-template-columns:1fr}.xlate .h{display:none}
+  .xlate .py{border-top:2px solid var(--amber);padding-top:14px}}
+.nilgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:24px 0 28px}
+.nilc{border:1px solid var(--rule);background:var(--surface);padding:14px 16px}
+.nilc .t{font-family:var(--f-mono);font-size:12.5px;font-weight:600;display:block;margin-bottom:8px}
+.nilc p{margin:0;font-size:14.5px;color:var(--ink-2);line-height:1.5}
+.nilc.ok{border-left:3px solid var(--moss)} .nilc.ok .t{color:var(--moss)}
+.nilc.bad{border-left:3px solid var(--clay)} .nilc.bad .t{color:var(--clay)}
+.nilc.warn{border-left:3px solid var(--amber)} .nilc.warn .t{color:var(--amber)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/01-go-for-infra/lessons/01-syntax-and-types.html">Back to lesson warm-up</a>
+
+<header class="mast">
+  <p class="kicker">Module 01 · warm-up · Go for infrastructure engineers</p>
+  <h1>Go&#39;s spelling of<br>what you already<br>know — and where<br>the analogy breaks</h1>
+  <p class="standfirst">Module 01 skips “programming 101” and assumes you arrive from Python, then opens on escape analysis. This is the floor that assumption stands on.</p>
+  <div class="mast-meta">
+    <span><b>Not a lesson companion</b> the prerequisite under module 01</span>
+    <span><b>Run live</b> Python 3.11 and go1.24.7, both sides</span>
+    <span><b>Core shift</b> a variable is the value, not a name</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>This page is not a companion to a lesson — it is the <strong>floor underneath module 01</strong>. That module's calibration says it skips “programming 101, pointers-as-concept, OOP-in-Go,” and assumes you arrive from Python. Lesson 01 then opens on escape analysis and struct padding.</p>
+<p>So: here is what that assumption is standing on. Every transcript below was run live on <code>go1.24.7 linux/amd64</code> and <code>Python 3.11</code> — both sides of every comparison, actually executed.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Orientation</span><span>the translation table</span></div>
+  <h2>What transfers, and what quietly doesn't</h2>
+
+<div class="xlate"><div class="h">You write, in Python</div><div class="h">Go&#39;s spelling</div><div class="h">Where the analogy breaks</div><div class="py"><code>x = y</code></div><div class="go"><code>x := y</code></div><div class="br">Python binds a name to the same object. Go <b>copies the value</b> — unless it is a slice, map, channel or pointer.</div><div class="py"><code>None</code></div><div class="go"><code>nil</code> — sometimes</div><div class="br">Go has <b>four different nils</b> that behave differently, and a zero value for every type that is usually not nil at all.</div><div class="py"><code>raise ValueError()</code></div><div class="go"><code>return 0, err</code></div><div class="br">Errors are ordinary return values. <b>Nothing unwinds the stack</b>, so nothing is caught — you check.</div><div class="py"><code>class Dog(Animal):</code></div><div class="go"><code>type Dog struct{ Animal }</code></div><div class="br">Embedding, not inheritance. There is <b>no method overriding and no super()</b>.</div><div class="py">duck typing</div><div class="go">implicit interfaces</div><div class="br">Same idea, but <b>checked at compile time</b>. A type satisfies an interface without ever naming it — and the compiler proves it.</div><div class="py"><code>_private</code> by convention</div><div class="go"><code>lowercase</code> by compiler</div><div class="br">Capitalisation <b>is</b> the access modifier. Lowercase fields are invisible to other packages <em>and to <code>encoding/json</code></em>.</div><div class="py"><code>async def</code> / <code>threading</code></div><div class="go"><code>go f()</code></div><div class="br">No GIL, no event loop, no colour. Any function can be a goroutine — which is why <b>leaks are easy</b> and lesson 04 is 18 hours.</div></div>
+
+  <div class="note">
+    <span class="h">The one shift everything else follows from</span>
+    <p>In Python, a variable is a <em>name bound to an object</em>. In Go, a variable <strong>is</strong> the value — a box with bytes in it. Assignment copies the box.</p>
+    <p>Once that lands, zero values, pointer receivers, struct padding and escape analysis all stop being separate topics and become consequences of the same fact.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>One</span><span>copy vs alias</span></div>
+  <h2>Assignment copies</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>the same program, both languages</span><span class="who">live · py3.11 / go1.24.7</span></div>
+<pre><span class="dim">python                              go</span>
+<span class="dim">class P:</span>                            <span class="dim">type P struct{ N int }</span>
+<span class="dim">    def __init__(s,n): s.n = n</span>
+<span class="dim">a = P(1)</span>                            <span class="dim">a := P{1}</span>
+<span class="dim">b = a</span>                               <span class="dim">b := a</span>
+<span class="dim">b.n = 99</span>                            <span class="dim">b.N = 99</span>
+
+  python: a.n = <span class="bad">99</span>   b.n = 99   same object? <span class="bad">True</span>
+  go:     a.N = <span class="ok">1</span>    b.N = 99   same? <span class="ok">false</span>
+
+  <span class="dim">to get Python's behaviour you ask for it explicitly:</span>
+  <span class="dim">c := &amp;a ; c.N = 42</span>
+  go ptr: a.N = <span class="hl">42</span>   via c.N = 42</pre>
+    <figcaption>This is why Go has pointers in ordinary code and Python does not need them. <b>Sharing is opt-in.</b> A function taking <code>P</code> cannot modify your copy; a function taking <code>*P</code> announces in its signature that it might.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Two</span><span>the exception</span></div>
+  <h2>Except when it doesn't</h2>
+
+  <div class="col">
+  <p>Having just learned "Go copies," here is the trap: <strong>slices, maps and channels are small headers that point at shared data.</strong> Copying the header copies the pointer.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>go run — slice aliasing and append</span><span class="who">live</span></div>
+<pre>s := []int{1, 2, 3, 4}
+t := s                <span class="dim">// copies the HEADER, shares the ARRAY</span>
+t[0] = 99
+  slice:  s = <span class="bad">[99 2 3 4]</span>   t = [99 2 3 4]   <span class="bad">&lt;- aliased!</span>
+
+u := s[:2]
+u = append(u, 777)    <span class="dim">// room in the backing array → writes into it</span>
+  append: s = <span class="bad">[99 2 777 4]</span>  u = [99 2 777]  <span class="bad">&lt;- append clobbered s[2]</span></pre>
+    <figcaption>That second one is the bug people actually ship. <code>append</code> writes in place when capacity allows and only allocates when it must — so whether a caller sees your write depends on <code>cap()</code>, which is invisible at the call site.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">The rule to carry</span>
+    <p><strong>Structs and arrays copy. Slices, maps and channels share.</strong> When you need a genuinely independent slice, <code>slices.Clone</code> or an explicit <code>copy()</code> — never assignment.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Three</span><span>nil</span></div>
+  <h2>Four nils, four behaviours</h2>
+
+  <div class="col">
+  <p>Python has one <code>None</code> and it does nothing. Go's <code>nil</code> is typed, and what it does depends on the type.</p>
+  </div>
+
+  <div class="nilgrid">
+    <div class="nilc ok"><span class="t">nil slice</span>
+      <p><code>append</code> works. <code>len</code> is 0. Ranging over it is a no-op. <b>A nil slice is a perfectly good empty slice</b> — do not guard against it.</p></div>
+    <div class="nilc warn"><span class="t">nil map — reading</span>
+      <p>Returns the zero value, <code>len</code> is 0, ranging is a no-op. Reads are <b>safe</b>.</p></div>
+    <div class="nilc bad"><span class="t">nil map — writing</span>
+      <p><b>Panics.</b> <code>assignment to entry in nil map</code>. A map must be made before it can be written.</p></div>
+    <div class="nilc bad"><span class="t">nil pointer</span>
+      <p>Dereferencing panics — the familiar one. But a nil pointer with a <em>pointer receiver</em> method can still be called safely if the method doesn't dereference.</p></div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>go run — all four, live</span><span class="who">live</span></div>
+<pre>  nil map read : 0, len 0  <span class="ok">(fine)</span>
+  nil slice append works: <span class="ok">[1]</span>
+  nil map WRITE panics: <span class="bad">assignment to entry in nil map</span></pre>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">And a fifth, which is the most famous bug in the language</span>
+    <p>An interface value holds <strong>a type and a value</strong>. It is nil only when <em>both</em> are nil. So a nil <em>pointer</em> stored in an interface makes the interface non-nil:</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>func bad() error { var p *MyErr; return p }</span><span class="who">live</span></div>
+<pre>  bad():  err == nil ? <span class="bad">false</span>   (but the pointer inside IS nil)
+          %T = *main.MyErr
+  good(): err == nil ? <span class="ok">true</span></pre>
+    <figcaption><code>bad()</code> looks like it returns no error and every <code>if err != nil</code> in your program will fire. <b>Never declare a typed-pointer error variable and return it</b> — return <code>nil</code> literally.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Four</span><span>zero values</span></div>
+  <h2>There is no uninitialised</h2>
+
+  <div class="col">
+  <p>Python raises <code>NameError</code>, or you carry <code>None</code> and check it everywhere. Go gives every type a <strong>zero value</strong>, and a declared variable always has it.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>var of each kind, printed</span><span class="who">live</span></div>
+<pre>  zero values: struct=<span class="ok">{n:0}</span>  slice=<span class="ok">[]</span>(nil:true)  map=<span class="ok">map[]</span>(nil:true)  ptr=<span class="ok">&lt;nil&gt;</span>
+
+  int/float → 0     string → ""      bool → false
+  pointer, slice, map, chan, func, interface → nil
+  struct → every field at ITS zero value, recursively</pre>
+    <figcaption>This is why Go has no constructors. The idiom is to make the zero value <em>useful</em> — <code>sync.Mutex</code>, <code>bytes.Buffer</code> and <code>strings.Builder</code> are all ready to use at zero, with no <code>New()</code> call.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Five</span><span>errors</span></div>
+  <h2>Nothing is thrown</h2>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">Python — control flow</div>
+      <p>An exception unwinds the stack until something catches it. <b>The signature does not mention it</b>, so you learn what can fail by reading the body, or by production.</p>
+    </div>
+    <div class="add">
+      <div class="tag">Go — a value</div>
+      <p><code>func parse(s string) (int, error)</code>. Failure is <b>in the type</b>. Nothing unwinds; if you ignore the error, execution continues with a zero value.</p>
+    </div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the same failure, both languages</span><span class="who">live</span></div>
+<pre>  python: caught at runtime -> invalid literal for int() with base 10: 'abc'
+  go: returned as a VALUE  -> strconv.Atoi: parsing "abc": invalid syntax
+
+  <span class="dim">and because it is a value, it composes:</span>
+  errors.As unwraps to a typed error: <span class="ok">true</span> (Func="Atoi")
+  wrapped: loading config: strconv.Atoi: parsing "abc": invalid syntax
+  errors.Is still finds the cause: <span class="ok">true</span></pre>
+    <figcaption><code>%w</code> wraps while preserving the chain; <code>errors.Is</code> asks “is this cause anywhere in the chain”, <code>errors.As</code> asks “is there a value of this type in the chain, and give it to me.” Lesson 02 is nine hours on exactly this, and it is worth every one.</figcaption>
+  </figure>
+
+  <div class="note">
+    <span class="h">panic is not an exception</span>
+    <p>It exists, and it is <strong>not</strong> the error mechanism. Panic means "this program has a bug and cannot continue" — nil dereference, index out of range, a broken invariant. Library code that panics on bad input rather than returning an error is considered badly written.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Six</span><span>interfaces</span></div>
+  <h2>Duck typing the compiler checks</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>Temp never mentions Stringer anywhere</span><span class="who">live</span></div>
+<pre>type Stringer interface{ String() string }
+
+type Temp float64
+func (t Temp) String() string { return fmt.Sprintf("%.1f°C", float64(t)) }
+
+var s Stringer = Temp(21.5)      <span class="dim">// satisfied implicitly</span>
+  implicit interface: <span class="ok">21.5°C</span></pre>
+    <figcaption>No <code>implements</code>, no registration, no ABC. If the method set matches, the type satisfies the interface — and the compiler proves it at the assignment. <b>This is why Go interfaces are usually declared by the <em>consumer</em>, not the producer</b>: you define the small interface you need, and existing types already satisfy it.</figcaption>
+  </figure>
+
+  <div class="note calm">
+    <span class="h">The idiom that follows, and that lesson 03 spends 14 hours on</span>
+    <p><strong>Accept interfaces, return structs.</strong> Keep interfaces small — one or two methods. A Python instinct to define a big abstract base class up front produces un-Go-like code that is hard to satisfy and hard to test.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Seven</span><span>receivers</span></div>
+  <h2>The mutation that silently doesn't happen</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>value receiver vs pointer receiver</span><span class="who">live</span></div>
+<pre>func (c  Counter) IncVal() { c.n++ }   <span class="dim">// operates on a COPY</span>
+func (c *Counter) IncPtr() { c.n++ }   <span class="dim">// operates on the original</span>
+
+  after 2x value-receiver Inc:   n = <span class="bad">0</span>  <span class="bad">&lt;- lost</span>
+  after 2x pointer-receiver Inc: n = <span class="ok">2</span></pre>
+    <figcaption>It compiles, it runs, it does nothing. Directly downstream of part one: the receiver is just another parameter, and parameters copy.</figcaption>
+  </figure>
+
+  <div class="note">
+    <span class="h">The default that avoids it</span>
+    <p>If any method on a type needs a pointer receiver, <strong>give them all pointer receivers</strong>. Mixing them is legal and produces exactly this class of bug, plus method-set surprises when satisfying interfaces.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Eight</span><span>small things</span></div>
+  <h2>Three that surprise people once</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>multiple returns, defer, capitalisation</span><span class="who">live</span></div>
+<pre>  multiple returns: 17/5 = 3 rem 2      <span class="dim">not a tuple — genuinely two values</span>
+  defer runs even on early return / panic
+  capitalisation is the access modifier: {Name:ada email:a@b.c}</pre>
+    <figcaption><code>defer</code> is LIFO and runs on the way out however you leave — the idiom for <code>Close()</code>, <code>Unlock()</code> and <code>Done()</code>. Capitalisation is not a convention like Python's leading underscore; the compiler enforces it, and it also decides what <code>encoding/json</code> can see.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Nine</span><span>when you find out</span></div>
+  <h2>Compile time is the point</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>the same class of mistake, both languages</span><span class="who">live</span></div>
+<pre>  <span class="bad">python</span>: f defined with a latent bug; only fails when CALLED
+          -> TypeError: can only concatenate str (not "int") to str
+
+  <span class="ok">go</span>: the same mistake never builds
+      ./bad.go:4:20: cannot use 42 (untyped int constant)
+                     as string value in variable declaration</pre>
+    <figcaption>Worth internalising because it changes where your effort goes. A large fraction of the test-writing a Python codebase needs exists to catch what <code>go build</code> catches for free — which is why lesson 05 on testing focuses on behaviour and concurrency rather than on type sanity.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Check yourself</span><span>before lesson 01</span></div>
+  <h2>Drills</h2>
+
+  <details class="drill">
+    <summary>You pass a struct to a function and it modifies a field. Does the caller see it?</summary>
+    <div class="ans">
+      <p>No. Parameters copy, and a struct copies by value. The caller sees nothing.</p>
+      <p>To let it modify, take <code>*T</code> — which also documents the intent in the signature. This is the single most important difference from Python.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You pass a slice to a function and it does <code>s[0] = 99</code>. Does the caller see it?</summary>
+    <div class="ans">
+      <p><b>Yes.</b> A slice is a header — pointer, length, capacity — and copying the header copies the pointer to the shared backing array.</p>
+      <p>But if the function <code>append</code>s and the append reallocates, the caller sees <em>neither</em> the new elements nor further writes. Whether it reallocates depends on <code>cap()</code>, which the call site cannot see.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Is a nil map safe to use?</summary>
+    <div class="ans">
+      <p>Safe to <b>read</b> — returns the zero value, <code>len</code> 0, ranging is a no-op. <b>Writing panics</b> with <code>assignment to entry in nil map</code>.</p>
+      <p>A nil <em>slice</em>, by contrast, is safe to append to and is a perfectly good empty slice. Do not write <code>if s == nil</code> guards around slices.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary><code>func f() error { var p *MyErr; return p }</code>. Is <code>f() == nil</code>?</summary>
+    <div class="ans">
+      <p><b>No</b> — and this is the most famous bug in Go. An interface holds a type <em>and</em> a value, and is nil only when both are. Returning a nil <code>*MyErr</code> gives an interface with type <code>*main.MyErr</code> and value nil, which is not nil.</p>
+      <p>Every <code>if err != nil</code> downstream fires. Return the literal <code>nil</code>.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>How does a type declare that it implements an interface?</summary>
+    <div class="ans">
+      <p>It doesn't. Satisfaction is <b>implicit and structural</b> — if the method set matches, the type satisfies it, and the compiler checks at the point of assignment.</p>
+      <p>Which is why interfaces are usually declared by the consumer: define the one- or two-method interface you need, and types you don't own already satisfy it.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does <code>encoding/json</code> ignore your field?</summary>
+    <div class="ans">
+      <p>It is lowercase. Capitalisation is the access modifier — enforced by the compiler, not a convention — and unexported fields are invisible to other packages, including the json encoder.</p>
+      <p>The Python instinct that <code>_name</code> is "private by agreement" does not transfer; here it is mechanical.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>What is <code>panic</code> for?</summary>
+    <div class="ans">
+      <p>Programmer error — a broken invariant, a nil dereference, index out of range. <b>Not</b> the error mechanism. Errors are returned values.</p>
+      <p>Library code that panics on bad input instead of returning an error is considered badly written.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Now start</span><span>module 01</span></div>
+  <h2>What to carry into lesson 01</h2>
+  <ul class="keeps">
+    <li><span class="k">A variable is the value</span><span class="v">Not a name bound to an object. Assignment copies the bytes.</span></li>
+    <li><span class="k">Sharing is opt-in</span><span class="v">Pointers exist so a signature can say “I may modify this.”</span></li>
+    <li><span class="k">Headers are the exception</span><span class="v">Slices, maps and channels copy a header that points at shared data.</span></li>
+    <li><span class="k">Zero, not None</span><span class="v">Every type has a useful zero. That is why there are no constructors.</span></li>
+    <li><span class="k">Errors are values</span><span class="v">In the signature, composable with <code>%w</code>, <code>errors.Is</code> and <code>errors.As</code>. Nothing unwinds.</span></li>
+    <li><span class="k">Interfaces are structural</span><span class="v">Implicit, compile-time checked, and declared by the consumer. Keep them tiny.</span></li>
+    <li><span class="k">Receivers are parameters</span><span class="v">So value receivers mutate copies. Pick one kind per type.</span></li>
+    <li><span class="k">The compiler is the first test</span><span class="v">Which is why the testing lesson can be about behaviour rather than types.</span></li>
+  </ul>
+
+  <div class="note calm" style="margin-top:26px">
+    <span class="h">Then go to lesson 01</span>
+    <p>It picks up exactly here and goes deeper: struct field alignment and padding, escape analysis, method sets and addressability, comparability as a compile-time property. Those are the things Python has no analogue for at all — and they read far more easily once the value model above is automatic.</p>
+  </div>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/01-go-for-infra/lessons/01-syntax-and-types.html">Back to lesson warm-up</a>
+  </footer>
+</div>
+
+</body>
+</html>

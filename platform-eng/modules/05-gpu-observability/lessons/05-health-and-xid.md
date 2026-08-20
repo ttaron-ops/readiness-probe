@@ -16,6 +16,8 @@ sources: 16
 > **Concept.** An XID is the GPU's own crash code; your job is to classify each one as "the silicon is dying — cordon and drain" versus "the tenant's kernel is buggy — log and move on," and wire that decision into node conditions automatically.
 >
 > Module: [📊 05 — GPU observability and telemetry](../README.md) · Deliverable: ["Your GPU dashboard is lying to you"](../practice/gpu-dashboard-lie/README.md)
+>
+> **Advanced Learning** — [The XID Triage](../../../learning/05-health-and-xid.html): XIDs sorted by the action they demand, and the blast-pattern rule that flips a user bug into a hardware escalation. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

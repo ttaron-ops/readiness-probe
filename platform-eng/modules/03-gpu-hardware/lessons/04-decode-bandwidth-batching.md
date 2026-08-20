@@ -16,6 +16,8 @@ sources: 15
 > **Concept.** Decode tok/s ≈ HBM bandwidth ÷ model bytes; batching is the only lever that raises it, KV cache is what stops you batching forever, and production systems now split prefill and decode onto separate GPU pools to buy for each bottleneck independently.
 >
 > Module: [🔌 03 — GPU hardware fundamentals](../README.md) · Deliverable: [GPU Efficiency & Cost Report](../practice/gpu-efficiency-report/README.md)
+>
+> **Advanced Learning** — [Bandwidth Over Bytes](../../../learning/04-decode-bandwidth-batching.html): the decode ceiling derived without FLOPS, and the throughput-versus-batch curve showing where KV reads overtake the weight read. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

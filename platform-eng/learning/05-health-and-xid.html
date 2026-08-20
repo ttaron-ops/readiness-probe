@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 05.5: XIDs sorted by the action they demand, the three different things "recoverable" means, and why the blast pattern discriminates better than the error number.">
+<meta name="color-scheme" content="light dark">
+<title>The XID Triage · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.xgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin:22px 0 10px}
+.x{border:1px solid var(--rule);border-radius:2px;padding:10px 8px;text-align:center;background:var(--surface)}
+.x .n{font-family:var(--f-mono);font-size:20px;font-weight:600;display:block;line-height:1.1}
+.x .t{font-family:var(--f-mono);font-size:10px;color:var(--ink-3);display:block;margin-top:5px;line-height:1.35}
+.x.drain{background:var(--clay-bg);border-color:var(--clay)} .x.drain .n{color:var(--clay)}
+.x.log{background:var(--moss-bg);border-color:var(--moss)}  .x.log .n{color:var(--moss)}
+.x.rma{background:var(--clay);border-color:var(--clay)}     .x.rma .n{color:var(--paper)} .x.rma .t{color:var(--paper);opacity:.85}
+.x.info{background:var(--sunk)}                              .x.info .n{color:var(--ink-3)}
+.xkey{display:flex;flex-wrap:wrap;gap:6px 20px;margin:14px 0 30px;font-family:var(--f-mono);
+  font-size:11px;color:var(--ink-3)}
+.xkey b{display:inline-block;width:11px;height:11px;border-radius:1px;vertical-align:-1px;margin-right:6px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/05-gpu-observability/lessons/05-health-and-xid.html">Back to lesson 05.5</a>
+
+<header class="mast">
+  <p class="kicker">Module 05 · 05.5 · GPU observability</p>
+  <h1>Dying silicon,<br>or a tenant&#39;s<br>bad kernel?</h1>
+  <p class="standfirst">One binary call made under time pressure. Sorted by what you do rather than by cause — plus the rule that flips a user bug into a hardware escalation.</p>
+  <div class="mast-meta">
+    <span><b>Sorted by</b> action, not cause</span>
+    <span><b>Terminal</b> XID 64 — the self-repair failed</span>
+    <span><b>Discriminator</b> blast pattern, not the number</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>An XID is the GPU's own crash code. Your job is one binary call made under time pressure: <strong>is the silicon dying, or did a tenant write a bad kernel?</strong> Cordon the wrong way and you either burn capacity on a healthy card or keep scheduling onto a failing one.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the catalogue</span></div>
+  <h2>Sorted by what you do, not by cause</h2>
+
+<div class="xgrid"><div class="x rma"><span class="n">64</span><span class="t">remap FAILED</span></div><div class="x drain"><span class="n">48</span><span class="t">ECC DBE</span></div><div class="x drain"><span class="n">74</span><span class="t">NVLink</span></div><div class="x drain"><span class="n">79</span><span class="t">off the bus</span></div><div class="x drain"><span class="n">94</span><span class="t">contained</span></div><div class="x drain"><span class="n">95</span><span class="t">uncontained</span></div><div class="x drain"><span class="n">119</span><span class="t">GSP timeout</span></div><div class="x drain"><span class="n">120</span><span class="t">GSP error</span></div><div class="x drain"><span class="n">140</span><span class="t">ECC escape</span></div><div class="x drain"><span class="n">62</span><span class="t">PMU halt</span></div><div class="x drain"><span class="n">69</span><span class="t">GR class</span></div><div class="x drain"><span class="n">143</span><span class="t">init fail</span></div><div class="x drain"><span class="n">171/172</span><span class="t">DRAM/SRAM</span></div><div class="x info"><span class="n">63</span><span class="t">remap recorded</span></div><div class="x info"><span class="n">92</span><span class="t">SBE rate</span></div><div class="x info"><span class="n">61</span><span class="t">PMU breakpt</span></div><div class="x info"><span class="n">80</span><span class="t">CRC mismatch</span></div><div class="x info"><span class="n">93</span><span class="t">InfoROM worn</span></div><div class="x info"><span class="n">110</span><span class="t">security</span></div><div class="x log"><span class="n">13</span><span class="t">GR exception</span></div><div class="x log"><span class="n">31</span><span class="t">MMU fault</span></div><div class="x log"><span class="n">43</span><span class="t">channel reset</span></div><div class="x log"><span class="n">32</span><span class="t">PBDMA</span></div><div class="x log"><span class="n">45</span><span class="t">preemptive</span></div></div><div class="xkey"><span><b style="background:var(--clay)"></b>RMA — do not uncordon</span><span><b style="background:var(--clay-bg);border:1px solid var(--clay)"></b>cordon + drain — hardware fault</span><span><b style="background:var(--sunk);border:1px solid var(--rule)"></b>informational — trend it</span><span><b style="background:var(--moss-bg);border:1px solid var(--moss)"></b>log only — the tenant&#39;s bug</span></div>
+
+  <div class="note warn">
+    <span class="h">The one that is never recoverable</span>
+    <p><strong>XID 64 — <code>INFOROM_PAGE_RETIREMENT_FAILURE</code>.</strong> The remap could not be recorded, meaning <em>the self-repair path itself failed</em>. Cordon, drain, <strong>RMA — and do not uncordon</strong>.</p>
+    <p>Contrast XID 63, the same machinery <em>succeeding</em>: a remap entry was recorded but is not yet active. Cordon, drain, schedule a reset window, verify the pending flag clears.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th class="m">XID</th><th>Symbol</th><th>What it means</th><th>Reset-recoverable?</th></tr>
+    <tr><td class="m"><b>48</b></td><td class="m">GPU_ECC_DBE</td><td>Uncorrectable double-bit ECC in framebuffer. <b>Data is already wrong.</b></td><td>usually, after remap</td></tr>
+    <tr><td class="m"><b>63</b></td><td class="m">PAGE_RETIREMENT_EVENT</td><td>Remap entry recorded to InfoROM. Not yet active.</td><td class="yes">yes, needs a reset</td></tr>
+    <tr><td class="m"><b>64</b></td><td class="m">PAGE_RETIREMENT_FAILURE</td><td>The remap could not be recorded.</td><td class="no"><b>NO — RMA</b></td></tr>
+    <tr><td class="m"><b>74</b></td><td class="m">NVLINK_ERROR</td><td>Fault on GPU↔GPU or GPU↔NVSwitch. <b>Corrupts collectives.</b></td><td>sometimes, after retrain — <b>check the partner GPU too</b></td></tr>
+    <tr><td class="m"><b>79</b></td><td class="m">FALLEN_OFF_THE_BUS</td><td>Stopped responding on PCIe. NVML cannot read it at all.</td><td>node reboot, sometimes</td></tr>
+    <tr><td class="m"><b>92</b></td><td class="m">EXCESSIVE_SBE</td><td>Single-bit ECC <em>rate</em> exceeded threshold. Errors <b>were corrected</b>.</td><td class="yes">nothing is broken yet — <b>do not cordon on one</b></td></tr>
+    <tr><td class="m"><b>94</b></td><td class="m">CONTAINED_ERROR</td><td>Uncorrectable error <b>contained</b> to the faulting context.</td><td class="yes">yes — drain gracefully</td></tr>
+    <tr><td class="m"><b>95</b></td><td class="m">UNCONTAINED_ERROR</td><td>Uncorrectable and <b>not contained</b> — other contexts may be poisoned.</td><td>yes, but drain <b>hard</b>; co-tenant output is suspect</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>three meanings</span></div>
+  <h2>“Recoverable” means three different things</h2>
+
+  <div class="col">
+  <p>Conflating them is how people build broken runbooks.</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Level</th><th>The question</th><th>Who decides</th><th>What you observe</th></tr>
+    <tr>
+      <td><b>Context-recoverable</b></td>
+      <td>Did the fault stay inside the faulting CUDA context?</td>
+      <td>hardware containment + driver</td>
+      <td>XID 94 vs 95 — the app dies, the GPU survives</td>
+    </tr>
+    <tr>
+      <td><b>Reset-recoverable</b></td>
+      <td>Can a reset or reboot restore full capacity?</td>
+      <td>driver, via the GPU Recovery Action enum</td>
+      <td><code>GPU_RESET</code> / <code>NODE_REBOOT</code> / <code>DRAIN_AND_RESET</code></td>
+    </tr>
+    <tr>
+      <td><b>Field-recoverable</b></td>
+      <td>Can the board return to service at all?</td>
+      <td>remap budget, failure flag, recurrence</td>
+      <td><code>ROW_REMAP_FAILURE=1</code>, exhausted bank histogram, repeat 79 after reseat</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">A single XID rarely answers all three</span>
+    <p>XID 94 answers the first — yes, contained. It says <strong>nothing</strong> about the third: the same board may be three remaps from exhaustion.</p>
+    <p>Which is why the operational answer is never “look up the XID.” It is <strong>“look up the XID, <em>then</em> read the state fields it points at.”</strong></p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the discriminator</span></div>
+  <h2>The same number means opposite things</h2>
+
+  <div class="swap">
+    <div class="del">
+      <div class="tag">One pod, XID 31, repeatedly</div>
+      <p>A <b>user bug</b>. MMU fault — the kernel touched an address with no valid page-table entry. Classic CUDA out-of-bounds or use-after-free. Log it, attribute it to the pod, notify the tenant. <b>Do not cordon.</b></p>
+    </div>
+    <div class="add">
+      <div class="tag">Every pod on GPU 3, XID 31, within minutes</div>
+      <p>A <b>bad board or bad driver install</b>. Same error number, completely different blast pattern — and the pattern is the discriminator, not the code.</p>
+    </div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>encode the discriminator as a rule</span><span class="who">policy</span></div>
+<pre>  count of DISTINCT NAMESPACES raising an app-class XID
+  on the SAME UUID within 1h  >=  3        →  escalate to hardware review</pre>
+    <figcaption>Meta's fleet data corroborates the need for a narrow log-only bucket from the other direction: the overwhelming majority of their 419 unexpected interruptions were <em>genuine hardware</em>. So any false-hardware noise you generate by cordoning on XID 31 lands on top of a queue that already has real faults in it.</figcaption>
+  </figure>
+
+  <div class="note calm">
+    <span class="h">XID 45 is almost always a symptom, not a cause</span>
+    <p><code>PREEMPTIVE_REMOVAL</code> means the driver tore down a channel — after a Ctrl-C, an OOM-kill, or <em>a previous XID</em>. If it trails a hardware XID in the log, <strong>act on that one</strong> and ignore the 45.</p>
+    <p>Similarly XID 80 (<code>PUSHBUFFER_CRC_MISMATCH</code>) means corrupted data reached the GPU — often from the <em>host</em> side, bad RAM or bad PCIe. Check the host before blaming the board.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>XID 31 on GPU 3. Cordon?</summary>
+    <div class="ans">
+      <p>Not on its own — it is an MMU fault, almost always a tenant's out-of-bounds access. Log it and attribute it to the pod.</p>
+      <p>But check the blast pattern: if three or more <em>distinct namespaces</em> hit an app-class XID on the same UUID within an hour, that flips to hardware suspicion and should be escalated.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Which XID means "RMA and never uncordon"?</summary>
+    <div class="ans">
+      <p><b>64</b> — <code>INFOROM_PAGE_RETIREMENT_FAILURE</code>. The remap could not be recorded, so the card's self-repair mechanism itself has failed. No reset helps.</p>
+      <p>Do not confuse it with 63, which is the same machinery <em>succeeding</em> and needs only a scheduled reset window.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>XID 92 fires. Drain the node?</summary>
+    <div class="ans">
+      <p>No. It reports that the single-bit ECC <em>rate</em> crossed a threshold — the errors <b>were corrected</b> and nothing is broken. Trend it and schedule pre-emptive maintenance.</p>
+      <p>Cordoning on a single 92 burns healthy capacity.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>XID 94 versus 95 — what changes operationally?</summary>
+    <div class="ans">
+      <p>94 is contained to the faulting context: drain gracefully, reset to apply the remap, verify. 95 is <b>uncontained</b> — other contexts may be poisoned, so drain <b>hard</b> and treat co-tenant output as suspect.</p>
+      <p>Note neither tells you whether the board is field-recoverable; for that you read the remap budget and failure flag.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You see XID 45 right after XID 48. Which do you act on?</summary>
+    <div class="ans">
+      <p>The 48. XID 45 is <code>PREEMPTIVE_REMOVAL</code> — the driver tearing down a channel, frequently <em>because of</em> a preceding fault. It is a symptom.</p>
+      <p>The 48 is an uncorrectable ECC error where data is already wrong: cordon, drain, reset.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>XID 74 on GPU 2. Which cards do you inspect?</summary>
+    <div class="ans">
+      <p>GPU 2 <b>and its NVLink partner</b> — the fault is on a connection, GPU↔GPU or GPU↔NVSwitch, so the far end matters too.</p>
+      <p>It also corrupts collectives, which means a training job may produce wrong results rather than failing loudly.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 05.6–05.8, 10.6</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Sort by action</span><span class="v">Cordon-and-drain, log-only, informational, RMA. Not by NVIDIA's cause columns.</span></li>
+    <li><span class="k">64 is terminal</span><span class="v">The self-repair path failed. RMA, never uncordon. 63 is the same machinery succeeding.</span></li>
+    <li><span class="k">Three recoverabilities</span><span class="v">Context, reset, field. One XID rarely answers more than one.</span></li>
+    <li><span class="k">Then read the state</span><span class="v">The XID points at fields — remap budget, failure flag, recovery action. Look those up too.</span></li>
+    <li><span class="k">Pattern over number</span><span class="v">Three distinct namespaces, one UUID, one hour → hardware, whatever the code says.</span></li>
+    <li><span class="k">92 is a trend</span><span class="v">Corrected errors. Do not cordon on one.</span></li>
+    <li><span class="k">45 and 80 are symptoms</span><span class="v">45 trails another fault; 80 often means the host, not the card.</span></li>
+    <li><span class="k">74 corrupts silently</span><span class="v">NVLink faults poison collectives — wrong results rather than loud failure. Check the partner.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/05-gpu-observability/lessons/05-health-and-xid.html">Back to lesson 05.5</a>
+  </footer>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 01b.4: PSI drawn as a task timeline so some and full become visible, how to read the four lines, and the starved-versus-busy table for a GPU node.">
+<meta name="color-scheme" content="light dark">
+<title>some and full · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.tl{margin:26px 0 8px;padding:20px 18px;background:var(--surface);border:1px solid var(--rule);overflow-x:auto}
+.tlrow{display:flex;align-items:center;gap:10px;font-family:var(--f-mono);font-size:12px;padding:3px 0;min-width:max-content}
+.tlrow .lab{width:112px;flex:none;color:var(--ink-2);font-weight:500}
+.cellz{display:flex;gap:2px}
+.cellz i{width:40px;height:24px;display:grid;place-items:center;font-style:normal;font-size:11px;
+  font-weight:600;border-radius:1px;background:var(--sunk);color:var(--ink-3)}
+.cellz i.R{background:var(--moss);color:var(--paper)}
+.cellz i.Q{background:var(--amber);color:var(--paper)}
+.cellz i.M{background:var(--clay);color:var(--paper)}
+.cellz i.S{background:var(--sunk);color:var(--ink-3)}
+.cellz i.on{background:var(--ink);color:var(--paper)}
+.cellz i.off{background:var(--sunk);color:var(--ink-3)}
+.tlrow.sum .lab{color:var(--ink);font-weight:600}
+.tlrow.sum .cellz i{height:16px;font-size:0}
+.tlrow.sum .cellz i.hit{background:var(--amber)}
+.tlrow.sum.f .cellz i.hit{background:var(--clay)}
+.tlrow .tot{color:var(--ink);font-weight:600;white-space:nowrap;padding-left:8px}
+.tlkey{display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+.tlkey b{display:inline-block;width:11px;height:11px;border-radius:1px;vertical-align:-1px;margin-right:6px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/01b-linux-internals/lessons/04-psi.html">Back to lesson 01b.4</a>
+
+<header class="mast">
+  <p class="kicker">Module 01b · 01b.4 · Linux internals</p>
+  <h1>The metric that<br>measures waiting,<br>not busy-ness</h1>
+  <p class="standfirst">Load average counts waiters whether or not anyone needs them. PSI counts only work that was denied a resource — and the difference between its two lines is the difference between contention and lost throughput.</p>
+  <div class="mast-meta">
+    <span><b>Answers</b> the saturation question load average cannot</span>
+    <span><b>Centrepiece</b> one cgroup, three tasks, 200 ms</span>
+    <span><b>Rule</b> busy is not starved</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>Lesson 01b.1 ended by saying load average is not a saturation metric and pointing here. This is the instrument that is — and its whole design is one idea: <strong>measure the time work spent <em>waiting</em>, not the time a resource spent busy.</strong></p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the picture</span></div>
+  <h2>some and full, on one timeline</h2>
+
+  <div class="col">
+  <p>Definitions in prose are slippery, so here is one cgroup with three tasks sharing one CPU's worth of a domain, over 200 ms. Each column is a 20 ms slice.</p>
+  </div>
+
+<div class="tl"><div class="tlrow"><span class="lab">task A</span><span class="cellz"><i class="R">R</i><i class="Q">Q</i><i class="R">R</i><i class="M">M</i><i class="M">M</i><i class="S">S</i><i class="R">R</i><i class="Q">Q</i><i class="R">R</i><i class="R">R</i></span></div><div class="tlrow"><span class="lab">task B</span><span class="cellz"><i class="S">S</i><i class="R">R</i><i class="Q">Q</i><i class="R">R</i><i class="M">M</i><i class="S">S</i><i class="Q">Q</i><i class="Q">Q</i><i class="Q">Q</i><i class="S">S</i></span></div><div class="tlrow"><span class="lab">task C</span><span class="cellz"><i class="S">S</i><i class="S">S</i><i class="S">S</i><i class="S">S</i><i class="M">M</i><i class="S">S</i><i class="Q">Q</i><i class="Q">Q</i><i class="S">S</i><i class="S">S</i></span></div><div class="tlrow"><span class="lab">on CPU?</span><span class="cellz"><i class="on">A</i><i class="on">B</i><i class="on">A</i><i class="on">B</i><i class="off">–</i><i class="off">–</i><i class="on">A</i><i class="off">–</i><i class="on">A</i><i class="on">A</i></span></div><div style="height:10px"></div><div class="tlrow sum"><span class="lab">cpu some</span><span class="cellz"><i class="off"></i><i class="hit"></i><i class="hit"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="hit"></i><i class="hit"></i><i class="hit"></i><i class="off"></i></span><span class="tot">100 ms → 50%</span></div><div class="tlrow sum f"><span class="lab">cpu full</span><span class="cellz"><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="hit"></i><i class="off"></i><i class="off"></i></span><span class="tot">20 ms → 10%</span></div><div class="tlrow sum"><span class="lab">mem some</span><span class="cellz"><i class="off"></i><i class="off"></i><i class="off"></i><i class="hit"></i><i class="hit"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span><span class="tot">40 ms → 20%</span></div><div class="tlrow sum f"><span class="lab">mem full</span><span class="cellz"><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="hit"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i><i class="off"></i></span><span class="tot">20 ms → 10%</span></div><div class="tlkey"><span><b style="background:var(--moss)"></b>R — running on-CPU, productive</span><span><b style="background:var(--amber)"></b>Q — runnable but queued</span><span><b style="background:var(--clay)"></b>M — blocked in reclaim</span><span><b style="background:var(--sunk);border:1px solid var(--rule)"></b>S — sleeping, <em>invisible to PSI</em></span></div></div>
+
+  <div class="tw">
+  <table>
+    <tr><th>Slice</th><th>What happens</th><th>Why the counters read as they do</th></tr>
+    <tr><td class="m">4</td><td>A is in reclaim, B is productively running</td><td><code>NR_RUNNING(1) ≠ NR_MEMSTALL_RUNNING(0)</code> → <b>mem some</b>, but <b>not</b> mem full</td></tr>
+    <tr><td class="m">5</td><td>All three are reclaimers</td><td><code>NR_RUNNING == NR_MEMSTALL_RUNNING</code> → <b>mem FULL</b>. The CPU is busy, but 100% of it is overhead</td></tr>
+    <tr><td class="m">6</td><td>Everyone asleep</td><td>NONIDLE is 0, so this slice carries <b>no weight at all</b> in the average — <b>PSI never reports “we were fine” as evidence</b></td></tr>
+    <tr><td class="m">8</td><td>Three tasks runnable, none on a CPU</td><td>The CPU is running <em>another cgroup's</em> task → <b>cpu some AND cpu full</b></td></tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <span class="h">The distinction in one line each</span>
+    <p><strong>some</strong> — at least one task was stalled. Something is being delayed.</p>
+    <p><strong>full</strong> — <em>every</em> runnable task was stalled. Nothing productive happened at all. This is the number that converts directly into lost throughput.</p>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Sleeping tasks are invisible, and that is the whole trick</span>
+    <p>A process blocked in <code>epoll_wait</code> because there is no work is not stalled — it is idle. PSI counts only tasks that <em>want</em> a resource and cannot have it.</p>
+    <p>Compare with load average from lesson 01b.1, which counts <code>nr_uninterruptible</code> regardless of whether anyone is waiting on the result. That is exactly why load says 80 on a hung mount and PSI says what fraction of real work was lost.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the files</span></div>
+  <h2>Reading the four lines correctly</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>cat /proc/pressure/{cpu,memory,io}</span><span class="who">format</span></div>
+<pre><span class="dim">$ cat /proc/pressure/cpu</span>
+some avg10=8.42  avg60=6.13  avg300=4.20  total=1290034567
+full avg10=0.00  avg60=0.00  avg300=0.00  total=0
+
+<span class="dim">$ cat /proc/pressure/io</span>
+some avg10=<span class="bad">88.20</span> avg60=84.11 avg300=71.03 total=182933944912
+full avg10=<span class="bad">71.50</span> avg60=68.02 avg300=57.44 total=140222110293</pre>
+    <figcaption>That io line is what a storage incident looks like: 71.5% of wall time in which <em>nothing</em> in the group made progress, while a CPU-utilisation graph for the same node would look unremarkable.</figcaption>
+  </figure>
+
+  <div class="tw">
+  <table>
+    <tr><th>Field</th><th>Unit</th><th>Exactly what it is</th></tr>
+    <tr><td class="m">avg10</td><td>percent of wall time</td><td>EWMA of the 2-second samples with decay <code>e^(−2/10)</code> per period — a 10-second <b>time constant, not a window</b></td></tr>
+    <tr><td class="m">avg60 / avg300</td><td>percent</td><td>same, with decay <code>e^(−2/60)</code> and <code>e^(−2/300)</code></td></tr>
+    <tr><td class="m">total</td><td><b>microseconds</b>, monotonic</td><td>cumulative non-idle-weighted stall time since boot, or since cgroup creation. The kernel accumulates in ns and divides by 1000 on output.</td></tr>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="h">Use <code>total</code>, not the averages, for anything you alert on</span>
+    <p>The three averages are decayed EWMAs — same structural lag as load average, for the same reason. <code>total</code> is a monotonic microsecond counter, so a rate over your own window is both exact and free of the kernel's choice of time constant.</p>
+    <p><code>/proc/pressure/irq</code> exists only with <code>CONFIG_IRQ_TIME_ACCOUNTING</code>, and only has a <code>full</code> line.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>the GPU node</span></div>
+  <h2>Starved versus merely busy</h2>
+
+  <div class="col">
+  <p>A training step is a pipeline, and the expensive stage sits downstream of the cheap ones. <strong>The GPU being idle is never the cause.</strong> PSI on the loader's cgroup tells you which upstream stage lost the time, and <code>full</code> tells you how much.</p>
+  </div>
+
+  <div class="map">
+<pre>  ┌────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐  ┌─────────────┐
+  │ shard  │─▶│ decode & │─▶│ collate  │─▶│ H2D copy│─▶│ GPU kernels │
+  │ read   │  │ augment  │  │ &amp; pin    │  │ (PCIe)  │  │ fwd+bwd+opt │
+  │(NFS/S3)│  │ (CPU)    │  │(CPU+RAM) │  │         │  │             │
+  └────────┘  └──────────┘  └──────────┘  └─────────┘  └─────────────┘
+      ▲            ▲             ▲                           ▲
+ io.pressure  cpu.pressure  memory.pressure           nvidia-smi util
+ on the       on the        on the                    <b>(the SYMPTOM)</b>
+ loader cgroup
+
+ The GPU idling is never the cause. PSI on the loader's cgroup says
+ WHICH upstream stage lost the time; `full` says HOW MUCH.</pre>
+  </div>
+
+  <div class="tw">
+  <table>
+    <tr><th>What you see</th><th>What it means</th><th>First action</th></tr>
+    <tr>
+      <td>Node CPU high, loader <code>cpu.pressure</code> ~0</td>
+      <td class="yes">The node is <b>busy</b>, not starved — someone is using the CPU productively</td>
+      <td><b>Nothing.</b> Do not add capacity.</td>
+    </tr>
+    <tr>
+      <td>Loader <code>cpu some</code> high, <code>full</code> low</td>
+      <td>Loader threads are <b>queueing</b> — bursty collisions or a noisy neighbour. The GPU sees jitter.</td>
+      <td>Check siblings' <code>cpu.weight</code>; thread count vs <code>cpu.max</code></td>
+    </tr>
+    <tr>
+      <td>Loader <code>cpu full</code> high</td>
+      <td class="no">Loader gets <b>no CPU at all</b> for that fraction of time. Direct GPU idle.</td>
+      <td>Is <code>cpu.max</code> capping it? Check <code>cpu.stat nr_throttled</code></td>
+    </tr>
+    <tr>
+      <td>Loader <code>io full</code> high</td>
+      <td>Blocked reading shards. Storage or network FS, not CPU.</td>
+      <td>Prefetch depth, shard size, page-cache residency</td>
+    </tr>
+    <tr>
+      <td>Loader <code>memory full</code> climbing</td>
+      <td class="no">Reclaim thrash — <b>pre-OOM</b></td>
+      <td>Lesson 01b.5: <code>memory.events</code>, <code>workingset_refault_*</code></td>
+    </tr>
+    <tr>
+      <td>Trainer <code>cpu full</code> high, loader clean</td>
+      <td>The <b>trainer's own</b> host threads are starved — NCCL progress threads, CUDA runtime</td>
+      <td><code>cpuset.cpus</code> / NUMA placement</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="h">The boundary of the instrument, stated plainly</span>
+    <p><strong>PSI localises the resource and the cgroup. It does not identify the code path.</strong> It will tell you <code>io.pressure full = 58%</code> on the loader; it will not tell you the stall is in <code>read()</code> on a specific shard over a specific NFS mount.</p>
+    <p>That is lesson 01b.9's off-CPU flame graph. PSI is the wide-angle instrument; off-CPU analysis is the zoom — <strong>and running the zoom first is how people lose the first hour of an incident.</strong></p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Give the one-line difference between <code>some</code> and <code>full</code>.</summary>
+    <div class="ans">
+      <p><b>some</b> = at least one task was stalled. <b>full</b> = every runnable task was stalled, so nothing productive happened at all.</p>
+      <p><code>full</code> is the one that converts directly into lost throughput; <code>some</code> tells you there is contention worth understanding.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why is a process blocked in <code>epoll_wait</code> invisible to PSI?</summary>
+    <div class="ans">
+      <p>Because it is idle, not stalled — it does not <em>want</em> a resource it cannot have. PSI counts only tasks that want a resource and are denied it.</p>
+      <p>That is precisely the distinction load average fails to make: it counts <code>nr_uninterruptible</code> regardless of whether anyone is waiting on the result.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Node CPU is at 90% and the loader's <code>cpu.pressure</code> is near zero. Add cores?</summary>
+    <div class="ans">
+      <p>No — do nothing. The node is <b>busy</b>, not <b>starved</b>. Someone is using that CPU productively and your loader is getting what it asks for.</p>
+      <p>High utilisation with zero pressure is a healthy, well-packed node. Utilisation graphs alone cannot tell you that.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why alert on <code>total</code> rather than <code>avg10</code>?</summary>
+    <div class="ans">
+      <p><code>avg10/60/300</code> are decayed EWMAs with fixed time constants — the same structural lag as load average. <code>total</code> is a monotonic microsecond counter, so you can compute an exact rate over whatever window you choose.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>In slice 5 all three tasks are in reclaim and the CPU is 100% busy. Is that CPU pressure?</summary>
+    <div class="ans">
+      <p>No — it is <b>memory full</b>. <code>NR_RUNNING == NR_MEMSTALL_RUNNING</code>, so every runnable task is stalled on memory reclaim. The CPU is busy, but 100% of that busy-ness is reclaim overhead rather than your work.</p>
+      <p>A CPU-utilisation graph would show a healthy 100%. That is the failure mode PSI exists to catch.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary><code>io.pressure full = 58%</code> on the loader. What does PSI still not tell you?</summary>
+    <div class="ans">
+      <p>Which code path. PSI localises the <em>resource</em> (io) and the <em>cgroup</em> (the loader) — not the syscall, the file, or the mount.</p>
+      <p>For that you need off-CPU analysis from scheduler tracepoints. Reach for PSI first and the flame graph second; the reverse order costs you an hour.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 01b.5, 01b.9, 05</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Waiting, not busy</span><span class="v">PSI measures time work spent stalled. Utilisation measures time a resource spent occupied. Different questions.</span></li>
+    <li><span class="k">some vs full</span><span class="v">At least one stalled, versus everything stalled. Only <code>full</code> is lost throughput.</span></li>
+    <li><span class="k">Sleep is invisible</span><span class="v">Idle tasks carry no weight, and an all-idle slice carries none at all.</span></li>
+    <li><span class="k">Alert on total</span><span class="v">Monotonic microseconds. The three averages are EWMAs with the same lag problem as load average.</span></li>
+    <li><span class="k">Busy ≠ starved</span><span class="v">High utilisation with zero pressure is a healthy node. Do not add capacity to it.</span></li>
+    <li><span class="k">Pressure on the loader</span><span class="v">The GPU idling is a symptom. PSI on the upstream cgroup names the stage that lost the time.</span></li>
+    <li><span class="k">Resource, not code path</span><span class="v">PSI is the wide angle. Off-CPU flame graphs are the zoom, and they come second.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/01b-linux-internals/lessons/04-psi.html">Back to lesson 01b.4</a>
+  </footer>
+</div>
+
+</body>
+</html>

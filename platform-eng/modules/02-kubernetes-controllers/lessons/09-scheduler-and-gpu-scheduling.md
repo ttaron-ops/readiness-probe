@@ -16,6 +16,8 @@ sources: 21
 > **Concept.** The default scheduler is a framework of pluggable extension points; GPU and distributed-training workloads push past its integer-count, one-Pod-at-a-time model into DRA (request devices by attribute) and Kueue (quota + gang admission).
 >
 > Module: [⚙️ 02 — Kubernetes internals and controllers](../README.md) · Deliverable: [`gpu-cost-operator`](../practice/gpu-cost-operator/README.md)
+>
+> **Advanced Learning** — [Extension Points](../../../learning/09-scheduler-and-gpu-scheduling.html): one GPU Pod traced through every extension point, and the two stages whose absence causes the problems you hit. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

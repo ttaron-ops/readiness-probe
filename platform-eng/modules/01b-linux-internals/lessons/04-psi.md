@@ -16,6 +16,8 @@ sources: 12
 > **Concept.** PSI measures the *time a workload was stalled waiting* for CPU, memory, or I/O — the saturation signal that utilization graphs hide.
 >
 > Module: [🐧 01b — Linux systems internals](../README.md) · Deliverable: [Anatomy of a Container](../practice/anatomy-of-a-container/README.md)
+>
+> **Advanced Learning** — [some and full](../../../learning/04-psi.html): the lesson's “picture to memorize” drawn as a real timeline, with the some and full bars computed underneath it. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

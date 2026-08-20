@@ -16,6 +16,8 @@ sources: 11
 > **Concept.** Indivisible bin-packing means an allocated fleet is not a usable fleet — measure the gap and you find hidden GPUs.
 >
 > Module: [🗓️ 06 — Scheduling, queueing and capacity](../README.md) · Deliverable: [Kueue setup + per-queue showback](../practice/kueue-showback/README.md)
+>
+> **Advanced Learning** — [Placeable Capacity](../../../learning/07-fragmentation-effective-capacity.html): the binomial closed form plotted against utilisation, so the collapse of whole-node capacity is visible. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 
