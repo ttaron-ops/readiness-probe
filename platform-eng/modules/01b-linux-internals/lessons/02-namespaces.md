@@ -16,6 +16,8 @@ sources: 14
 > **Concept.** A container is not a kernel object — it's a process wrapped in a set of namespaces (plus a cgroup and a rootfs). Understand namespaces and "container" stops being magic.
 >
 > Module: [🐧 01b — Linux systems internals](../README.md) · Deliverable: [Anatomy of a Container](../practice/anatomy-of-a-container/README.md)
+>
+> **Advanced Learning** — [The Eight Namespaces](../../../learning/02-namespaces.html): namespace membership as a clone-flag bitmask, the three syscalls as create/move/join, and a container built in nine steps. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

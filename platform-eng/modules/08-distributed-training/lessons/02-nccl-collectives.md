@@ -16,6 +16,8 @@ sources: 14
 > **Concept.** NCCL is the layer that turns "which collective over which link" into real wire traffic — and its signature failure is a job that hangs at 100% GPU utilization with *no error*, which you debug by reading its topology/transport logs and, on 2.24+, querying the RAS subsystem.
 >
 > Module: [🧮 08 — Distributed training infrastructure](../README.md) · Deliverable: [Survive-a-failure lab](../practice/survive-a-failure/README.md)
+>
+> **Advanced Learning** — [The Ring, Derived](../../../learning/02-nccl-collectives.html): the ring all-reduce worked chunk by chunk, and why per-rank bytes converge to 2S and stop. Optional visual companion; this lesson stays the source of truth.
 
 ## Where this fits
 

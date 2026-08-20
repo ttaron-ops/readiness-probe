@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Companion notes for lesson 08.2: the ring all-reduce worked chunk by chunk, why per-rank bytes converge to 2S, and the difference between algbw and busbw including why busbw can exceed the link rate.">
+<meta name="color-scheme" content="light dark">
+<title>The Ring, Derived · Readiness Probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+/* minimal reset — the hosted Artifact runtime supplies one; a standalone page needs its own */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+img,svg{max-width:100%;height:auto}
+table{border-collapse:collapse}
+:where(button,summary,a):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+<style>
+:root{
+  --paper:#eef1f4;
+  --surface:#f7f9fa;
+  --sunk:#e3e8ed;
+  --ink:#14202b;
+  --ink-2:#3c4c5a;
+  --ink-3:#6b7c8a;
+  --rule:#ccd6de;
+  --rule-soft:#dde4ea;
+  --amber:#a85c14;
+  --amber-bg:#f6e3cd;
+  --clay:#9b3129;
+  --clay-bg:#f7dedb;
+  --moss:#356a52;
+  --moss-bg:#d9e9e1;
+  --shadow:rgba(20,32,43,.09);
+
+  --f-head:"IBM Plex Sans Condensed","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e161d;
+    --surface:#16212b;
+    --sunk:#1b2833;
+    --ink:#dde6ed;
+    --ink-2:#a8b8c5;
+    --ink-3:#7b8c9a;
+    --rule:#2c3d4b;
+    --rule-soft:#22303c;
+    --amber:#e0983f;
+    --amber-bg:#3a2a13;
+    --clay:#e8776b;
+    --clay-bg:#3b1f1c;
+    --moss:#6fb694;
+    --moss-bg:#163026;
+    --shadow:rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e161d;
+  --surface:#16212b;
+  --sunk:#1b2833;
+  --ink:#dde6ed;
+  --ink-2:#a8b8c5;
+  --ink-3:#7b8c9a;
+  --rule:#2c3d4b;
+  --rule-soft:#22303c;
+  --amber:#e0983f;
+  --amber-bg:#3a2a13;
+  --clay:#e8776b;
+  --clay-bg:#3b1f1c;
+  --moss:#6fb694;
+  --moss-bg:#163026;
+  --shadow:rgba(0,0,0,.4);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 24px 120px}
+.col{max-width:68ch}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:2px solid var(--ink);
+  padding:56px 0 22px;
+  margin-bottom:14px;
+}
+.kicker{
+  font-family:var(--f-mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--amber);
+  font-weight:600;
+  margin:0 0 18px;
+}
+h1{
+  font-family:var(--f-head);
+  font-weight:700;
+  font-size:clamp(34px,6vw,54px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  margin:0 0 16px;
+  text-wrap:balance;
+}
+.standfirst{
+  font-size:19px;
+  color:var(--ink-2);
+  margin:0;
+  max-width:60ch;
+  font-style:italic;
+}
+.mast-meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:var(--f-mono);font-size:11.5px;
+  color:var(--ink-3);letter-spacing:.05em;
+  margin-top:26px;
+}
+.mast-meta b{color:var(--ink-2);font-weight:500}
+
+/* ---------- section chrome ---------- */
+section{padding-top:52px}
+.sec-label{
+  font-family:var(--f-mono);
+  font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--rule);
+  margin-bottom:26px;
+  display:flex;justify-content:space-between;gap:16px;
+}
+.sec-label span:last-child{color:var(--amber)}
+h2{
+  font-family:var(--f-head);font-weight:700;
+  font-size:clamp(26px,4vw,36px);line-height:1.1;letter-spacing:-.01em;
+  margin:0 0 18px;text-wrap:balance;
+}
+h3{
+  font-family:var(--f-head);font-weight:600;
+  font-size:21px;line-height:1.25;letter-spacing:.005em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+h4{
+  font-family:var(--f-mono);font-weight:600;
+  font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-2);margin:32px 0 10px;
+}
+p{margin:0 0 18px}
+code{
+  font-family:var(--f-mono);font-size:.88em;
+  background:var(--sunk);padding:.12em .38em;border-radius:2px;
+  color:var(--ink);
+}
+strong{font-weight:600}
+em{font-style:italic}
+a{color:var(--amber)}
+
+/* ---------- the swap: before/after ---------- */
+.swap{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);
+  margin:28px 0 34px;
+}
+.swap>div{background:var(--surface);padding:20px 22px}
+.swap .tag{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;font-weight:600;margin-bottom:10px;
+}
+.swap .del .tag{color:var(--clay)}
+.swap .add .tag{color:var(--moss)}
+.swap p{margin:0;font-size:16px;line-height:1.5}
+.swap .del p{text-decoration:line-through;text-decoration-color:var(--clay);
+  text-decoration-thickness:1px;color:var(--ink-3)}
+@media(max-width:640px){.swap{grid-template-columns:1fr}}
+
+/* ---------- terminal capture ---------- */
+figure.term{margin:26px 0 30px}
+figure.term .cmd{
+  font-family:var(--f-mono);font-size:12px;font-weight:500;
+  background:var(--ink);color:var(--paper);
+  padding:8px 14px;letter-spacing:.02em;
+  display:flex;justify-content:space-between;gap:14px;align-items:baseline;
+}
+figure.term .cmd .who{color:var(--amber);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase}
+figure.term pre{
+  margin:0;background:var(--surface);border:1px solid var(--rule);border-top:none;
+  padding:16px 14px;overflow-x:auto;
+  font-family:var(--f-mono);font-size:12.5px;line-height:1.65;color:var(--ink-2);
+}
+figure.term figcaption{
+  font-size:14.5px;color:var(--ink-3);margin-top:10px;
+  padding-left:14px;border-left:2px solid var(--amber);font-style:italic;
+}
+pre b{color:var(--ink);font-weight:600}
+pre .hl{color:var(--amber);font-weight:600}
+pre .bad{color:var(--clay);font-weight:600}
+pre .ok{color:var(--moss);font-weight:600}
+pre .dim{color:var(--ink-3)}
+
+/* ---------- bitfield diagram ---------- */
+.bitfield{
+  margin:26px 0 32px;padding:20px 22px;
+  background:var(--surface);border:1px solid var(--rule);
+  overflow-x:auto;
+}
+.bitrow{
+  display:flex;align-items:center;gap:14px;
+  font-family:var(--f-mono);font-size:12.5px;
+  padding:5px 0;min-width:max-content;
+}
+.bitrow+.bitrow{border-top:1px solid var(--rule-soft)}
+.bitrow .name{width:210px;flex:none;font-weight:500;color:var(--ink)}
+.bitrow .hex{width:70px;flex:none;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.bits{display:flex;gap:2px;flex:none}
+.bits i{
+  width:15px;height:19px;flex:none;
+  display:grid;place-items:center;font-style:normal;font-size:10px;
+  background:var(--sunk);color:var(--ink-3);border-radius:1px;
+}
+.bits i.on{background:var(--amber);color:var(--paper);font-weight:600}
+.bits i.on.mod{background:var(--clay)}
+.bitrow .note{color:var(--ink-3);font-size:11.5px;padding-left:6px}
+.bitlegend{
+  display:flex;flex-wrap:wrap;gap:6px 20px;margin-top:16px;padding-top:14px;
+  border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+}
+.bitlegend b{display:inline-block;width:11px;height:11px;border-radius:1px;
+  vertical-align:-1px;margin-right:5px}
+.bitlegend .k1{background:var(--amber)}
+.bitlegend .k2{background:var(--clay)}
+.bitlegend .k3{background:var(--sunk);border:1px solid var(--rule)}
+
+/* ---------- data tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 30px;border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:520px;background:var(--surface)}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid var(--rule-soft);
+  font-size:14.5px;vertical-align:top}
+th{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--sunk);
+  border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td.m,th.m{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+td .letter{
+  font-family:var(--f-mono);font-weight:600;font-size:15px;
+  display:inline-grid;place-items:center;width:24px;height:24px;
+  background:var(--ink);color:var(--paper);border-radius:2px;
+}
+td .letter.warn{background:var(--clay)}
+td .letter.calm{background:var(--moss)}
+.yes{color:var(--moss);font-weight:600}
+.no{color:var(--clay);font-weight:600}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-bg);
+  padding:16px 20px;margin:26px 0;
+}
+.note.warn{border-left-color:var(--clay);background:var(--clay-bg)}
+.note.calm{border-left-color:var(--moss);background:var(--moss-bg)}
+.note p{margin:0}
+.note p+p{margin-top:12px}
+.note .h{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  font-weight:600;color:var(--amber);margin-bottom:8px;display:block;
+}
+.note.warn .h{color:var(--clay)}
+.note.calm .h{color:var(--moss)}
+
+/* ---------- shared / private split ---------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:26px 0 32px}
+.split>div{border:1px solid var(--rule);background:var(--surface);padding:18px 20px}
+.split h5{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;font-weight:600;
+}
+.split .sh h5{color:var(--moss)}
+.split .pv h5{color:var(--amber)}
+.split ul{margin:0;padding-left:0;list-style:none}
+.split li{
+  font-family:var(--f-mono);font-size:12.5px;padding:5px 0;
+  border-bottom:1px solid var(--rule-soft);color:var(--ink-2);
+}
+.split li:last-child{border-bottom:none}
+.split li b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+
+/* ---------- playbook steps ---------- */
+ol.play{list-style:none;counter-reset:s;padding:0;margin:26px 0 30px}
+ol.play li{
+  counter-increment:s;position:relative;
+  padding:0 0 26px 52px;
+}
+ol.play li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:1px;
+  font-family:var(--f-mono);font-size:12px;font-weight:600;
+  color:var(--amber);
+  border:1px solid var(--amber);border-radius:2px;
+  width:32px;height:26px;display:grid;place-items:center;
+}
+ol.play li::after{
+  content:"";position:absolute;left:16px;top:31px;bottom:2px;width:1px;
+  background:var(--rule);
+}
+ol.play li:last-child::after{display:none}
+ol.play .what{font-family:var(--f-head);font-weight:600;font-size:17px;display:block;margin-bottom:3px}
+ol.play code{font-size:12.5px}
+ol.play p{margin:6px 0 0;font-size:15.5px;color:var(--ink-2)}
+
+/* ---------- transition map ---------- */
+.map{
+  margin:26px 0 32px;padding:22px;background:var(--surface);
+  border:1px solid var(--rule);overflow-x:auto;
+}
+.map pre{
+  margin:0;font-family:var(--f-mono);font-size:12.5px;line-height:1.7;
+  color:var(--ink-2);min-width:max-content;
+}
+
+/* ---------- drills ---------- */
+.drill{border:1px solid var(--rule);background:var(--surface);margin:14px 0}
+.drill summary{
+  cursor:pointer;padding:14px 18px;font-weight:600;
+  font-family:var(--f-head);font-size:16.5px;list-style:none;
+  display:flex;gap:12px;align-items:baseline;
+}
+.drill summary::-webkit-details-marker{display:none}
+.drill summary::before{
+  content:"?";font-family:var(--f-mono);font-size:12px;color:var(--amber);
+  border:1px solid var(--amber);width:20px;height:20px;flex:none;
+  display:grid;place-items:center;border-radius:2px;
+}
+.drill[open] summary::before{content:"!"}
+.drill summary:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+.drill .ans{padding:0 18px 16px 50px;font-size:15.5px;color:var(--ink-2);
+  border-top:1px solid var(--rule-soft);margin-top:0;padding-top:14px}
+.drill .ans p{margin:0 0 10px}
+.drill .ans p:last-child{margin:0}
+
+/* ---------- takeaway strip ---------- */
+.keeps{margin:28px 0 0;padding:0;list-style:none;
+  border-top:2px solid var(--ink)}
+.keeps li{
+  display:grid;grid-template-columns:150px 1fr;gap:20px;
+  padding:16px 0;border-bottom:1px solid var(--rule);
+}
+.keeps .k{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--amber);font-weight:600;line-height:1.5;
+}
+.keeps .v{font-size:16px}
+@media(max-width:640px){.keeps li{grid-template-columns:1fr;gap:4px}}
+
+footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--rule);
+  font-family:var(--f-mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+ul.plain{padding-left:20px}
+ul.plain li{margin-bottom:8px}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+
+/* --- narrow-viewport containment ------------------------------------- */
+/* long inline code must break rather than push the page sideways;
+   preformatted code keeps its own scroll container instead */
+code{overflow-wrap:anywhere}
+pre code{overflow-wrap:normal}
+/* flex rows whose items would otherwise refuse to shrink below content */
+.drill summary{flex-wrap:wrap}
+.drill summary>*{min-width:0}
+figure.term .cmd{flex-wrap:wrap}
+figure.term .cmd>*{min-width:0;overflow-wrap:anywhere}
+.sec-label{flex-wrap:wrap}
+.keeps .v,.keeps .k{overflow-wrap:anywhere}
+/* belt and braces: the page itself never scrolls sideways */
+.wrap{overflow-x:clip}
+</style>
+<style>
+.backlink{
+  font-family:var(--f-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ink-3);text-decoration:none;padding:20px 0 0;
+}
+.backlink:hover,.backlink:focus-visible{color:var(--amber)}
+.backlink::before{content:"\2190";font-size:14px}
+</style>
+<style>
+.ringtab{margin:24px 0 8px;overflow-x:auto;border:1px solid var(--rule);background:var(--surface)}
+.ringtab table{min-width:560px;font-family:var(--f-mono);font-size:12px}
+.ringtab th{background:var(--sunk)}
+.ringtab td{text-align:center;padding:7px 10px;border-bottom:1px solid var(--rule-soft)}
+.ringtab td.rk{text-align:left;color:var(--ink-3);font-weight:600}
+.ringtab td.acc{background:var(--amber-bg);color:var(--ink);font-weight:600}
+.ringtab td.done{background:var(--moss);color:var(--paper);font-weight:600}
+.ringtab caption{caption-side:top;text-align:left;padding:12px 14px;font-family:var(--f-mono);
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);background:var(--sunk);
+  border-bottom:1px solid var(--rule)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <a class="backlink" href="../modules/08-distributed-training/lessons/02-nccl-collectives.html">Back to lesson 08.2</a>
+
+<header class="mast">
+  <p class="kicker">Module 08 · 08.2 · Distributed training</p>
+  <h1>Every link busy,<br>every step,<br>forever</h1>
+  <p class="standfirst">The ring all-reduce derived chunk by chunk — and the consequence that adding data-parallel ranks costs you latency but almost no extra bandwidth per GPU.</p>
+  <div class="mast-meta">
+    <span><b>Key result</b> 2(N−1)/N → 2, and fast</span>
+    <span><b>Measure with</b> busbw, never algbw</span>
+    <span><b>Healthy</b> 80–88% of unidirectional spec</span>
+  </div>
+</header>
+
+
+<div class="col">
+<p>NCCL is where "which collective over which link" becomes real wire traffic. Two things are worth owning here rather than quoting: <strong>the ring all-reduce derivation</strong> — because it explains why data parallelism scales — and <strong>bus bandwidth</strong>, because it is the only number you can compare against a spec sheet.</p>
+</div>
+
+<section>
+  <div class="sec-label"><span>Part one</span><span>the barrier</span></div>
+  <h2>Why a collective is a barrier, mathematically</h2>
+
+  <figure class="term">
+    <div class="cmd"><span>the definition that forces the property</span><span class="who">why</span></div>
+<pre>  o_0 = o_1 = ... = o_{N-1} = i_0 + i_1 + ... + i_{N-1}</pre>
+    <figcaption>An all-reduce's output on <em>any</em> rank depends on the input of <em>every</em> rank. There is no partial answer, so a rank cannot produce a correct result having heard from only some peers — it must wait. <b>The barrier is a consequence of the arithmetic, not a design choice.</b></figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">Ordering is enforced by position, not by name</span>
+    <p>Every rank must call the same collectives, <strong>in the same order, the same number of times, with the same sizes and datatypes</strong>. Each communicator keeps an <code>opCount</code> that increments per enqueued collective, and operations are matched <em>pairwise by position</em>.</p>
+    <p>So if rank 5 issues <code>AllReduce, AllGather</code> while everyone else issues <code>AllGather, AllReduce</code>, you get a hang or <strong>silently wrong data</strong>. Frameworks avoid this by construction — DDP and FSDP issue from the autograd engine in deterministic order — which is why the ordering bugs you actually meet come from <em>conditional</em> code: <code>if rank == 0: log_something_that_all_reduces()</code>, or an early <code>break</code> when one rank's shard runs out first.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part two</span><span>the derivation</span></div>
+  <h2>The ring all-reduce, step by step</h2>
+
+  <div class="col">
+  <p>Both naive schemes are bad. Reduce to rank 0 and broadcast back makes rank 0's single link carry ≈2S bytes while every other link idles; all-to-all moves <code>N(N−1)</code> messages. <strong>The ring makes every link carry the same load, all the time.</strong></p>
+  <p>Arrange ranks in a logical ring, split each array into <code>N</code> chunks. Every step, every rank sends exactly one chunk to its successor and receives one from its predecessor.</p>
+  </div>
+
+<div class="ringtab"><table><caption>initial — each array split into 4 chunks</caption><tr><th></th><th>chunk a</th><th>chunk b</th><th>chunk c</th><th>chunk d</th></tr><tr><td class="rk">rank 0</td><td class="">a0</td><td class="">b0</td><td class="">c0</td><td class="">d0</td></tr><tr><td class="rk">rank 1</td><td class="">a1</td><td class="">b1</td><td class="">c1</td><td class="">d1</td></tr><tr><td class="rk">rank 2</td><td class="">a2</td><td class="">b2</td><td class="">c2</td><td class="">d2</td></tr><tr><td class="rk">rank 3</td><td class="">a3</td><td class="">b3</td><td class="">c3</td><td class="">d3</td></tr></table></div><div class="ringtab"><table><caption>phase 1 · step 1 — rank r sends chunk r, ACCUMULATE on arrival</caption><tr><th></th><th>chunk a</th><th>chunk b</th><th>chunk c</th><th>chunk d</th></tr><tr><td class="rk">rank 0</td><td class="">a0</td><td class="">b0</td><td class="">c0</td><td class="acc">d3+d0</td></tr><tr><td class="rk">rank 1</td><td class="acc">a0+a1</td><td class="">b1</td><td class="">c1</td><td class="">d1</td></tr><tr><td class="rk">rank 2</td><td class="">a2</td><td class="acc">b1+b2</td><td class="">c2</td><td class="">d2</td></tr><tr><td class="rk">rank 3</td><td class="">a3</td><td class="">b3</td><td class="acc">c2+c3</td><td class="">d3</td></tr></table></div><div class="ringtab"><table><caption>phase 1 · step 2</caption><tr><th></th><th>chunk a</th><th>chunk b</th><th>chunk c</th><th>chunk d</th></tr><tr><td class="rk">rank 0</td><td class="">a0</td><td class="">b0</td><td class="acc">c2+c3+c0</td><td class="acc">d3+d0</td></tr><tr><td class="rk">rank 1</td><td class="acc">a0+a1</td><td class="">b1</td><td class="">c1</td><td class="acc">d3+d0+d1</td></tr><tr><td class="rk">rank 2</td><td class="acc">a0+a1+a2</td><td class="acc">b1+b2</td><td class="">c2</td><td class="">d2</td></tr><tr><td class="rk">rank 3</td><td class="">a3</td><td class="acc">b1+b2+b3</td><td class="acc">c2+c3</td><td class="">d3</td></tr></table></div><div class="ringtab"><table><caption>phase 1 · step 3 — after N−1 steps rank r owns exactly one COMPLETE chunk</caption><tr><th></th><th>chunk a</th><th>chunk b</th><th>chunk c</th><th>chunk d</th></tr><tr><td class="rk">rank 0</td><td class="">a0</td><td class="done">B</td><td class="acc">c2+c3+c0</td><td class="acc">d3+d0</td></tr><tr><td class="rk">rank 1</td><td class="acc">a0+a1</td><td class="">b1</td><td class="done">C</td><td class="acc">d3+d0+d1</td></tr><tr><td class="rk">rank 2</td><td class="acc">a0+a1+a2</td><td class="acc">b1+b2</td><td class="">c2</td><td class="done">D</td></tr><tr><td class="rk">rank 3</td><td class="done">A</td><td class="acc">b1+b2+b3</td><td class="acc">c2+c3</td><td class="">d3</td></tr></table></div>
+
+  <div class="col">
+  <p>After <code>N−1</code> steps each rank owns exactly one fully reduced chunk — <strong>that is a reduce-scatter</strong>. Phase 2 runs the same ring in the same direction for another <code>N−1</code> steps, storing rather than accumulating, and every rank ends with every chunk.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the accounting — read the last three lines twice</span><span class="who">arithmetic</span></div>
+<pre>  steps           = (N-1) + (N-1) = 2(N-1)        = 6 for N=4
+  bytes per step  = S/N per rank                  = S/4
+  bytes per rank  = <span class="hl">2(N-1)/N · S</span>                  = 1.5 S for N=4
+  bytes per link  = <span class="ok">identical — no hot spot, ever</span></pre>
+  </figure>
+
+  <div class="note calm">
+    <span class="h">The most misunderstood fact about scaling data parallelism</span>
+    <p><code>2(N−1)/N = 2 − 2/N</code>. At N=2 it is 1.0, at N=8 it is 1.75, at N=64 it is 1.969, at N=16,384 it is <strong>1.99988</strong>. Bounded above by 2, and it gets there fast.</p>
+    <p><strong>Adding data-parallel replicas does not multiply your per-GPU bandwidth bill.</strong> It is asymptotically flat — which is exactly why lesson 08.1 could say the reason to leave DDP is memory pressure, not bandwidth scaling.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="h">What <em>does</em> grow with N is the step count</span>
+    <p><code>2(N−1)</code> steps, and therefore the latency floor. Each step is a real hop with a real cost — kernel-side handshake, buffer copy, and on inter-node hops a proxy thread posting an RDMA operation.</p>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>NCCL's own cost model — src/tuning/tuning_general.cc</span><span class="who">source</span></div>
+<pre>int ncclTuningGetNsteps(int coll, int nRanks) {
+  if (coll == ncclFuncAllReduce)        return <span class="hl">2 * (nRanks - 1)</span>;
+  else if (coll == ncclFuncReduceScatter || coll == ncclFuncAllGather)
+                                        return nRanks - 1;
+  else                                  return nRanks;
+}
+
+                                 2(N-1)      S
+   T_ring(S, N) = 2(N-1)·α  +   ──────── · ─────
+                                    N          B
+                  └──┬───┘       └─────┬──────┘
+              latency term      bandwidth term</pre>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-label"><span>Part three</span><span>measuring</span></div>
+  <h2>algbw versus busbw</h2>
+
+  <div class="split">
+    <div class="pv">
+      <h5>Algorithm bandwidth</h5>
+      <ul>
+        <li><b>algbw = S / t</b></li>
+        <li>answers “how long will this take”</li>
+        <li><b>useless for judging hardware</b></li>
+        <li>falls as N grows even on a healthy fabric</li>
+      </ul>
+    </div>
+    <div class="sh">
+      <h5>Bus bandwidth</h5>
+      <ul>
+        <li><b>busbw = algbw × 2(N−1)/N</b></li>
+        <li>corrects for the ring's byte count</li>
+        <li><b>comparable to a spec sheet</b></li>
+        <li>independent of rank count</li>
+      </ul>
+    </div>
+  </div>
+
+  <figure class="term">
+    <div class="cmd"><span>the correction factor is the step count ÷ N</span><span class="who">formula</span></div>
+<pre>  busbw = algbw x <span class="hl">2(N-1)/N</span>     all-reduce
+  busbw = algbw x <span class="hl">(N-1)/N</span>      all-gather, reduce-scatter
+  busbw = algbw                    broadcast, reduce  <span class="dim">(root is the bottleneck)</span>
+
+  worked — a 4 GiB all-reduce on 8 GPUs taking 11.7 ms:
+     S     = 4 x 2^30                        = 4.295e9 bytes
+     algbw = 4.295e9 / 0.0117                = 367.1 GB/s
+     busbw = 367.1 x 2(8-1)/8 = x1.75        = 642.4 GB/s</pre>
+    <figcaption><code>nccl-tests</code> applies the right factor per collective, which is why an all-gather's <code>busbw</code> is directly comparable to an all-reduce's even though its <code>algbw</code> is nearly double.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="h">Trap one — busbw can exceed the physical link rate</span>
+    <p>It is only a wire speed when the algorithm is a flat ring. When NCCL picks a hierarchical algorithm the payload no longer maps onto any single link.</p>
+    <p>On an 8×H200 node at 16 GiB, <code>all_reduce</code> reports <strong>480.0 GB/s against a 450 GB/s NVLink 4 spec — 107%</strong> — because NCCL selected NVLS and the <em>NVSwitch</em> did the reduction. Force the ring with <code>NCCL_NVLS_ENABLE=0</code> and the same collective reports <strong>367.2 GB/s, 82% of spec</strong>, which is the honest wire number.</p>
+  </div>
+
+  <div class="note calm">
+    <span class="h">Trap two — ~80% of spec is the normal, healthy result</span>
+    <p>Not a problem to chase. Encoding overhead and protocol framing eat the rest. <strong>If you measure 80–88% of the unidirectional spec, your fabric is fine.</strong></p>
+    <p>All-gather and reduce-scatter on that same H200 node report 361.4 and 362.9 GB/s — 80–81% — because they have no NVLS path and always ran the ring.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-label"><span>Using it</span><span>drills</span></div>
+  <h2>Drill yourself</h2>
+
+  <details class="drill">
+    <summary>Going from 8 to 512 data-parallel ranks — how much more bandwidth per GPU?</summary>
+    <div class="ans">
+      <p>Almost none. Per-rank bytes are <code>2(N−1)/N · S</code>: 1.75S at N=8, 1.996S at N=512 — a 14% increase, and bounded above by 2S forever.</p>
+      <p>What grows is the <em>step count</em>, <code>2(N−1)</code>, and therefore the latency floor. Bandwidth is not why you leave DDP; memory is.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Your benchmark reports 107% of the NVLink spec. Is the tool broken?</summary>
+    <div class="ans">
+      <p>No — NCCL chose NVLS, so the NVSwitch performed the reduction in-network and the payload never traversed a single link the way the ring formula assumes. <code>busbw</code>'s correction factor only describes a flat ring.</p>
+      <p>Set <code>NCCL_NVLS_ENABLE=0</code> to get the honest wire number, which will land around 82%.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>You measure 82% of the unidirectional spec. Escalate?</summary>
+    <div class="ans">
+      <p>No. <b>80–88% is the healthy range</b> — encoding overhead and protocol framing account for the rest. Chasing the last 18% is chasing physics.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Rank 5 hangs in a collective. What class of bug should you suspect first?</summary>
+    <div class="ans">
+      <p>Collective ordering. Operations are matched pairwise by <code>opCount</code> position, not by name — so if one rank issues a different sequence, you get a hang or silently wrong results.</p>
+      <p>Look for <em>conditional</em> collectives: <code>if rank == 0:</code> branches that call something reducing, or an early <code>break</code> when one rank's data shard runs out first. Framework-issued collectives are deterministic by construction.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>Why does the ring have no hot spot?</summary>
+    <div class="ans">
+      <p>Because every rank sends exactly one chunk of <code>S/N</code> bytes to its successor in every step, in both phases — so every link carries identical load at every moment.</p>
+      <p>Compare reduce-to-root-and-broadcast, where rank 0's single link carries ≈2S while every other link idles.</p>
+    </div>
+  </details>
+
+  <details class="drill">
+    <summary>After phase 1, what does each rank hold?</summary>
+    <div class="ans">
+      <p>Exactly one fully reduced chunk — chunk <code>(r+1) mod N</code> — and no other chunk completely. <strong>That is precisely a reduce-scatter</strong>, which is why NCCL implements reduce-scatter as phase 1 alone and all-gather as phase 2 alone, each at <code>N−1</code> steps.</p>
+    </div>
+  </details>
+</section>
+
+<section>
+  <div class="sec-label"><span>Carry forward</span><span>into 08.3–08.8, 09.5</span></div>
+  <h2>What to keep</h2>
+  <ul class="keeps">
+    <li><span class="k">Barrier by arithmetic</span><span class="v">Every output depends on every input, so no rank can finish early. Not a design choice.</span></li>
+    <li><span class="k">Matched by position</span><span class="v"><code>opCount</code> pairs collectives in order. Conditional collectives are the bug source.</span></li>
+    <li><span class="k">2(N−1)/N → 2</span><span class="v">Per-rank bytes are asymptotically flat. DP scales on bandwidth; it fails on memory.</span></li>
+    <li><span class="k">Steps grow, bytes do not</span><span class="v"><code>2(N−1)</code> hops set the latency floor as N rises.</span></li>
+    <li><span class="k">No hot spot</span><span class="v">Every link carries an identical S/N chunk every step, both phases.</span></li>
+    <li><span class="k">Phase 1 is reduce-scatter</span><span class="v">Which is why those collectives cost <code>N−1</code> steps, not <code>2(N−1)</code>.</span></li>
+    <li><span class="k">busbw for hardware</span><span class="v">algbw answers duration; busbw is the only spec-comparable number.</span></li>
+    <li><span class="k">80–88% is healthy</span><span class="v">And &gt;100% means a hierarchical algorithm, not a broken benchmark.</span></li>
+  </ul>
+</section>
+
+
+  <footer>
+    Companion notes · all figures traced to the lesson's own primary sources<br>
+    <a class="backlink" href="../modules/08-distributed-training/lessons/02-nccl-collectives.html">Back to lesson 08.2</a>
+  </footer>
+</div>
+
+</body>
+</html>
