@@ -301,3 +301,32 @@ _(each run appends: date · modules enriched · commit shas)_
   reference-list numbering renumbered to stay sequential per lesson, with every `sources:`
   frontmatter count verified to match its lesson's actual reference-entry count. No dead links, no
   broken file links, and no other fixes were necessary.
+- **2026-08-21** · QA pass · `modules/08-distributed-training` (next-oldest-enriched, 2026-08-10,
+  not yet QA'd) · commit `d3499f1`. Full consistency sweep via two parallel subagents (structural
+  check + link verification). Verified the prev/next chain across all 8 lessons is unbroken
+  (01→08, null at both ends), all 12 template sections present in every lesson with ≥3
+  `**Answer:**` self-check lines each (5–8 actual), and checkpoint.md / practice/survive-a-failure
+  links resolve and stay consistent with lesson content. Found and fixed a real citation error:
+  lesson 07's JPEG-decoder throughput claim (270 img/s Arm Neoverse N1 to 840 img/s Zen 5) was
+  attributed to arXiv:2501.13131, which actually benchmarks Apple M4 Max and AMD Threadripper
+  only and never tests Neoverse N1 or Zen 5 — independently confirmed via WebSearch. Traced the
+  real source to arXiv:2605.08731 ("Single-Thread JPEG Decoder Benchmarks Mis-Evaluate ML Data
+  Loaders"), which does test those five architectures; swapped the citation and reworded the claim
+  around what's independently corroborable (the paper's actual headline finding, that single-thread
+  benchmarks mis-predict multi-worker `DataLoader` throughput on 3 of 5 CPUs), dropping the specific
+  270/840 img/s figures since the correct paper's per-architecture numbers couldn't be independently
+  confirmed against its abstract. Also found and fixed the same defect classes as recent QA passes:
+  `concept:` frontmatter duplicated the full lesson `title:` in all 8 lessons instead of a short
+  kebab-case tag (fixed all 8); README lesson-table titles for 01 and 02 had drifted from the actual
+  enriched lesson titles (synced); References bucket labels used inconsistent wording ("Real-world
+  engineering blogs and reports" / "...and measurements" / "...reports") instead of the spec's exact
+  "Real-world engineering blogs" across lessons 01–06 (standardized); lessons 06, 07 and 08 padded
+  their numbered References list with internal cross-lesson links instead of external sources (08
+  additionally had a duplicate "Primary sources" bucket header) — moved the internal links to an
+  unnumbered "Related lessons in this course" note excluded from `sources:`, and corrected the
+  `sources:` counts to match (06: 14→11, 07: 15→14, 08: 16→10); two non-standard "What's new here"
+  subtitles in lessons 05 and 06 normalized to the spec's "(calibration)" wording. All other checked
+  citations (Meta reliability/Llama-3/HSDP papers, NCCL/PyTorch/DeepSpeed/Megatron-LM/DALI/
+  WebDataset/Ray source repos, CoreWeave, Uber, Databricks, Kubeflow Trainer v2.3.0, torchft, and
+  the AWS/NVIDIA doc pages) verified real, on-topic, and matching their claimed figures — no dead
+  links or other fabricated sources found.
