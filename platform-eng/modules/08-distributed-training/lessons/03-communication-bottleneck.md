@@ -2,7 +2,7 @@
 lesson: "08.3"
 title: "Communication as the bottleneck"
 module: "08"
-concept: "Communication as the bottleneck"
+concept: "communication-bottleneck"
 status: not-started
 est_time: "7h"
 prev: "02-nccl-collectives.md"
@@ -607,7 +607,7 @@ Backward: **02b** supplied the link topology and rail alignment that §8's phase
 
 5. **PyTorch — `torch/nn/parallel/distributed.py`** — <https://github.com/pytorch/pytorch>. Source of the DDP `bucket_cap_mb` default of **25 MiB** that §6 and §7 build the bucketing argument on. *`docs.pytorch.org` is blocked by this environment's egress proxy; verified against the in-repo source at HEAD.*
 
-**Real-world engineering blogs and measurements**
+**Real-world engineering blogs**
 
 6. **`stas00/ml-engineering` — `compute/accelerator/README.md`** — <https://github.com/stas00/ml-engineering>. **Read the "Maximum Achievable FLOPS" section in full.** Source of the MAMF table in §3 — H100 SXM 794.5 of 989 TFLOP/s (80.3%), GH200 828.6 (83.8%), B200 1745 of 2250 (77.6%), B300 1769 (78.6%), GB200 1822 of 2500 (72.9%), all BF16 without sparsity — and of the derivation `1830 MHz × 512 × 2 × 528 = 989.4 TFLOP/s` that reproduces NVIDIA's own H100 spec. Also the caveat that these are brute-force searches over a non-exhaustive shape space and should be re-run on your own hardware. Verified by cloning at HEAD.
 

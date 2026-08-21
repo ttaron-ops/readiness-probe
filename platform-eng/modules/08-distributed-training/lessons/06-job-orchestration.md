@@ -2,13 +2,13 @@
 lesson: "08.6"
 title: "Job orchestration"
 module: "08"
-concept: "Job orchestration"
+concept: "job-orchestration"
 status: not-started
 est_time: "6h"
 prev: "05-failure-and-elasticity.md"
 next: "07-data-pipeline.md"
 artifacts: []
-sources: 14
+sources: 11
 ---
 # 08.6 · Job orchestration
 > **Concept.** A training job on Kubernetes is a *set* of pods that must find each other and agree on a world; the Training Operator is the controller that turns one `PyTorchJob` object into master/worker pods and injects the rendezvous env — the glue between 06's placed gang and torchrun's process group.
@@ -55,7 +55,7 @@ blocked in `init_process_group` waiting for a rank that will never arrive. That 
 the full gang rate until someone kills it. On 32 H100s at $3/GPU-hr that is $96/hr of
 nothing.
 
-## What's new here (building on module 06, 08.5)
+## What's new here (calibration)
 
 - **Module 06 owns admission; this lesson owns expression and wiring.** In module 06 you
   learned gang scheduling in mechanism-level detail: the `PodGroup` CRD, `minMember`, the
@@ -1194,7 +1194,7 @@ perfectly rendezvoused job — using the same SM%/cost lens this module has used
 
 ## References & further reading
 
-**Primary sources — read in this pass**
+**Primary sources**
 
 1. **`kubeflow/training-operator` at tag `v1.9.3`** — <https://github.com/kubeflow/training-operator>.
    **Read `pkg/apis/kubeflow.org/v1/pytorch_types.go`, `common_types.go`,
@@ -1241,8 +1241,6 @@ perfectly rendezvoused job — using the same SM%/cost lens this module has used
    not re-read from the upstream tutorial in this pass and are stated only where the operator
    source names them.*
 
-**Project documentation — named, not relied upon for the mechanisms above**
-
 6. **Kubeflow Trainer docs** — <https://www.kubeflow.org/docs/components/trainer/>, including
    the [legacy-v1 PyTorch user guide](https://www.kubeflow.org/docs/components/trainer/legacy-v1/user-guides/pytorch/)
    and the [v2 migration guide](https://www.kubeflow.org/docs/components/trainer/operator-guides/migration/).
@@ -1256,7 +1254,7 @@ perfectly rendezvoused job — using the same SM%/cost lens this module has used
    in this lesson come from the repository's own `VERSION` file and `CHANGELOG/` directory
    instead.*
 
-**Real-world engineering**
+**Real-world engineering blogs**
 
 9. **CoreWeave — "A Slurm on Kubernetes Implementation for HPC and Large Scale AI"** —
    <https://www.coreweave.com/blog/sunk-slurm-on-kubernetes-implementations>, with
@@ -1272,18 +1270,19 @@ perfectly rendezvoused job — using the same SM%/cost lens this module has used
     A third-party treatment of the Slurm/Kubernetes cultural split. *Not fetched in this
     pass; cited as a perspective, not as a source of fact.*
 
-**Adjacent lessons that own the mechanisms this one delegates to**
+**Related lessons in this course** (internal links, not external sources — not counted in
+`sources:`)
 
-12. **[06.2 · Gang scheduling: all-or-nothing admission](../../06-scheduling-capacity/lessons/02-gang-scheduling.md)** —
-    the `PodGroup` CRD field by field, the five extension points, `permitWaitingTimeSeconds`
-    / `podGroupBackoffSeconds` / `podGroupRejectPercentage` defaults, Kueue's Workload-level
-    alternative, and the native `Gang{minCount}` successor. **This lesson deliberately does
-    not re-teach any of it.**
-13. **[08.5 · Failure & elasticity](05-failure-and-elasticity.md)** — the detection→drain→
-    re-rendezvous→resume loop that layer 3 of §5 implements.
-14. **[08.8 · Training economics](08-training-economics.md)** — where the restart-time and
-    blast-radius consequences of every failure-policy choice here become the `R/M` term in a
-    dollar figure.
+- **[06.2 · Gang scheduling: all-or-nothing admission](../../06-scheduling-capacity/lessons/02-gang-scheduling.md)** —
+  the `PodGroup` CRD field by field, the five extension points, `permitWaitingTimeSeconds`
+  / `podGroupBackoffSeconds` / `podGroupRejectPercentage` defaults, Kueue's Workload-level
+  alternative, and the native `Gang{minCount}` successor. **This lesson deliberately does
+  not re-teach any of it.**
+- **[08.5 · Failure & elasticity](05-failure-and-elasticity.md)** — the detection→drain→
+  re-rendezvous→resume loop that layer 3 of §5 implements.
+- **[08.8 · Training economics](08-training-economics.md)** — where the restart-time and
+  blast-radius consequences of every failure-policy choice here become the `R/M` term in a
+  dollar figure.
 
 > **Snapshot (2026-08).** Version-specific claims — Training Operator `v1.9.3`, Kubeflow
 > Trainer `v2.3.0` (2026-08-05), JobSet `v1alpha2` at `master`, Ray Train v2 API at `master`

@@ -2,7 +2,7 @@
 lesson: "08.4"
 title: "Checkpointing"
 module: "08"
-concept: "Checkpointing"
+concept: "checkpointing"
 status: not-started
 est_time: "9h"
 prev: "03-communication-bottleneck.md"
@@ -647,7 +647,7 @@ Backward: **08.1** supplied the model-state accounting the `14Ψ` figure is deri
 
 5. **torchtitan — `docs/checkpoint.md` and `torchtitan/components/checkpointer/dcp.py`** — <https://github.com/pytorch/torchtitan>. Source of the production configuration surface named in §4: `async_mode ∈ {disabled, async, async_with_pinned_mem}`, `interval`, `keep_latest_k`, `enable_first_step_checkpoint`, `last_save_model_only`, `export_dtype`, and the seed-checkpoint pattern for reproducible initialisation across device counts. Verified by cloning at HEAD.
 
-**Real-world engineering reports**
+**Real-world engineering blogs**
 
 6. **PyTorch / Meta — "Reducing Model Checkpointing Times by Over 10x with PyTorch Distributed Asynchronous Checkpointing"** — <https://pytorch.org/blog/reducing-checkpointing-times/>. Source of the async magnitude in §4: a 7B model's checkpoint down time falling from an average of **148.8 s to 6.3 s (23.6×)**, 7B–13B models generally at 6–14 s of visible downtime, and the two-phase description (GPU→CPU copy, then background CPU→disk). **Correction:** the previous version of this lesson cited a "5–15×" async reduction attributed to TorchTitan; that specific multiplier could not be confirmed against any primary source in this pass, and has been replaced with the measured 148.8 s → 6.3 s figure and the blog's own 10–20× characterisation. *`pytorch.org` is blocked by this environment's egress proxy; the figures were confirmed via search snippets of the blog, not by reading it.*
 

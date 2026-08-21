@@ -2,7 +2,7 @@
 lesson: "08.2"
 title: "NCCL collectives: topology, transport, and the silent hang"
 module: "08"
-concept: "NCCL collectives: topology, transport, and the silent hang"
+concept: "nccl-collectives"
 status: not-started
 est_time: "9h"
 prev: "01-parallelism-strategies.md"
@@ -968,7 +968,7 @@ Backward: **02b** supplied the link bandwidths every calculation here rests on a
 
 9. **PyTorch — `torch/csrc/distributed/c10d/TraceUtils.h`** (same repository). Source of the desync report in §12: `retrieveDesyncReport`, `analyzeMissingRanks` ("ranks [...] are the lagging ranks that caused this timeout. They never joined any collectives") and `analyzeLaggingRanks` ("[...] joined but didn't finish collective #N" / "finished collective #N, but didn't join collective #N+1"), gated on `TORCH_NCCL_DESYNC_DEBUG`. Verified in-source.
 
-**Real-world engineering blogs and reports**
+**Real-world engineering blogs**
 
 10. **`stas00/ml-engineering` — `network/README.md`** — <https://github.com/stas00/ml-engineering>. **Read the "Unidirectional vs Bidirectional", "SHARP" and "Inter-node speed depends on intra-node speed" sections in full.** Source of the measured NVLS sweeps on 8×H200 and 8×B200 in §6, the 480.0 / 367.2 / 361.4 / 362.9 GB/s collective comparison at 16 GiB in §4, the "80–88% of unidirectional spec is normal" calibration, and the 1-node vs 4-node P6-B200 all-reduce table (845.67 → 381.80 GB/s at 16 GiB, 2.2×; 120× at 32 KiB) cited in Real-world use cases. Practitioner measurements, clearly dated and reproducible, with the exact commands. Verified by cloning at HEAD.
 

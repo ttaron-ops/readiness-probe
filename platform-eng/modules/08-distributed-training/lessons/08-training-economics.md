@@ -2,13 +2,13 @@
 lesson: "08.8"
 title: "Training economics"
 module: "08"
-concept: "Training economics"
+concept: "training-economics"
 status: not-started
 est_time: "7h"
 prev: "07-data-pipeline.md"
 next: null
 artifacts: []
-sources: 16
+sources: 10
 ---
 
 # 08.8 · Training economics
@@ -1004,7 +1004,7 @@ Most cost disagreements are two people using different ones without noticing.
 
 ## References & further reading
 
-**Primary sources — reliability data**
+**Primary sources**
 
 1. **Meta — "Revisiting Reliability in Large-Scale Machine Learning Research Clusters"** —
    <https://arxiv.org/abs/2410.21680> (HPCA 2025). The empirical base for §3: 11 months of two
@@ -1030,65 +1030,67 @@ Most cost disagreements are two people using different ones without noticing.
    accuracy impact. The empirical confirmation that `R/M` dominates at extreme scale.
    *arxiv.org blocked; search-verified.*
 
-**Primary sources — the model's other inputs**
+4. **NVIDIA H100 datasheet figures** — H100 SXM at 80 GB HBM3, 3.35 TB/s memory bandwidth,
+   700 W, with Tensor Core peaks quoted **with 2:4 structured sparsity** (1,979 TFLOPS BF16,
+   3,958 TFLOPS FP8) — i.e. roughly **989 and 1,979 TFLOP/s dense**. *NVIDIA's hosted
+   datasheet PDFs are blocked from this environment; these are the widely reproduced
+   datasheet values, search-verified, and identical to the figures module 11 uses. Confirm
+   against the datasheet for your exact SKU — PCIe and NVL variants differ.*
 
-4. **[08.3 · Communication as the bottleneck](03-communication-bottleneck.md)** — MFU's
-   definition, the roofline, and the exposed-communication term. This lesson consumes MFU and
-   does not re-derive it.
-5. **[08.4 · Checkpointing](04-checkpointing.md)** — Young/Daly, `τ* = √(2Mδ)`, and the
-   distinction between total checkpoint write time and the *blocking* portion `δ` that the
-   model uses. The source of the `√(2δ/M)` collapse.
-6. **[08.5 · Failure & elasticity](05-failure-and-elasticity.md)** — the detection → drain →
-   re-rendezvous → resume loop that `R` measures, and the elastic option that converts `q`
-   into an MFU reduction.
-7. **[08.6 · Job orchestration](06-job-orchestration.md)** — the failure policies that set a
-   restart's blast radius, and §6's distinction between admission layers that hold capacity
-   while waiting and those that hold nothing, which is what decides whether `q` is billed.
-8. **[08.7 · Data pipeline](07-data-pipeline.md)** — the starvation tax on MFU, and the
-   storage-bandwidth budget that lands in `f`.
-9. **[11.5 · Unit economics](../../11-gpu-cost-economics/lessons/05-unit-economics.md)** — the
-   loading multiplier `L = (P/A)(1+f)`, the documented double-count in `L = 1/utilisation`
-   (78% overstatement on that lesson's worked fleet), the blended-versus-marginal rate
-   distinction, and the `$2.99/GPU-hr` blended H100 figure used here. **This lesson's §7 is
-   written specifically to compose with it.**
-10. **NVIDIA H100 datasheet figures** — H100 SXM at 80 GB HBM3, 3.35 TB/s memory bandwidth,
-    700 W, with Tensor Core peaks quoted **with 2:4 structured sparsity** (1,979 TFLOPS BF16,
-    3,958 TFLOPS FP8) — i.e. roughly **989 and 1,979 TFLOP/s dense**. *NVIDIA's hosted
-    datasheet PDFs are blocked from this environment; these are the widely reproduced
-    datasheet values, search-verified, and identical to the figures module 11 uses. Confirm
-    against the datasheet for your exact SKU — PCIe and NVL variants differ.*
+**Real-world engineering blogs**
 
-**Real-world cost figures — all dated snapshots**
-
-11. **Databricks/MosaicML — "Mosaic LLMs (Part 2): GPT-3 quality for <$500k"** —
-    <https://www.databricks.com/blog/gpt-3-quality-for-500k> (**2023**). ~$450K for
-    GPT-3-quality training, framed as the payoff of managing MFU and reliability rather than
-    of ignoring them. *databricks.com is blocked here; search-verified.*
-12. **Databricks — "Introducing MPT-7B"** — <https://www.databricks.com/blog/mpt-7b>
-    (**2023**). **440 A100-40GB, ~9.5 days, ~$200K, zero human intervention**, with the
-    platform handling hardware failures automatically. The cleanest small-scale figure to
-    sanity-check a model against. *Blocked here; search-verified.*
-13. **BigScience — BLOOM-176B** — reported at roughly **€3–5M** including engineering support,
-    storage and networking, over 117 days on 3,000+ GPUs of the Jean Zay supercomputer
-    (**circa 2022**). The "including engineering support" caveat is this lesson's §10 thesis
-    stated by someone else. *Not fetched in this pass.*
-14. **SemiAnalysis — "How Much Do GPU Clusters Really Cost?"** (**2026 snapshot**). Cluster
-    TCO and the "goodput" framing; argues a well-run specialist cloud can beat a hyperscaler
-    on total cost at an equal or higher nominal rate. *Blocked from this environment; **not
-    fetched in this pass and not relied upon for any number above** — cited only as an
-    independent statement of §4's argument.*
-15. **GPU rate survey, 2026-08.** On-demand H100 SXM spans roughly **$1.4–$7/GPU-hr** across
-    specialist GPU clouds, with hyperscaler list prices reported up to **~$7–12/GPU-hr**;
-    market medians reported around **$2.5/GPU-hr**. Module 11 uses a blended **$2.99/GPU-hr**
-    for the same hardware, which is the figure used throughout this lesson. *Compiled from
-    multiple public pricing surveys via search; vendor pricing pages are blocked from this
-    environment. Treat as a dated snapshot and re-pull your own blended rate before quoting.*
+5. **Databricks/MosaicML — "Mosaic LLMs (Part 2): GPT-3 quality for <$500k"** —
+   <https://www.databricks.com/blog/gpt-3-quality-for-500k> (**2023**). ~$450K for
+   GPT-3-quality training, framed as the payoff of managing MFU and reliability rather than
+   of ignoring them. *databricks.com is blocked here; search-verified.*
+6. **Databricks — "Introducing MPT-7B"** — <https://www.databricks.com/blog/mpt-7b>
+   (**2023**). **440 A100-40GB, ~9.5 days, ~$200K, zero human intervention**, with the
+   platform handling hardware failures automatically. The cleanest small-scale figure to
+   sanity-check a model against. *Blocked here; search-verified.*
+7. **BigScience — BLOOM-176B** — reported at roughly **€3–5M** including engineering support,
+   storage and networking, over 117 days on 3,000+ GPUs of the Jean Zay supercomputer
+   (**circa 2022**). The "including engineering support" caveat is this lesson's §10 thesis
+   stated by someone else. *Not fetched in this pass.*
+8. **SemiAnalysis — "How Much Do GPU Clusters Really Cost?"** (**2026 snapshot**). Cluster
+   TCO and the "goodput" framing; argues a well-run specialist cloud can beat a hyperscaler
+   on total cost at an equal or higher nominal rate. *Blocked from this environment; **not
+   fetched in this pass and not relied upon for any number above** — cited only as an
+   independent statement of §4's argument.*
+9. **GPU rate survey, 2026-08.** On-demand H100 SXM spans roughly **$1.4–$7/GPU-hr** across
+   specialist GPU clouds, with hyperscaler list prices reported up to **~$7–12/GPU-hr**;
+   market medians reported around **$2.5/GPU-hr**. Module 11 uses a blended **$2.99/GPU-hr**
+   for the same hardware, which is the figure used throughout this lesson. *Compiled from
+   multiple public pricing surveys via search; vendor pricing pages are blocked from this
+   environment. Treat as a dated snapshot and re-pull your own blended rate before quoting.*
 
 **Deeper dives**
 
-16. **stas00/ml-engineering** — <https://github.com/stas00/ml-engineering>. An open book on
+10. **stas00/ml-engineering** — <https://github.com/stas00/ml-engineering>. An open book on
     large-scale training written by a BLOOM engineer; the reliability and performance chapters
     are the best practitioner companion to this module's `M`, `R` and MFU terms.
+
+**Related lessons in this course** (internal links, not external sources — not counted in
+`sources:`)
+
+- **[08.3 · Communication as the bottleneck](03-communication-bottleneck.md)** — MFU's
+  definition, the roofline, and the exposed-communication term. This lesson consumes MFU and
+  does not re-derive it.
+- **[08.4 · Checkpointing](04-checkpointing.md)** — Young/Daly, `τ* = √(2Mδ)`, and the
+  distinction between total checkpoint write time and the *blocking* portion `δ` that the
+  model uses. The source of the `√(2δ/M)` collapse.
+- **[08.5 · Failure & elasticity](05-failure-and-elasticity.md)** — the detection → drain →
+  re-rendezvous → resume loop that `R` measures, and the elastic option that converts `q`
+  into an MFU reduction.
+- **[08.6 · Job orchestration](06-job-orchestration.md)** — the failure policies that set a
+  restart's blast radius, and §6's distinction between admission layers that hold capacity
+  while waiting and those that hold nothing, which is what decides whether `q` is billed.
+- **[08.7 · Data pipeline](07-data-pipeline.md)** — the starvation tax on MFU, and the
+  storage-bandwidth budget that lands in `f`.
+- **[11.5 · Unit economics](../../11-gpu-cost-economics/lessons/05-unit-economics.md)** — the
+  loading multiplier `L = (P/A)(1+f)`, the documented double-count in `L = 1/utilisation`
+  (78% overstatement on that lesson's worked fleet), the blended-versus-marginal rate
+  distinction, and the `$2.99/GPU-hr` blended H100 figure used here. **This lesson's §7 is
+  written specifically to compose with it.**
 
 > **Snapshot (2026-08).** Every dollar figure here is dated and every one is an input you
 > should replace. `$/GPU-hr` is a linear scalar in the model, so substituting your own blended

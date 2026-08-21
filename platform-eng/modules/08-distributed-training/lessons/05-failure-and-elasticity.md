@@ -2,7 +2,7 @@
 lesson: "08.5"
 title: "Failure and elasticity"
 module: "08"
-concept: "Failure and elasticity"
+concept: "failure-and-elasticity"
 status: not-started
 est_time: "7h"
 prev: "04-checkpointing.md"
@@ -37,7 +37,7 @@ A synchronous data-parallel run is one process with `N` ranks joined at the hip 
 
 Price it. On a 16,384-GPU H100 fleet at a nominal $3/GPU-hour — **$49,152 per hour** — each *minute* of restart dead time costs **$819**, and at one failure every 3.1 hours you get 7.7 failures per day. **Cutting restart time from 10 minutes to 3 minutes is worth $43,000 per day, or $2.3 M over a 54-day run.** That is one engineer's quarter, paid back in a fortnight, and it is exactly the kind of number a CoreWeave or Anthropic platform interview is probing for.
 
-## What's new here (building on 04, 05, 06)
+## What's new here (calibration)
 
 This lesson wires together three things you already have and adds the missing loop:
 
@@ -592,7 +592,7 @@ Backward: **08.2** supplied the barrier semantics that make one rank fatal, the 
 
 6. **Meta — `meta-pytorch/torchft`** — <https://github.com/meta-pytorch/torchft>. **Read the README and `src/lighthouse.rs`'s `LighthouseOpt`.** Source of the architecture and every default in §8: the Lighthouse coordination server (`--bind [::]:29510`, `--join_timeout_ms 60000`, `--quorum_tick_ms 100`, `--heartbeat_timeout_ms 5000`), the per-replica-group `Manager` with `heartbeat_interval` **100 ms** and 60 s `timeout`/`quorum_timeout`/`connect_timeout`, the fault-tolerant `ProcessGroup` that "reports errors sanely and can be reinitialized gracefully", the **checkpoint transports for live recovery from a healthy peer**, and the supported algorithms (fault-tolerant DDP, fault-tolerant HSDP, LocalSGD, DiLoCo). Verified by cloning at HEAD.
 
-**Real-world engineering reports**
+**Real-world engineering blogs**
 
 7. **Meta — "Training LLMs with Fault Tolerant HSDP on 100,000 GPUs"** — <https://arxiv.org/abs/2602.00277> (Salpekar et al., January 2026). FT-HSDP's design — data-parallel replicas as the fault-tolerance unit, the Fault Tolerant All Reduce (FTAR) protocol driving control logic from the CPU while the GPU moves data, and a non-blocking catch-up protocol — and the headline result: **stall time from failure recovery ~10 min → ~3 min, effective training time 44% → 80%** at O(100K) GPUs, with no meaningful accuracy degradation. *`arxiv.org` is blocked by this environment's egress proxy; the authorship, design summary and both numbers were confirmed via search snippets of the paper's abstract, not by reading the PDF in this pass.*
 

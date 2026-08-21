@@ -2,13 +2,13 @@
 lesson: "08.7"
 title: "Data pipeline"
 module: "08"
-concept: "Data pipeline"
+concept: "data-pipeline"
 status: not-started
 est_time: "6h"
 prev: "06-job-orchestration.md"
 next: "08-training-economics.md"
 artifacts: []
-sources: 15
+sources: 14
 ---
 
 # 08.7 · Data pipeline
@@ -129,7 +129,7 @@ bottleneck names itself.
    object store       page cache /       JPEG → RGB       crop/flip/     pinned host
    or filesystem      socket buffer      (libjpeg)        normalise      → device
         │                  │                  │                │              │
-        │ 114,660 B        │                  │  ~270–840      │  ~2–5×       │ ~25 GB/s
+        │ 114,660 B        │                  │  few-100s      │  ~2–5×       │ ~25 GB/s
         │ per sample       │                  │  img/s/core    │  cheaper     │ over PCIe
         │                  │                  │  (decode only) │  than decode │ Gen5 x16
         ▼                  ▼                  ▼                ▼              ▼
@@ -231,13 +231,19 @@ U-Net needs about **100,000×** the per-GPU read bandwidth of 8B LLM pretraining
 
 Now the other side of the ledger.
 
-**Decode.** A published multi-decoder benchmark on ImageNet-scale JPEGs (arXiv:2501.13131)
-measures single-thread decode throughput spanning roughly **270 img/s** (Arm Neoverse N1)
-to **840 img/s** (Zen 5), with libjpeg-turbo-family decoders and OpenCV clustered near the
-top on every architecture. That is *decode only*; resize, crop, colour jitter, normalise and
-collate add meaningfully on top — assume 1.5–3× the decode cost for a standard augmentation
-stack unless you have measured yours. So budget **150–400 img/s per core** end-to-end and
-then measure.
+**Decode.** A published multi-decoder benchmark on ImageNet-scale JPEGs across five matched
+16-vCPU cloud CPUs — Intel Emerald Rapids, AMD Zen 4, AMD Zen 5, Arm Neoverse V2, Arm
+Neoverse N1 (arXiv:2605.08731) — finds single-thread decode throughput varies several-fold by
+architecture *and* by decoder library, with `simplejpeg` leading on Intel/Zen 4/Neoverse V2,
+`torchvision` narrowly leading on Zen 5, and `imagecodecs` narrowly leading on Neoverse N1.
+The paper's sharper warning for a platform engineer: on three of the five CPUs, the
+single-thread leader is *not* the peak multi-worker `DataLoader` leader — a decoder chosen
+from a single-thread microbenchmark can be the wrong choice once you fan out across
+`num_workers`. That is *decode only*; resize, crop, colour jitter, normalise and collate add
+meaningfully on top — assume 1.5–3× the decode cost for a standard augmentation stack unless
+you have measured yours. So budget on the order of a few hundred images/s per core end-to-end
+as a starting point, and confirm the actual number for your decoder-library + CPU combination
+with a `DataLoader`-level benchmark, not a single-thread one, before sizing cores off it.
 
 Against the ResNet-50 demand of 14,286 img/s for an 8-GPU node:
 
@@ -953,7 +959,7 @@ silently caps throughput.
 
 ## References & further reading
 
-**Primary sources — read in this pass**
+**Primary sources**
 
 1. **PyTorch — `torch/utils/data/dataloader.py`** (`main`, version string `2.15.0a0`) —
    <https://github.com/pytorch/pytorch>. **Read the `DataLoader` docstring and
@@ -993,14 +999,18 @@ silently caps throughput.
    answer to the streaming problem. *docs.ray.io is blocked from this environment; not
    relied on for any claim in this lesson.*
 
-**Published measurements and product characteristics**
-
-6. **"Need for Speed: A Comprehensive Benchmark of JPEG Decoders in Python"** —
-   <https://arxiv.org/abs/2501.13131>. Single-thread ImageNet JPEG decode throughput
-   spanning roughly **270 img/s** (Arm Neoverse N1) to **840 img/s** (Zen 5), with
-   libjpeg-turbo-family decoders and OpenCV near the top on every architecture — the basis
-   for §4's per-core budget. *arxiv.org is blocked from this environment; the figures were
-   confirmed via search against the paper's abstract and coverage, not by reading the PDF.*
+6. **"Single-Thread JPEG Decoder Benchmarks Mis-Evaluate ML Data Loaders"** (Iglovikov &amp;
+   Kosarevsky) — <https://arxiv.org/abs/2605.08731>. Thirteen Python-accessible JPEG decoders
+   benchmarked on five matched 16-vCPU cloud CPUs (Intel Emerald Rapids, AMD Zen 4/Zen 5, Arm
+   Neoverse V2/N1) at both single-thread and `DataLoader` worker counts; on three of the five
+   CPUs the single-thread throughput leader is not the peak `DataLoader` leader — the basis
+   for §4's "benchmark at the `DataLoader` level, not single-thread" per-core guidance.
+   **Correction:** an earlier version of this lesson cited arXiv:2501.13131 ("Need for Speed")
+   for these Neoverse N1/Zen 5 figures; that paper benchmarks Apple M4 Max and AMD
+   Threadripper only and does not cover Neoverse N1 or Zen 5 — this is the correct source.
+   *arxiv.org is blocked from this environment; confirmed via search corroboration of the
+   paper's abstract, architectures tested, and per-architecture leaderboard, not by reading
+   the PDF.*
 7. **Amazon S3 performance guidelines** —
    <https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance-guidelines.html>.
    **5,500 GET/HEAD requests per second per prefix**, 3,500 PUT/COPY/POST/DELETE per prefix,
@@ -1012,6 +1022,9 @@ silently caps throughput.
    provisioned throughput: **Persistent-2 SSD 125 / 250 / 500 / 1000 MB/s per TiB**,
    **Persistent-1 SSD 50 / 100 / 200 MB/s per TiB**. The basis for §4's "bandwidth is bought
    as capacity" point. *Blocked here; search-verified against AWS's published documentation.*
+
+**Real-world engineering blogs**
+
 9. **NVIDIA — "Leveraging the Hardware JPEG Decoder and nvJPEG on A100"** and
    **"Loading Data Fast with DALI and the New Hardware JPEG Decoder in A100"** —
    <https://developer.nvidia.com/blog/leveraging-hardware-jpeg-decoder-and-nvjpeg-on-a100/>.
@@ -1025,9 +1038,6 @@ silently caps throughput.
     SageMaker"**, reporting **37–72%** improvement across ResNet-18/50/152. Together they
     establish that the DALI win is a wide range, not a constant. *Both hosts blocked; cited
     as reported, not fetched.*
-
-**Real-world engineering**
-
 11. **Uber — "Accelerating Deep Learning: How Uber Optimized Petastorm for High-Throughput
     and Reproducible GPU Training"** — <https://www.uber.com/us/en/blog/accelerating-deep-learning/>.
     10–15% → >60% GPU utilisation, 22 h → ~3 h, ~80% compute-cost reduction. *uber.com is
@@ -1047,10 +1057,14 @@ silently caps throughput.
     Pipeline"** — <https://chaimrand.medium.com/a-caching-strategy-for-identifying-bottlenecks-on-the-data-input-pipeline-8e52060b402f>.
     A practitioner's profiler-based, stage-by-stage attribution method, complementary to §6's
     synthetic-data A/B. *Not fetched in this pass.*
-15. **[08.3 · Communication as the bottleneck](03-communication-bottleneck.md)** and
-    **[08.8 · Training economics](08-training-economics.md)** — the two lessons this one
-    sits between: 08.3 owns the roofline and the comms-bound diagnosis this lesson rules out,
-    08.8 owns the cost model that consumes this lesson's `SM_active` figure.
+
+**Related lessons in this course** (internal links, not external sources — not counted in
+`sources:`)
+
+- **[08.3 · Communication as the bottleneck](03-communication-bottleneck.md)** and
+  **[08.8 · Training economics](08-training-economics.md)** — the two lessons this one
+  sits between: 08.3 owns the roofline and the comms-bound diagnosis this lesson rules out,
+  08.8 owns the cost model that consumes this lesson's `SM_active` figure.
 
 > **Snapshot (2026-08).** GPU rates move. On-demand H100 SXM spans roughly **$1.4–$7/GPU-hr**
 > on specialist clouds and up to **~$7–12/GPU-hr** at hyperscaler list price; module 11 uses a

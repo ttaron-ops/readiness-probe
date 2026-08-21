@@ -47,8 +47,8 @@ Anchored on **NCCL debugging** (L2); the throughput lever is **checkpointing** (
 
 | # | Lesson | Hrs | Reliability/cost decision |
 |---|--------|-----|---------------------------|
-| 01 | [Parallelism strategies (platform view)](lessons/01-parallelism-strategies.md) | 7 | which collective, over which link, memory saved |
-| 02 | [**NCCL & collectives**](lessons/02-nccl-collectives.md) (anchor) | 9 | minutes-to-detect a hang vs hours of gang burn |
+| 01 | [Parallelism strategies: network and memory footprint](lessons/01-parallelism-strategies.md) | 7 | which collective, over which link, memory saved |
+| 02 | [**NCCL collectives: topology, transport, and the silent hang**](lessons/02-nccl-collectives.md) (anchor) | 9 | minutes-to-detect a hang vs hours of gang burn |
 | 03 | [Communication as the bottleneck](lessons/03-communication-bottleneck.md) | 7 | is the run comms-bound? MFU as report card |
 | 04 | [**Checkpointing** (the throughput lever)](lessons/04-checkpointing.md) | 9 | interval sets effective time + $ wasted per failure |
 | 05 | [Failure & elasticity](lessons/05-failure-and-elasticity.md) | 7 | auto-drain-and-restart vs babysitting |

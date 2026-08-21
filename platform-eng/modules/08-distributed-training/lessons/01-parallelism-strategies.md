@@ -2,7 +2,7 @@
 lesson: "08.1"
 title: "Parallelism strategies: network and memory footprint"
 module: "08"
-concept: "Parallelism strategies: network and memory footprint"
+concept: "parallelism-strategies"
 status: not-started
 est_time: "7h"
 prev: null
@@ -772,7 +772,7 @@ Backward: **02b** supplied the 450 GB/s NVLink and 50 GB/s rail-NIC figures ever
 
 7. **Reducing Activation Recomputation in Large Transformer Models** — Korthikanti et al., MLSys 2023, <https://arxiv.org/abs/2205.05198>. Source of the activation-memory formulas: `sbh(34 + 5as/h)` per layer with no parallelism, `sbhL(10 + 24/t + 5as/(ht))` with tensor parallelism, and `34sbh/t` with sequence parallelism plus selective recomputation. *arxiv.org unreachable from this environment; the three formulas were confirmed via search against the paper's own text and NVIDIA's Megatron-Bridge activation-recomputation documentation rather than by fetching the PDF.*
 
-**Real-world engineering blogs and reports**
+**Real-world engineering blogs**
 
 8. **The Llama 3 Herd of Models, §3.3** — <https://arxiv.org/abs/2407.21783>. The module's anchor. 16,384 H100s, 4D parallelism at TP=8 / CP=2 / PP=16 with DP filling the remainder, ~400 TFLOP/s per GPU at 8K sequence, 38–43% BF16 MFU with the documented 43%→41% dip going from DP=64 to DP=128. *arxiv.org and ar5iv are both blocked here; the parallelism degrees and MFU figures were confirmed via search snippets of the paper and of the ISCA'25 follow-up "Scaling Llama 3 Training with Efficient Parallelism Strategies," not by reading the PDF in this pass.*
 
